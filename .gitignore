@@ -31,3 +31,15 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Local builds, dependencies and development data
+.cache/
+.tools/
+.local/
+dist/
+web/dist/
+node_modules/
+playwright-report/
+test-results/
+.env.*
+!.env.example

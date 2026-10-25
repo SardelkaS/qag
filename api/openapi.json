@@ -1,0 +1,2867 @@
+{
+  "components": {
+    "responses": {
+      "BadRequest": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/APIError"
+            }
+          }
+        },
+        "description": "BadRequest"
+      },
+      "Conflict": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/APIError"
+            }
+          }
+        },
+        "description": "Conflict"
+      },
+      "Forbidden": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/APIError"
+            }
+          }
+        },
+        "description": "Forbidden"
+      },
+      "NotFound": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/APIError"
+            }
+          }
+        },
+        "description": "NotFound"
+      },
+      "Unavailable": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/APIError"
+            }
+          }
+        },
+        "description": "Unavailable"
+      }
+    },
+    "schemas": {
+      "APIError": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "fieldErrors": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "message": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "requestId"
+        ],
+        "type": "object"
+      },
+      "ArchivePatch": {
+        "additionalProperties": false,
+        "properties": {
+          "archived": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "Attempt": {
+        "additionalProperties": false,
+        "properties": {
+          "blockId": {
+            "type": "string"
+          },
+          "durationMs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "environmentId": {
+            "type": "string"
+          },
+          "environmentName": {
+            "type": "string"
+          },
+          "finishedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "number": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "persistencePending": {
+            "type": "boolean"
+          },
+          "request": {
+            "$ref": "#/components/schemas/Block"
+          },
+          "resource": {
+            "$ref": "#/components/schemas/Resource"
+          },
+          "result": {
+            "$ref": "#/components/schemas/ExecutionResult"
+          },
+          "revision": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "queued",
+              "running",
+              "completed",
+              "error",
+              "timed_out",
+              "cancelled",
+              "interrupted"
+            ],
+            "type": "string"
+          },
+          "testCaseId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "testCaseId",
+          "blockId",
+          "revision",
+          "environmentId",
+          "environmentName",
+          "resource",
+          "request",
+          "number",
+          "state",
+          "startedAt",
+          "durationMs",
+          "persistencePending"
+        ],
+        "type": "object"
+      },
+      "AttemptStart": {
+        "additionalProperties": false,
+        "properties": {
+          "environmentId": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "Block": {
+        "additionalProperties": false,
+        "properties": {
+          "expected": {
+            "$ref": "#/components/schemas/Expectation"
+          },
+          "grpc": {
+            "$ref": "#/components/schemas/GRPCRequest"
+          },
+          "http": {
+            "$ref": "#/components/schemas/HTTPRequest"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "http",
+              "grpc",
+              "postgresql"
+            ],
+            "type": "string"
+          },
+          "resource": {
+            "type": "string"
+          },
+          "sql": {
+            "$ref": "#/components/schemas/SQLRequest"
+          },
+          "timeoutSeconds": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "resource",
+          "timeoutSeconds",
+          "expected"
+        ],
+        "type": "object"
+      },
+      "Column": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type"
+        ],
+        "type": "object"
+      },
+      "ComparisonResult": {
+        "additionalProperties": false,
+        "properties": {
+          "differences": {
+            "items": {
+              "$ref": "#/components/schemas/Difference"
+            },
+            "type": "array"
+          },
+          "differencesTruncated": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "match",
+              "mismatch",
+              "not_compared"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "differences",
+          "differencesTruncated"
+        ],
+        "type": "object"
+      },
+      "CreateName": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "Difference": {
+        "additionalProperties": false,
+        "properties": {
+          "actual": {
+            "type": "string"
+          },
+          "expected": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "expected",
+          "actual"
+        ],
+        "type": "object"
+      },
+      "Environment": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "secretNames": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "variables": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "revision",
+          "variables",
+          "secretNames"
+        ],
+        "type": "object"
+      },
+      "EnvironmentPage": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Environment"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "EnvironmentWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "secrets": {
+            "$ref": "#/components/schemas/SecretChanges"
+          },
+          "variables": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "name",
+          "revision",
+          "variables",
+          "secrets"
+        ],
+        "type": "object"
+      },
+      "ExecutionResult": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/Column"
+            },
+            "type": "array"
+          },
+          "comparison": {
+            "$ref": "#/components/schemas/ComparisonResult"
+          },
+          "error": {
+            "type": "string"
+          },
+          "errorCode": {
+            "type": "string"
+          },
+          "grpcCode": {
+            "type": "string"
+          },
+          "headers": {
+            "items": {
+              "$ref": "#/components/schemas/KeyValue"
+            },
+            "type": "array"
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "redacted": {
+            "type": "boolean"
+          },
+          "rows": {
+            "items": {
+              "items": {
+                "$ref": "#/components/schemas/TypedValue"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "rowsAffected": {
+            "type": "string"
+          },
+          "statusCode": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "statusMessage": {
+            "type": "string"
+          },
+          "trailers": {
+            "items": {
+              "$ref": "#/components/schemas/KeyValue"
+            },
+            "type": "array"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "protocol",
+          "headers",
+          "body",
+          "truncated",
+          "redacted",
+          "comparison"
+        ],
+        "type": "object"
+      },
+      "Expectation": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "bodyMode": {
+            "enum": [
+              "none",
+              "text",
+              "json",
+              "rows",
+              "exec"
+            ],
+            "type": "string"
+          },
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/Column"
+            },
+            "type": "array"
+          },
+          "grpcCode": {
+            "type": "string"
+          },
+          "headers": {
+            "items": {
+              "$ref": "#/components/schemas/KeyValue"
+            },
+            "type": "array"
+          },
+          "rows": {
+            "items": {
+              "items": {
+                "$ref": "#/components/schemas/TypedValue"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "rowsAffected": {
+            "type": "string"
+          },
+          "statusCode": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bodyMode"
+        ],
+        "type": "object"
+      },
+      "Folder": {
+        "additionalProperties": false,
+        "properties": {
+          "archived": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "archived",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "FolderPage": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Folder"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "GRPCRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "metadata": {
+            "items": {
+              "$ref": "#/components/schemas/KeyValue"
+            },
+            "type": "array"
+          },
+          "method": {
+            "type": "string"
+          },
+          "service": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "service",
+          "method",
+          "body",
+          "metadata"
+        ],
+        "type": "object"
+      },
+      "HTTPRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "bodyMode": {
+            "enum": [
+              "none",
+              "text",
+              "json"
+            ],
+            "type": "string"
+          },
+          "headers": {
+            "items": {
+              "$ref": "#/components/schemas/KeyValue"
+            },
+            "type": "array"
+          },
+          "method": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "query": {
+            "items": {
+              "$ref": "#/components/schemas/KeyValue"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "method",
+          "path",
+          "query",
+          "headers",
+          "bodyMode",
+          "body"
+        ],
+        "type": "object"
+      },
+      "Health": {
+        "properties": {
+          "status": {
+            "enum": [
+              "ready"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "KeyValue": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "value"
+        ],
+        "type": "object"
+      },
+      "ProtoBundle": {
+        "additionalProperties": false,
+        "properties": {
+          "files": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "revision": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "files",
+          "revision"
+        ],
+        "type": "object"
+      },
+      "Resource": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/ResourceConfig"
+          },
+          "environmentId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "http",
+              "grpc",
+              "postgresql"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "secretNames": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "versionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "environmentId",
+          "name",
+          "kind",
+          "versionId",
+          "revision",
+          "config",
+          "secretNames",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "ResourceConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "baseUrl": {
+            "type": "string"
+          },
+          "database": {
+            "type": "string"
+          },
+          "headers": {
+            "items": {
+              "$ref": "#/components/schemas/KeyValue"
+            },
+            "type": "array"
+          },
+          "protoFiles": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "tls": {
+            "$ref": "#/components/schemas/TLSConfig"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "headers",
+          "tls"
+        ],
+        "type": "object"
+      },
+      "ResourcePage": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Resource"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "ResourceWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/ResourceConfig"
+          },
+          "kind": {
+            "enum": [
+              "http",
+              "grpc",
+              "postgresql"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "secrets": {
+            "$ref": "#/components/schemas/SecretChanges"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "revision",
+          "config",
+          "secrets"
+        ],
+        "type": "object"
+      },
+      "Run": {
+        "additionalProperties": false,
+        "properties": {
+          "attempts": {
+            "items": {
+              "$ref": "#/components/schemas/Attempt"
+            },
+            "type": "array"
+          },
+          "environmentId": {
+            "type": "string"
+          },
+          "environmentName": {
+            "type": "string"
+          },
+          "finishedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "resources": {
+            "items": {
+              "$ref": "#/components/schemas/Resource"
+            },
+            "type": "array"
+          },
+          "retentionReasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/TestCase"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "running",
+              "passed",
+              "failed",
+              "blocked",
+              "cancelled",
+              "interrupted"
+            ],
+            "type": "string"
+          },
+          "stepStates": {
+            "items": {
+              "$ref": "#/components/schemas/StepState"
+            },
+            "type": "array"
+          },
+          "testCaseId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "testCaseId",
+          "environmentId",
+          "environmentName",
+          "status",
+          "snapshot",
+          "resources",
+          "stepStates",
+          "attempts",
+          "retentionReasons",
+          "startedAt"
+        ],
+        "type": "object"
+      },
+      "RunPage": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Run"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "RunStart": {
+        "additionalProperties": false,
+        "properties": {
+          "environmentId": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "environmentId",
+          "revision"
+        ],
+        "type": "object"
+      },
+      "SQLRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "enum": [
+              "rows",
+              "exec"
+            ],
+            "type": "string"
+          },
+          "parameters": {
+            "items": {
+              "$ref": "#/components/schemas/TypedValue"
+            },
+            "type": "array"
+          },
+          "query": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "query",
+          "parameters",
+          "mode"
+        ],
+        "type": "object"
+      },
+      "SecretChanges": {
+        "additionalProperties": false,
+        "properties": {
+          "clear": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "replace": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "replace",
+          "clear"
+        ],
+        "type": "object"
+      },
+      "Session": {
+        "properties": {
+          "csrfToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "csrfToken"
+        ],
+        "type": "object"
+      },
+      "Step": {
+        "additionalProperties": false,
+        "properties": {
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/Block"
+            },
+            "type": "array"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "description",
+          "blocks"
+        ],
+        "type": "object"
+      },
+      "StepState": {
+        "additionalProperties": false,
+        "properties": {
+          "comment": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "not_run",
+              "passed",
+              "failed",
+              "blocked",
+              "skipped"
+            ],
+            "type": "string"
+          },
+          "stepId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "stepId",
+          "status",
+          "comment",
+          "revision"
+        ],
+        "type": "object"
+      },
+      "StepWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "comment": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "not_run",
+              "passed",
+              "failed",
+              "blocked",
+              "skipped"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "comment",
+          "revision"
+        ],
+        "type": "object"
+      },
+      "TLSConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "ca": {
+            "type": "string"
+          },
+          "certificate": {
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "tls",
+              "plaintext"
+            ],
+            "type": "string"
+          },
+          "serverName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "type": "object"
+      },
+      "TestCase": {
+        "additionalProperties": false,
+        "properties": {
+          "archived": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "folderId": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parentArchived": {
+            "type": "boolean"
+          },
+          "revision": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/Step"
+            },
+            "type": "array"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "folderId",
+          "name",
+          "archived",
+          "parentArchived",
+          "revision",
+          "steps",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "TestCasePage": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TestCase"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "TestCaseWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/Step"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "revision",
+          "steps"
+        ],
+        "type": "object"
+      },
+      "TypedValue": {
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "enum": [
+              "null",
+              "string",
+              "boolean",
+              "integer",
+              "decimal",
+              "timestamp",
+              "bytes",
+              "json"
+            ],
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "LocalSession": {
+        "description": "Токен из GET /session; изменяющие команды также требуют правильный Origin и application/json.",
+        "in": "header",
+        "name": "X-QAG-CSRF",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "Локальный API ручных проверок. Схемы генерируются из Go DTO; секреты выдаются только write-only.",
+    "license": {
+      "name": "Project license",
+      "url": "https://github.com/SardelkaS/qag/blob/main/LICENSE"
+    },
+    "title": "qag API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/attempts/{id}": {
+      "get": {
+        "operationId": "getAttempt",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Attempt"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "security": [],
+        "summary": "Получить состояние попытки",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/attempts/{id}/cancel": {
+      "post": {
+        "operationId": "cancelAttempt",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Attempt"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "summary": "Отменить попытку",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/environments": {
+      "get": {
+        "operationId": "listEnvironments",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentPage"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "security": [],
+        "summary": "Окружения",
+        "tags": [
+          "qag"
+        ]
+      },
+      "post": {
+        "operationId": "createEnvironment",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnvironmentWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Environment"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "summary": "Создать окружение",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/environments/{id}": {
+      "put": {
+        "operationId": "saveEnvironment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnvironmentWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Environment"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "summary": "Сохранить окружение",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/environments/{id}/resources": {
+      "get": {
+        "operationId": "listResources",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourcePage"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "security": [],
+        "summary": "Ресурсы окружения",
+        "tags": [
+          "qag"
+        ]
+      },
+      "post": {
+        "operationId": "createResource",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResourceWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "summary": "Создать ресурс",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/folders": {
+      "get": {
+        "operationId": "listFolders",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "archived",
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FolderPage"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "security": [],
+        "summary": "Список папок",
+        "tags": [
+          "qag"
+        ]
+      },
+      "post": {
+        "operationId": "createFolder",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateName"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Folder"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "summary": "Создать папку",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/folders/{id}": {
+      "patch": {
+        "operationId": "updateFolder",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchivePatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Folder"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "summary": "Переименовать или архивировать папку",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/folders/{id}/test-cases": {
+      "get": {
+        "operationId": "listTestCases",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestCasePage"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "security": [],
+        "summary": "Тест-кейсы папки",
+        "tags": [
+          "qag"
+        ]
+      },
+      "post": {
+        "operationId": "createTestCase",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateName"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestCase"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "summary": "Создать тест-кейс",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "security": [],
+        "summary": "Проверить готовность",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/resources/{id}": {
+      "put": {
+        "operationId": "saveResource",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResourceWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "summary": "Сохранить новую версию ресурса",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/resources/{id}/proto-bundles": {
+      "post": {
+        "operationId": "uploadProtoBundle",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProtoBundle"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resource"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "summary": "Загрузить proto-bundle",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/runs/{id}": {
+      "delete": {
+        "operationId": "deleteRun",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "deleted"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Несохранённый прогон удалён"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "summary": "Удалить несохранённый прогон",
+        "tags": [
+          "qag"
+        ]
+      },
+      "get": {
+        "operationId": "getRun",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "security": [],
+        "summary": "Прочитать снимок прогона",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/runs/{id}/blocks/{blockId}/attempts": {
+      "post": {
+        "operationId": "startRunAttempt",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "blockId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Attempt"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "summary": "Выполнить блок прогона",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/runs/{id}/cancel": {
+      "post": {
+        "operationId": "cancelRun",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "summary": "Отменить прогон",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/runs/{id}/finish": {
+      "post": {
+        "operationId": "finishRun",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "summary": "Завершить и оценить прогон",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/runs/{id}/save": {
+      "post": {
+        "operationId": "saveRun",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "summary": "Закрепить прогон вручную",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/runs/{id}/steps/{stepId}": {
+      "patch": {
+        "operationId": "updateRunStep",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "stepId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StepWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "summary": "Сохранить ручной статус и комментарий",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/session": {
+      "get": {
+        "operationId": "getSession",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "security": [],
+        "summary": "Получить локальную сессию",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/test-cases/{id}": {
+      "get": {
+        "operationId": "getTestCase",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestCase"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "security": [],
+        "summary": "Прочитать сценарий",
+        "tags": [
+          "qag"
+        ]
+      },
+      "patch": {
+        "operationId": "archiveTestCase",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchivePatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestCase"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "summary": "Изменить имя или архив тест-кейса",
+        "tags": [
+          "qag"
+        ]
+      },
+      "put": {
+        "operationId": "saveTestCase",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestCaseWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestCase"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "summary": "Сохранить версию сценария",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/test-cases/{id}/blocks/{blockId}/attempts": {
+      "post": {
+        "operationId": "startEditorAttempt",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "blockId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttemptStart"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Attempt"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "summary": "Проверить блок из редактора",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/test-cases/{id}/runs": {
+      "get": {
+        "operationId": "listRuns",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "retained",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Вернуть живой прогон для восстановления браузерной вкладки",
+            "in": "query",
+            "name": "active",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunPage"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "security": [],
+        "summary": "История прогонов",
+        "tags": [
+          "qag"
+        ]
+      },
+      "post": {
+        "operationId": "startRun",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunStart"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "summary": "Начать прогон",
+        "tags": [
+          "qag"
+        ]
+      }
+    }
+  },
+  "security": [
+    {
+      "LocalSession": []
+    }
+  ],
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8080/api/v1"
+    }
+  ],
+  "tags": [
+    {
+      "description": "Каталог, ресурсы, выполнение и история",
+      "name": "qag"
+    }
+  ]
+}

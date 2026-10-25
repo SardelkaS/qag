@@ -1,0 +1,48 @@
+schema: spec-driven
+
+context: |
+  Проект qag реализован на Go/React/TypeScript: каталог и архив, редактор,
+  ресурсы, HTTP/gRPC/PostgreSQL-вызовы, сравнение и история прогонов.
+  Бинарник включает UI; PostgreSQL запускается через Docker Compose.
+  Завершённое изменение add-manual-testing-app хранится в
+  openspec/changes/archive/2026-10-25-add-manual-testing-app; выполнены все 52 задачи.
+  Подтверждённые проверки отражены в docs/verification.md.
+  Приложение на Go и TypeScript предоставляет Web UI для создания и ручного
+  прохождения тест-кейсов с частичной автоматизацией через HTTP, gRPC и SQL.
+  Первая версия работает локально для одного пользователя без авторизации.
+  PostgreSQL хранит тест-кейсы, настройки и сохраняемые прогоны; SQL-блоки
+  первой версии также поддерживают только PostgreSQL.
+  Слева находится раскрываемый список папок и тест-кейсов; папки переносятся
+  на вкладку архива, архивные тест-кейсы тусклые и сортируются после активных.
+  Папки и тест-кейсы сортируются по алфавиту. В центре открывается редактор
+  тест-кейса с шагами: необязательный заголовок, описание и блоки вызовов.
+  У каждого блока есть параметры запроса, ожидаемый результат, запуск и
+  удобное сравнение ожидаемого результата с фактическим.
+  Ресурсы настраиваются отдельно: именованный ресурс задаёт адрес, сертификаты
+  и параметры подключения, которые подставляются при запуске запроса.
+  Первый прогон и первый успешный прогон тест-кейса сохраняются автоматически;
+  любой другой прогон пользователь может сохранить отдельной кнопкой.
+  Пиши документы и пояснения на русском языке, сохраняя структурные заголовки
+  OpenSpec и ключевые слова SHALL/MUST, WHEN/THEN на английском.
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing
