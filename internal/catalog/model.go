@@ -11,6 +11,7 @@ type Folder struct {
 }
 
 type TestCase struct {
+	ReadOnly       bool      `json:"readOnly"`
 	ID             string    `json:"id"`
 	FolderID       string    `json:"folderId"`
 	Name           string    `json:"name"`

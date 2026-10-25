@@ -38,6 +38,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/demo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Получить встроенный пример */
+        get: operations["getDemo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/environments": {
         parameters: {
             query?: never;
@@ -440,6 +457,13 @@ export interface components {
         CreateName: {
             name: string;
         };
+        DemoInfo: {
+            environmentId: string;
+            grpcResourceId: string;
+            httpResourceId: string;
+            sqlResourceId: string;
+            testCaseId: string;
+        };
         Difference: {
             actual: string;
             expected: string;
@@ -448,6 +472,7 @@ export interface components {
         Environment: {
             id: string;
             name: string;
+            readOnly: boolean;
             /** Format: int64 */
             revision: number;
             secretNames: string[];
@@ -548,6 +573,7 @@ export interface components {
             /** @enum {string} */
             kind: "http" | "grpc" | "postgresql";
             name: string;
+            readOnly: boolean;
             /** Format: int64 */
             revision: number;
             secretNames: string[];
@@ -656,6 +682,7 @@ export interface components {
             id: string;
             name: string;
             parentArchived: boolean;
+            readOnly: boolean;
             /** Format: int64 */
             revision: number;
             steps: components["schemas"]["Step"][];
@@ -777,6 +804,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Attempt"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getDemo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Успешный ответ */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DemoInfo"];
                 };
             };
             400: components["responses"]["BadRequest"];

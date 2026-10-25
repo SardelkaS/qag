@@ -1,6 +1,7 @@
 import type { Folder, TestCase } from './api'
 
 type Props = {
+  demoCaseId?: string
   view: string
   navigate: (view: 'cases' | 'resources') => void
   archive: boolean
@@ -66,6 +67,19 @@ export default function Sidebar(p: Props) {
           Архив
         </button>
       </div>
+      {p.demoCaseId && (
+        <button
+          className={`builtin-example ${p.selected === p.demoCaseId ? 'selected' : ''}`}
+          aria-label="Открыть встроенный пример"
+          onClick={() => p.open(p.demoCaseId!)}
+        >
+          <span>◈</span>
+          <div>
+            <strong>Встроенный пример</strong>
+            <small>HTTP · gRPC · PostgreSQL</small>
+          </div>
+        </button>
+      )}
       <nav className="folder-tree" aria-label="Каталог тест-кейсов">
         {p.loading && <p className="muted small">Загрузка…</p>}
         {!p.loading && !p.folders.length && (

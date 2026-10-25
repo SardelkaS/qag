@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"qag/internal/builtin"
 	"qag/internal/catalog"
 	"qag/internal/comparison"
 	"qag/internal/execution"
@@ -83,7 +84,8 @@ func request(name string) object {
 
 func main() {
 	for name, value := range map[string]any{
-		"Folder": catalog.Folder{}, "TestCase": catalog.TestCase{}, "Step": catalog.Step{}, "Block": catalog.Block{}, "KeyValue": catalog.KeyValue{}, "TypedValue": catalog.TypedValue{}, "Column": catalog.Column{}, "HTTPRequest": catalog.HTTPRequest{}, "GRPCRequest": catalog.GRPCRequest{}, "SQLRequest": catalog.SQLRequest{}, "Expectation": catalog.Expectation{},
+		"DemoInfo": builtin.Info{},
+		"Folder":   catalog.Folder{}, "TestCase": catalog.TestCase{}, "Step": catalog.Step{}, "Block": catalog.Block{}, "KeyValue": catalog.KeyValue{}, "TypedValue": catalog.TypedValue{}, "Column": catalog.Column{}, "HTTPRequest": catalog.HTTPRequest{}, "GRPCRequest": catalog.GRPCRequest{}, "SQLRequest": catalog.SQLRequest{}, "Expectation": catalog.Expectation{},
 		"Environment": resources.Environment{}, "Resource": resources.Resource{}, "ResourceConfig": resources.Config{}, "TLSConfig": resources.TLSConfig{}, "SecretChanges": resources.SecretChanges{},
 		"Attempt": execution.Attempt{}, "ExecutionResult": execution.Result{}, "ComparisonResult": comparison.Result{}, "Difference": comparison.Difference{}, "Run": runs.Run{}, "StepState": runs.StepState{},
 		"APIError": httpapi.Error{}, "CreateName": httpapi.CreateName{}, "ArchivePatch": httpapi.ArchivePatch{}, "TestCaseWrite": httpapi.TestCaseWrite{}, "EnvironmentWrite": httpapi.EnvironmentWrite{}, "ResourceWrite": httpapi.ResourceWrite{}, "ProtoBundle": httpapi.ProtoBundle{}, "RunStart": httpapi.RunStart{}, "AttemptStart": httpapi.AttemptStart{}, "StepWrite": httpapi.StepWrite{},
@@ -147,6 +149,7 @@ func main() {
 		paths[path].(object)[method] = operation
 	}
 	for _, route := range [][6]string{
+		{"get", "/demo", "getDemo", "Получить встроенный пример", "", "DemoInfo"},
 		{"get", "/session", "getSession", "Получить локальную сессию", "", "Session"},
 		{"get", "/health", "getHealth", "Проверить готовность", "", "Health"},
 		{"get", "/folders", "listFolders", "Список папок", "", "FolderPage"}, {"post", "/folders", "createFolder", "Создать папку", "CreateName", "Folder"}, {"patch", "/folders/{id}", "updateFolder", "Переименовать или архивировать папку", "ArchivePatch", "Folder"},

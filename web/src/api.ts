@@ -2,6 +2,7 @@ import type { components } from './generated/api'
 
 export type Folder = components['schemas']['Folder']
 export type TestCase = components['schemas']['TestCase']
+export type DemoInfo = components['schemas']['DemoInfo']
 export type Step = components['schemas']['Step']
 export type Block = components['schemas']['Block']
 export type KeyValue = components['schemas']['KeyValue']
@@ -68,13 +69,11 @@ export async function request<T>(
     )
   }
   if (!response.ok) {
-    const detail = (await response
-      .json()
-      .catch(() => ({
-        code: 'request_failed',
-        message: 'Не удалось выполнить действие',
-        requestId: '',
-      }))) as APIError
+    const detail = (await response.json().catch(() => ({
+      code: 'request_failed',
+      message: 'Не удалось выполнить действие',
+      requestId: '',
+    }))) as APIError
     if (response.status === 403) session = undefined
     throw new RequestError(response.status, detail)
   }

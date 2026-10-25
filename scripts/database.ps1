@@ -22,4 +22,15 @@ try {
         & $qagDockerPath compose --env-file $qagEnvPath up -d --wait postgres
     }
     if ($LASTEXITCODE -ne 0) { throw 'Не удалось запустить PostgreSQL через Compose' }
+    & "$PSScriptRoot/init-local.ps1"
+    foreach ($qagLine in [IO.File]::ReadAllLines($qagEnvPath)) {
+        $qagParts=$qagLine.Split('=',2)
+        if($qagParts.Length -eq 2 -and $qagParts[0] -in @('QAG_DATABASE_URL','QAG_DEMO_DATABASE_URL')) { Set-Item -LiteralPath "Env:$($qagParts[0])" -Value $qagParts[1] }
+    }
+    New-Item -ItemType Directory -Path (Join-Path $qagRoot '.tools') -Force | Out-Null
+    $qagProvision = Join-Path $qagRoot '.tools/qag-demo-provision.exe'
+    & go build -o $qagProvision ./cmd/demo-setup
+    if ($LASTEXITCODE -ne 0) { throw 'Не удалось собрать подготовку demo-роли' }
+    & $qagProvision
+    if ($LASTEXITCODE -ne 0) { throw 'Не удалось подготовить демонстрационную роль' }
 } finally { Pop-Location }

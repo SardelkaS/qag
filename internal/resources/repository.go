@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"qag/internal/builtin"
 	"qag/internal/catalog"
 	"qag/internal/problem"
 )
@@ -25,11 +26,11 @@ type queryer interface {
 }
 type scanner interface{ Scan(...any) error }
 
-const environmentSelect = `SELECT e.id::text,e.name,e.revision,v.variables,v.secret_names FROM qag.environments e JOIN qag.environment_versions v ON v.id=e.current_version_id`
+const environmentSelect = `SELECT e.id::text,e.name,e.revision,v.variables,v.secret_names,EXISTS(SELECT 1 FROM qag.builtin_demo WHERE environment_id=e.id) FROM qag.environments e JOIN qag.environment_versions v ON v.id=e.current_version_id`
 
 func scanEnvironment(row scanner) (Environment, error) {
 	var e Environment
-	err := row.Scan(&e.ID, &e.Name, &e.Revision, &e.Variables, &e.SecretNames)
+	err := row.Scan(&e.ID, &e.Name, &e.Revision, &e.Variables, &e.SecretNames, &e.ReadOnly)
 	if e.Variables == nil {
 		e.Variables = map[string]string{}
 	}
@@ -81,6 +82,11 @@ func (r *Repository) SaveEnvironment(ctx context.Context, id, value string, revi
 	}
 	var result Environment
 	err = r.transaction(ctx, func(tx pgx.Tx) error {
+		if !create {
+			if err := builtin.Protect(ctx, tx, id); err != nil {
+				return err
+			}
+		}
 		oldSecrets := map[string]string{}
 		currentRevision := int64(0)
 		if !create {
@@ -127,11 +133,11 @@ func (r *Repository) SaveEnvironment(ctx context.Context, id, value string, revi
 	return result, err
 }
 
-const resourceSelect = `SELECT r.id::text,r.environment_id::text,r.name,r.kind,v.id::text,v.revision,v.config,v.secret_names,v.created_at FROM qag.resources r JOIN qag.resource_versions v ON v.id=r.current_version_id`
+const resourceSelect = `SELECT r.id::text,r.environment_id::text,r.name,r.kind,v.id::text,v.revision,v.config,v.secret_names,v.created_at,EXISTS(SELECT 1 FROM qag.builtin_demo WHERE environment_id=r.environment_id) FROM qag.resources r JOIN qag.resource_versions v ON v.id=r.current_version_id`
 
 func scanResource(row scanner) (Resource, error) {
 	var result Resource
-	err := row.Scan(&result.ID, &result.EnvironmentID, &result.Name, &result.Kind, &result.VersionID, &result.Revision, &result.Config, &result.SecretNames, &result.UpdatedAt)
+	err := row.Scan(&result.ID, &result.EnvironmentID, &result.Name, &result.Kind, &result.VersionID, &result.Revision, &result.Config, &result.SecretNames, &result.UpdatedAt, &result.ReadOnly)
 	normalizeConfig(&result.Config)
 	if result.SecretNames == nil {
 		result.SecretNames = []string{}
@@ -186,6 +192,15 @@ func (r *Repository) SaveResource(ctx context.Context, id, environmentID, name, 
 	}
 	var result Resource
 	err := r.transaction(ctx, func(tx pgx.Tx) error {
+		if !create {
+			if err := builtin.Protect(ctx, tx, id); err != nil {
+				return err
+			}
+		} else if catalog.ValidID(environmentID) {
+			if err := builtin.Protect(ctx, tx, environmentID); err != nil {
+				return err
+			}
+		}
 		values := map[string]string{}
 		currentRevision := int64(0)
 		if !create {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Attempt, Environment, Folder, Resource, Run, TestCase } from './api'
+import type { Attempt, DemoInfo, Environment, Folder, Resource, Run, TestCase } from './api'
 import { all, command, fieldErrors, message, RequestError, request } from './api'
 import { Field, Modal, Notice } from './ui'
 import CaseEditor from './CaseEditor'
@@ -13,6 +13,9 @@ const clone = <T,>(value: T): T => structuredClone(value)
 const content = (c: TestCase | null) => (c ? JSON.stringify({ name: c.name, steps: c.steps }) : '')
 
 export default function App() {
+  const [demo, setDemo] = useState<DemoInfo | null>(null)
+  const demoRef = useRef<DemoInfo | null>(null),
+    userEnvironment = useRef(localStorage.getItem('qag.environment') ?? '')
   const [view, setView] = useState<'cases' | 'resources'>('cases'),
     [archive, setArchive] = useState(false)
   const [folders, setFolders] = useState<Folder[]>([]),
@@ -40,14 +43,18 @@ export default function App() {
     selection = useRef(selectedId),
     environment = useRef(environmentId)
   const dirty = content(document) !== content(saved),
-    readonly = !!(document?.archived || document?.parentArchived)
+    archived = !!(document?.archived || document?.parentArchived),
+    readonly = archived || !!document?.readOnly
   const writeDocument = (value: TestCase | null) => {
     current.current = value
     setDocument(value)
   }
-  const chooseEnvironment = (id: string) => {
+  const chooseEnvironment = (id: string, persist = true) => {
     environment.current = id
-    localStorage.setItem('qag.environment', id)
+    if (persist) {
+      localStorage.setItem('qag.environment', id)
+      userEnvironment.current = id
+    }
     setEnvironmentId(id)
   }
   const fail = (e: unknown) => {
@@ -69,11 +76,13 @@ export default function App() {
     setEnvironments(values)
     const id = values.some((e) => e.id === environment.current)
       ? environment.current
-      : (values[0]?.id ?? '')
+      : (values.find((e) => !e.readOnly)?.id ?? '')
     if (id !== environment.current) chooseEnvironment(id)
     setResources(id ? await all<Resource>(`/environments/${id}/resources`) : [])
   }
   const accept = (c: TestCase) => {
+    if (c.readOnly && demoRef.current) chooseEnvironment(demoRef.current.environmentId, false)
+    else if (current.current?.readOnly) chooseEnvironment(userEnvironment.current, false)
     current.current = clone(c)
     setDocument(clone(c))
     setSaved(c)
@@ -83,6 +92,8 @@ export default function App() {
     localStorage.setItem('qag.case', c.id)
   }
   const loadCase = async (id: string) => {
+    if (current.current?.readOnly && id !== demoRef.current?.testCaseId)
+      chooseEnvironment(userEnvironment.current, false)
     selection.current = id
     setSelectedId(id)
     localStorage.setItem('qag.case', id)
@@ -101,8 +112,13 @@ export default function App() {
       ])
       if (selection.current === id) {
         accept(c)
-        const liveRun=active.items[0]
-        if(liveRun){setRun(liveRun);setRunId(liveRun.id);sessionStorage.setItem(`qag.run.${id}`,liveRun.id);setTab('run')}
+        const liveRun = active.items[0]
+        if (liveRun) {
+          setRun(liveRun)
+          setRunId(liveRun.id)
+          sessionStorage.setItem(`qag.run.${id}`, liveRun.id)
+          setTab('run')
+        }
       }
     } catch (e) {
       if (selection.current === id) fail(e)
@@ -117,18 +133,20 @@ export default function App() {
     })
   useEffect(() => {
     let live = true
-    void all<Environment>('/environments')
-      .then((values) => {
+    void Promise.all([all<Environment>('/environments'), request<DemoInfo>('/demo')])
+      .then(([values, info]) => {
         if (!live) return
+        demoRef.current = info
+        setDemo(info)
         setEnvironments(values)
         chooseEnvironment(
           values.some((e) => e.id === environment.current)
             ? environment.current
-            : (values[0]?.id ?? ''),
+            : (values.find((e) => !e.readOnly)?.id ?? ''),
         )
+        if (selection.current) void loadCase(selection.current)
       })
       .catch(fail)
-    if (selection.current) void loadCase(selection.current)
     return () => {
       live = false
     }
@@ -388,7 +406,14 @@ export default function App() {
     <div className="app-shell">
       <Sidebar
         view={view}
-        navigate={(v) => guard(() => setView(v))}
+        navigate={(v) =>
+          guard(() => {
+            setView(v)
+            if (v === 'cases' && current.current?.readOnly && demoRef.current)
+              chooseEnvironment(demoRef.current.environmentId, false)
+          })
+        }
+        demoCaseId={demo?.testCaseId}
         archive={archive}
         setArchive={setArchive}
         folders={folders}
@@ -421,6 +446,7 @@ export default function App() {
               <span>Окружение</span>
               <select
                 aria-label="Текущее окружение"
+                disabled={view === 'cases' && !!document?.readOnly}
                 value={environmentId}
                 onChange={(e) => chooseEnvironment(e.target.value)}
               >
@@ -490,7 +516,10 @@ export default function App() {
                   <h1>{saved?.name}</h1>
                 </div>
                 <div className="inline">
-                  {readonly && <span className="badge">Архив · только просмотр</span>}
+                  {archived && <span className="badge">Архив · только просмотр</span>}
+                  {document.readOnly && (
+                    <span className="badge">Встроенный пример · только просмотр</span>
+                  )}
                   {tab === 'editor' && (
                     <>
                       <span className="muted small">{dirty ? 'Есть изменения' : 'Сохранено'}</span>
@@ -503,7 +532,7 @@ export default function App() {
                       </button>
                       <button
                         className="button"
-                        disabled={readonly || busy || !document.steps.length || !environmentId}
+                        disabled={archived || busy || !document.steps.length || !environmentId}
                         title={!environmentId ? 'Выберите окружение' : ''}
                         onClick={startRun}
                       >
@@ -537,6 +566,7 @@ export default function App() {
                 resources={resources}
                 fields={fields}
                 disabled={readonly || busy}
+                canExecute={!archived}
                 busy={busy}
                 environmentId={environmentId}
                 attempts={attempts}
@@ -565,7 +595,7 @@ export default function App() {
                   </p>
                   <button
                     className="button"
-                    disabled={readonly || !document.steps.length || !environmentId || busy}
+                    disabled={archived || !document.steps.length || !environmentId || busy}
                     onClick={startRun}
                   >
                     Начать прогон

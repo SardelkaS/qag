@@ -37,7 +37,7 @@ func (s *Server) operationError(w http.ResponseWriter, r *http.Request, err erro
 	switch issue.Code {
 	case "not_found":
 		status = 404
-	case "conflict":
+	case "conflict", "read_only":
 		status = 409
 	case "storage_unavailable":
 		status = 503

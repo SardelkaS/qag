@@ -4,6 +4,13 @@ context: |
   Проект qag реализован на Go/React/TypeScript: каталог и архив, редактор,
   ресурсы, HTTP/gRPC/PostgreSQL-вызовы, сравнение и история прогонов.
   Бинарник включает UI; PostgreSQL запускается через Docker Compose.
+  Встроенный демонстрационный сервис предоставляет HTTP и unary gRPC с reflection,
+  читает qag_demo.items в той же БД через отдельную ограниченную роль.
+  Готовый кейс из пяти шагов закреплён над папками; сценарий и системные ресурсы
+  доступны только для чтения, ручные прогоны и история доступны пользователю.
+  Изменение add-local-demo-service архивировано в
+  openspec/changes/archive/2026-10-26-add-local-demo-service; выполнены 25 задач,
+  пять разделов спецификаций синхронизированы с openspec/specs.
   Завершённое изменение add-manual-testing-app хранится в
   openspec/changes/archive/2026-10-25-add-manual-testing-app; выполнены все 52 задачи.
   Подтверждённые проверки отражены в docs/verification.md.

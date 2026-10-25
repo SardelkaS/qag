@@ -1,4 +1,8 @@
 :root { font-family: 'Segoe UI', system-ui, sans-serif; color: #20372e; background: #f7f8f5; font-synthesis: none; font-size: 14px; line-height: 1.5; }
+.builtin-example { display:flex; gap:12px; align-items:center; text-align:left; background:#e8efdf; border:1px solid #d3dfc9; border-radius:7px; padding:12px; color:#345032; margin:14px 0 4px; width:100%; }
+.builtin-example strong { display:block; font-size:13px; font-weight:600; }
+.builtin-example small { display:block; color:#718074; font-size:10px; margin-top:3px; }
+.builtin-example.selected { border-color:#789461; box-shadow:inset 3px 0 #789461; }
 * { box-sizing: border-box; }
 body { margin: 0; }
 button, input, textarea, select { font: inherit; }

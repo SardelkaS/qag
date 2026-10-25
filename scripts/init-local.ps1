@@ -2,7 +2,7 @@
 $qagRoot = Split-Path -Parent $PSScriptRoot
 $qagLocal = Join-Path $qagRoot '.local'
 $qagEnvPath = Join-Path $qagLocal 'dev.env'
-if (Test-Path -LiteralPath $qagEnvPath) { Write-Output 'Локальная конфигурация уже существует: .local/dev.env'; exit 0 }
+if (-not (Test-Path -LiteralPath $qagEnvPath)) {
 New-Item -ItemType Directory -Path $qagLocal -Force | Out-Null
 $qagGenerator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
 try {
@@ -22,4 +22,18 @@ try {
     )
     [IO.File]::WriteAllLines($qagEnvPath, $qagLines, [Text.UTF8Encoding]::new($false))
 } finally { $qagGenerator.Dispose() }
-Write-Output 'Создана .local/dev.env с отдельными случайными паролями и ключом. Файл исключён из Git.'
+}
+
+$qagExistingLines=[IO.File]::ReadAllLines($qagEnvPath)
+if (-not ($qagExistingLines | Where-Object { $_.StartsWith('QAG_DEMO_DATABASE_URL=') })) {
+    $qagMainLine=$qagExistingLines | Where-Object { $_.StartsWith('QAG_DATABASE_URL=') } | Select-Object -First 1
+    if (-not $qagMainLine) { throw 'Нет QAG_DATABASE_URL для подготовки demo-подключения' }
+    $qagDemoUri=New-Object UriBuilder($qagMainLine.Substring('QAG_DATABASE_URL='.Length))
+    $qagDemoUri.UserName='qag_demo_'+[guid]::NewGuid().ToString('N')
+    $qagDemoBytes=New-Object byte[] 32
+    $qagDemoRandom=[Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $qagDemoRandom.GetBytes($qagDemoBytes) } finally { $qagDemoRandom.Dispose() }
+    $qagDemoUri.Password=[BitConverter]::ToString($qagDemoBytes).Replace('-','').ToLowerInvariant()
+    [IO.File]::AppendAllText($qagEnvPath,[Environment]::NewLine+'QAG_DEMO_DATABASE_URL='+$qagDemoUri.Uri.AbsoluteUri+[Environment]::NewLine,(New-Object Text.UTF8Encoding($false)))
+}
+Write-Output 'Локальная конфигурация подготовлена; существующие реквизиты сохранены.'

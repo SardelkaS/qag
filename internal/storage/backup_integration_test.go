@@ -16,6 +16,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"qag/internal/catalog"
+	"qag/internal/demo"
 	"qag/internal/resources"
 	"qag/internal/runs"
 	"qag/internal/service"
@@ -42,6 +43,7 @@ func TestBackupRestoreCatalogHistoryAndSecret(t *testing.T) {
 	}
 	defer admin.Close(context.Background())
 	names := []string{"qag_backup_source_" + strings.ReplaceAll(catalog.NewID(), "-", ""), "qag_backup_restore_" + strings.ReplaceAll(catalog.NewID(), "-", "")}
+	var demoRole string
 	for _, name := range names {
 		if _, err = admin.Exec(ctx, "CREATE DATABASE "+pgx.Identifier{name}.Sanitize()); err != nil {
 			t.Fatal("create backup fixture database")
@@ -50,6 +52,9 @@ func TestBackupRestoreCatalogHistoryAndSecret(t *testing.T) {
 			c, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			_, _ = admin.Exec(c, "DROP DATABASE "+pgx.Identifier{name}.Sanitize()+" WITH (FORCE)")
+			if name == names[0] && demoRole != "" {
+				_, _ = admin.Exec(c, "DROP ROLE "+pgx.Identifier{demoRole}.Sanitize())
+			}
 		}(name)
 	}
 	open := func(db string) *storage.Store {
@@ -116,6 +121,42 @@ func TestBackupRestoreCatalogHistoryAndSecret(t *testing.T) {
 	if _, err = history.Finish(ctx, run.ID); err != nil {
 		t.Fatal(err)
 	}
+	demoAdminURL, _ := url.Parse(os.Getenv("QAG_TEST_DATABASE_URL"))
+	demoAdminURL.Path = "/" + names[0]
+	demoReaderURL := *demoAdminURL
+	roleName := "qag_demo_backup_" + strings.ReplaceAll(catalog.NewID(), "-", "")
+	demoReaderURL.User = url.UserPassword(roleName, catalog.NewID())
+	demoConfig, demoSecrets, err := demo.DatabaseConfig(demoAdminURL.String(), demoReaderURL.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = demo.PrepareRole(ctx, source.Pool, demoConfig, demoSecrets); err != nil {
+		t.Fatal(err)
+	}
+	demoRole = roleName
+	reader, err := demo.OpenReader(ctx, source.Pool, demoConfig, demoSecrets)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader.Close()
+	demoInfo, err := demo.Bootstrap(ctx, source.Pool, vault, "http://127.0.0.1:1", "127.0.0.1:2", demoConfig, demoSecrets)
+	if err != nil {
+		t.Fatal(err)
+	}
+	demoCase, err := c.GetCase(ctx, demoInfo.TestCaseID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	demoRun, err := engine.StartRun(ctx, demoCase.ID, demoInfo.EnvironmentID, demoCase.Revision, catalog.NewID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = history.UpdateStep(ctx, demoRun.ID, demoRun.StepStates[0].StepID, "passed", "Пример в резервной копии", 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = history.Finish(ctx, demoRun.ID); err != nil {
+		t.Fatal(err)
+	}
 	path := filepath.Join(t.TempDir(), "qag.dump")
 	out, err := os.Create(path)
 	if err != nil {
@@ -166,5 +207,31 @@ func TestBackupRestoreCatalogHistoryAndSecret(t *testing.T) {
 	wrong, _ := resources.NewVault(bytes.Repeat([]byte{9}, 32))
 	if _, err = resources.NewRepository(restored.Pool, wrong).Resolve(ctx, snapshot, "GW"); err == nil {
 		t.Fatal("backup decrypted with wrong key")
+	}
+	demoSnapshot, err := rr.Freeze(ctx, demoInfo.EnvironmentID, map[string]string{"DEMO_SQL": "postgresql"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	demoResolved, err := rr.Resolve(ctx, demoSnapshot, "DEMO_SQL")
+	if err != nil || demoResolved.Secrets["PASSWORD"] != demoSecrets["PASSWORD"] {
+		t.Fatal("restored demo secret cannot be decrypted")
+	}
+	demoConfig.Database = names[1]
+	restoredReader, err := demo.OpenReader(ctx, restored.Pool, demoConfig, demoSecrets)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer restoredReader.Close()
+	restoredInfo, err := demo.Bootstrap(ctx, restored.Pool, vault, "http://127.0.0.1:1", "127.0.0.1:2", demoConfig, demoSecrets)
+	if err != nil || restoredInfo != demoInfo {
+		t.Fatal("restored demo identity changed")
+	}
+	restoredRun, err := runs.NewRepository(restored.Pool).Get(ctx, demoRun.ID)
+	if err != nil || restoredRun.StepStates[0].Comment != "Пример в резервной копии" {
+		t.Fatal("demo history not restored")
+	}
+	var amount string
+	if err = restoredReader.QueryRow(ctx, `SELECT amount::text FROM qag_demo.items`).Scan(&amount); err != nil || amount != "9007199254740993.125" {
+		t.Fatal("demo schema not restored")
 	}
 }

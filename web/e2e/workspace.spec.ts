@@ -4,6 +4,7 @@ import { readFile, access } from 'node:fs/promises'
 import { createWriteStream } from 'node:fs'
 import { resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { createServer } from 'node:net'
 
 const root = resolve(import.meta.dirname, '../..'),
   base = 'http://127.0.0.1:18080'
@@ -24,7 +25,13 @@ async function startApp() {
   app = spawn(resolve(root, 'dist/qag.exe'), [], {
     cwd: root,
     windowsHide: true,
-    env: { ...process.env, QAG_ADDRESS: '127.0.0.1:18080', QAG_DATABASE_URL: config.databaseUrl },
+    env: {
+      ...process.env,
+      QAG_ADDRESS: '127.0.0.1:18080',
+      QAG_DATABASE_URL: config.databaseUrl,
+      QAG_DEMO_DATABASE_URL: config.demoDatabaseUrl,
+      QAG_DEMO_GRPC_ADDRESS: '127.0.0.1:0',
+    },
   })
   app.stdout?.on('data', (v) => {
     logs += String(v)
@@ -109,6 +116,150 @@ async function executeAll(page: Page) {
     await expect(calls.nth(i).getByText('Совпадает', { exact: true }).first()).toBeVisible()
   }
 }
+
+test('встроенный пример: просмотр, три протокола, история и перезапуск', async ({ page }) => {
+  const info = await api('/demo'),
+    c = await api(`/test-cases/${info.testCaseId}`)
+  expect(c.readOnly).toBe(true)
+  expect(c.steps).toHaveLength(5)
+  await page.goto('/')
+  const pinned = page.getByRole('button', { name: 'Открыть встроенный пример', exact: true })
+  await pinned.waitFor()
+
+  await pinned.click()
+  await expect(page.getByRole('heading', { name: c.name, exact: true })).toBeVisible()
+  await expect(page.getByText('Встроенный пример · только просмотр', { exact: true })).toBeVisible()
+  await expect(page.getByLabel('Название тест-кейса')).toBeDisabled()
+  await expect(page.getByRole('button', { name: '+ Добавить шаг', exact: true })).toBeDisabled()
+  await expect(page.getByLabel('Текущее окружение')).toBeDisabled()
+  await expect(page.getByLabel('Текущее окружение')).toHaveValue(info.environmentId)
+  await expect(page.locator('.folder-tree')).not.toContainText('Системные примеры')
+  // Read-only is enforced by the API for every managed object.
+  await expect(
+    api(`/test-cases/${c.id}`, 'PUT', { name: c.name, revision: c.revision, steps: c.steps }),
+  ).rejects.toThrow('409')
+  await expect(api(`/test-cases/${c.id}`, 'PATCH', { archived: true })).rejects.toThrow('409')
+  await expect(api(`/folders/${c.folderId}`, 'PATCH', { name: 'Изменено' })).rejects.toThrow('409')
+  await expect(
+    api(`/folders/${c.folderId}/test-cases`, 'POST', { name: 'Изменено' }),
+  ).rejects.toThrow('409')
+  const env = (await api('/environments')).items.find((e: any) => e.id === info.environmentId)
+  await expect(
+    api(`/environments/${env.id}`, 'PUT', {
+      name: env.name,
+      revision: env.revision,
+      variables: {},
+      secrets: { replace: {}, clear: [] },
+    }),
+  ).rejects.toThrow('409')
+  const resources = (await api(`/environments/${env.id}/resources`)).items
+  for (const resource of resources) {
+    await expect(
+      api(`/resources/${resource.id}`, 'PUT', {
+        name: resource.name,
+        kind: resource.kind,
+        revision: resource.revision,
+        config: resource.config,
+        secrets: { replace: {}, clear: [] },
+      }),
+    ).rejects.toThrow('409')
+  }
+  await expect(
+    api(`/resources/${info.grpcResourceId}/proto-bundles`, 'POST', {
+      files: {},
+      revision: resources.find((r: any) => r.id === info.grpcResourceId).revision,
+    }),
+  ).rejects.toThrow('409')
+  await expect(
+    api(
+      `/test-cases/${c.id}/blocks/${c.steps[0].blocks[0].id}/attempts`,
+      'POST',
+      { environmentId: randomUUID(), revision: c.revision },
+      randomUUID(),
+    ),
+  ).rejects.toThrow('400')
+  const httpConfig = resources.find((r: any) => r.kind === 'http').config
+  await expect(
+    api(`/environments/${env.id}/resources`, 'POST', {
+      name: 'EXTRA',
+      kind: 'http',
+      config: httpConfig,
+      secrets: { replace: {}, clear: [] },
+    }),
+  ).rejects.toThrow('409')
+  const editorCalls = page.locator('.editor .call-block')
+  await expect(editorCalls).toHaveCount(5)
+  await editorCalls.first().getByRole('button', { name: 'Запустить вызов', exact: true }).click()
+  await expect(editorCalls.first().getByText('Совпадает', { exact: true })).toBeVisible()
+  expect((await api(`/test-cases/${c.id}/runs`)).items).toHaveLength(0)
+  for (let cycle = 0; cycle < 2; cycle++) {
+    if (cycle) await page.getByRole('button', { name: 'Редактор 5', exact: true }).click()
+    await page.getByRole('button', { name: 'Начать прогон', exact: true }).click()
+    const calls = page.locator('.run-view .call-block')
+    for (let n = 0; n < 5; n++) {
+      await calls.nth(n).getByRole('button', { name: 'Запустить вызов', exact: true }).click()
+      await expect(calls.nth(n).getByText('Совпадает', { exact: true }).first()).toBeVisible()
+    }
+    for (let n = 1; n <= 5; n++) {
+      await page.getByLabel(`Статус шага ${n}`, { exact: true }).selectOption('passed')
+      await expect(page.getByLabel(`Статус шага ${n}`, { exact: true })).toBeEnabled()
+    }
+    await page.getByLabel('Комментарий к шагу 5', { exact: true }).fill('Проверены три интерфейса')
+    await page.getByRole('button', { name: 'Сохранить комментарий', exact: true }).click()
+    await page.getByRole('button', { name: 'Завершить прогон', exact: true }).click()
+    await expect(page.locator('.run-view > .page-heading .status')).toHaveText('Пройден')
+  }
+  const history = (await api(`/test-cases/${c.id}/runs`)).items
+  expect(history).toHaveLength(2)
+  expect(history[1].retentionReasons.sort()).toEqual(['first_run', 'first_success'])
+  expect(history[0].retentionReasons).toEqual([])
+  await stopApp()
+  const occupied = createServer()
+  await new Promise<void>((r) => occupied.listen(0, '127.0.0.1', r))
+  const occupiedAddress = occupied.address() as { port: number }
+  const rejected = spawn(resolve(root, 'dist/qag.exe'), [], {
+    cwd: root,
+    windowsHide: true,
+    env: {
+      ...process.env,
+      QAG_ADDRESS: '127.0.0.1:18080',
+      QAG_DATABASE_URL: config.databaseUrl,
+      QAG_DEMO_DATABASE_URL: config.demoDatabaseUrl,
+      QAG_DEMO_GRPC_ADDRESS: `127.0.0.1:${occupiedAddress.port}`,
+    },
+  })
+  let rejectedLog = ''
+  rejected.stderr?.on('data', (v) => (rejectedLog += String(v)))
+  const exitCode = await new Promise<number | null>((r) => rejected.once('close', r))
+  await new Promise<void>((r) => occupied.close(() => r()))
+  expect(exitCode).toBe(1)
+  expect(rejectedLog).toContain('gRPC-порт недоступен')
+  expect(rejectedLog).not.toContain(new URL(config.demoDatabaseUrl).password)
+  await startApp()
+  await page.reload()
+  expect(await api('/demo')).toEqual(info)
+  const old = await api(`/runs/${history[1].id}`)
+  expect(old.stepStates[4].comment).toBe('Проверены три интерфейса')
+  expect(old.attempts.map((a: any) => a.result.comparison.status)).toEqual([
+    'match',
+    'match',
+    'match',
+    'match',
+    'match',
+  ])
+  await page.getByRole('button', { name: 'Архив', exact: true }).click()
+  await expect(pinned).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Начать прогон', exact: true })).toBeEnabled()
+  await page.getByRole('button', { name: 'Окружения и ресурсы', exact: false }).click()
+  await expect(
+    page.getByRole('button', { name: 'Настроить окружение', exact: true }),
+  ).toBeDisabled()
+  await page.locator('.resource-item').filter({ hasText: 'DEMO_SQL' }).click()
+  await expect(page.getByLabel('Адрес сервера', { exact: true })).toBeDisabled()
+  await expect(page.getByLabel('Действие: PASSWORD', { exact: true })).toBeDisabled()
+  await pinned.click()
+  await page.screenshot({ path: resolve(root, '.local/builtin-demo.png'), fullPage: true })
+})
 
 test('каталог → три протокола → история → архив → перезапуск', async ({ page }) => {
   const errors: string[] = []
@@ -207,7 +358,7 @@ test('каталог → три протокола → история → арх
   await page.getByRole('button', { name: 'Сохранить комментарий', exact: true }).click()
   await page.getByLabel('Статус шага 1', { exact: true }).selectOption('passed')
   await expect(page.getByLabel('Статус шага 1', { exact: true })).toBeEnabled()
-  await page.evaluate(()=>sessionStorage.clear())
+  await page.evaluate(() => sessionStorage.clear())
   await page.reload()
   await page.getByRole('button', { name: 'Прогон', exact: true }).click()
   await expect(page.getByLabel('Комментарий к шагу 1', { exact: true })).toHaveValue(
@@ -274,7 +425,7 @@ test('каталог → три протокола → история → арх
 })
 
 test('остановка процесса не повторяет внешний эффект и сохраняет ручной шаг', async ({ page }) => {
-  let env = (await api('/environments')).items[0]
+  let env = (await api('/environments')).items.find((e: any) => !e.readOnly)
   if (!env) {
     env = await api('/environments', 'POST', {
       name: 'recovery',
@@ -349,6 +500,7 @@ test('остановка процесса не повторяет внешний
   expect(restored.attempts[0].state).toBe('interrupted')
   expect((await (await fetch(config.http + '/stats')).json()).calls).toBe(before + 1)
   await page.goto('/')
+  await page.getByRole('button', { name: 'Открыть встроенный пример', exact: true }).waitFor()
   await page.evaluate((id) => localStorage.setItem('qag.case', id), c.id)
   await page.reload()
   await page.getByRole('button', { name: 'История', exact: true }).click()
@@ -443,6 +595,7 @@ test('сортировка, конфликт редактора, секреты 
     ],
   })
   await page.goto('/')
+  await page.getByRole('button', { name: 'Открыть встроенный пример', exact: true }).waitFor()
   await page.evaluate(
     ({ id, env }) => {
       localStorage.setItem('qag.case', id)
@@ -513,4 +666,21 @@ test('сортировка, конфликт редактора, секреты 
   ])
   expect(logs).not.toContain(token)
   expect(await page.content()).not.toContain(token)
+  const previousEnvironment = await page.getByLabel('Текущее окружение').inputValue()
+  await page.getByLabel('Описание шага 1', { exact: true }).fill('Черновик перед примером')
+  const pinned = page.getByRole('button', { name: 'Открыть встроенный пример', exact: true })
+  await pinned.click()
+  await expect(page.getByRole('dialog', { name: 'Несохранённые изменения' })).toBeVisible()
+  await page.getByRole('button', { name: 'Остаться', exact: true }).click()
+  await expect(page.getByLabel('Описание шага 1', { exact: true })).toHaveValue(
+    'Черновик перед примером',
+  )
+  await pinned.click()
+  await page.getByRole('button', { name: 'Отбросить изменения', exact: true }).click()
+  await expect(page.getByLabel('Текущее окружение')).toBeDisabled()
+  await page.getByRole('button', { name: `Папка ${folder.name}`, exact: true }).click()
+  await page.getByRole('button', { name: `Открыть тест-кейс ${c.name}`, exact: true }).click()
+  await expect(page.getByLabel('Текущее окружение')).toBeEnabled()
+  await expect(page.getByLabel('Текущее окружение')).toHaveValue(previousEnvironment)
+  await expect(page.getByLabel('Описание шага 1', { exact: true })).toHaveValue('Второй ручной шаг')
 })

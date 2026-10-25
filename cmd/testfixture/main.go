@@ -14,7 +14,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"qag/internal/catalog"
+	"qag/internal/demo"
 	"qag/internal/testfixture"
 )
 
@@ -42,13 +44,34 @@ func run() error {
 	if _, err = admin.Exec(ctx, "CREATE DATABASE "+pgx.Identifier{db}.Sanitize()); err != nil {
 		return err
 	}
+	var demoRole string
 	defer func() {
 		cleanup, done := context.WithTimeout(context.Background(), 10*time.Second)
 		defer done()
 		_, _ = admin.Exec(cleanup, "DROP DATABASE "+pgx.Identifier{db}.Sanitize()+" WITH (FORCE)")
+		if demoRole != "" {
+			_, _ = admin.Exec(cleanup, "DROP ROLE "+pgx.Identifier{demoRole}.Sanitize())
+		}
 	}()
 	appURL := *u
 	appURL.Path = "/" + db
+	demoURL := appURL
+	demoName := "qag_demo_e2e_" + strings.ReplaceAll(catalog.NewID(), "-", "")
+	demoURL.User = url.UserPassword(demoName, catalog.NewID()+catalog.NewID())
+	demoConfig, demoSecrets, err := demo.DatabaseConfig(appURL.String(), demoURL.String())
+	if err != nil {
+		return err
+	}
+	provision, err := pgxpool.New(ctx, u.String())
+	if err != nil {
+		return err
+	}
+	err = demo.PrepareRole(ctx, provision, demoConfig, demoSecrets)
+	provision.Close()
+	if err != nil {
+		return err
+	}
+	demoRole = demoName
 	cert, err := testfixture.NewCertificates()
 	if err != nil {
 		return err
@@ -74,6 +97,7 @@ func run() error {
 	go server.Serve(l)
 	defer server.Close()
 	config := map[string]any{"databaseUrl": appURL.String(), "http": plain.HTTP.URL, "grpc": plain.GRPC, "mtlsHttp": secure.HTTP.URL, "mtlsGrpc": secure.GRPC, "ca": cert.CA, "certificate": cert.Client, "privateKey": cert.Key, "shutdown": "http://" + l.Addr().String() + "/shutdown", "target": map[string]string{"address": u.Host, "database": "qag_test", "username": u.User.Username(), "password": func() string { p, _ := u.User.Password(); return p }()}}
+	config["demoDatabaseUrl"] = demoURL.String()
 	data, err := json.Marshal(config)
 	if err != nil {
 		return err

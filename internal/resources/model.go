@@ -6,6 +6,7 @@ import (
 )
 
 type Environment struct {
+	ReadOnly    bool              `json:"readOnly"`
 	ID          string            `json:"id"`
 	Name        string            `json:"name"`
 	Revision    int64             `json:"revision"`
@@ -32,6 +33,7 @@ type Config struct {
 
 // Resource is the public representation. Secret values are never returned.
 type Resource struct {
+	ReadOnly      bool      `json:"readOnly"`
 	ID            string    `json:"id"`
 	EnvironmentID string    `json:"environmentId"`
 	Name          string    `json:"name"`

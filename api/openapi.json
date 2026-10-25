@@ -291,6 +291,34 @@
         ],
         "type": "object"
       },
+      "DemoInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "environmentId": {
+            "type": "string"
+          },
+          "grpcResourceId": {
+            "type": "string"
+          },
+          "httpResourceId": {
+            "type": "string"
+          },
+          "sqlResourceId": {
+            "type": "string"
+          },
+          "testCaseId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "testCaseId",
+          "environmentId",
+          "httpResourceId",
+          "grpcResourceId",
+          "sqlResourceId"
+        ],
+        "type": "object"
+      },
       "Difference": {
         "additionalProperties": false,
         "properties": {
@@ -320,6 +348,9 @@
           "name": {
             "type": "string"
           },
+          "readOnly": {
+            "type": "boolean"
+          },
           "revision": {
             "format": "int64",
             "type": "integer"
@@ -338,6 +369,7 @@
           }
         },
         "required": [
+          "readOnly",
           "id",
           "name",
           "revision",
@@ -711,6 +743,9 @@
           "name": {
             "type": "string"
           },
+          "readOnly": {
+            "type": "boolean"
+          },
           "revision": {
             "format": "int64",
             "type": "integer"
@@ -730,6 +765,7 @@
           }
         },
         "required": [
+          "readOnly",
           "id",
           "environmentId",
           "name",
@@ -1136,6 +1172,9 @@
           "parentArchived": {
             "type": "boolean"
           },
+          "readOnly": {
+            "type": "boolean"
+          },
           "revision": {
             "format": "int64",
             "type": "integer"
@@ -1152,6 +1191,7 @@
           }
         },
         "required": [
+          "readOnly",
           "id",
           "folderId",
           "name",
@@ -1342,6 +1382,43 @@
           }
         },
         "summary": "Отменить попытку",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/demo": {
+      "get": {
+        "operationId": "getDemo",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoInfo"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "security": [],
+        "summary": "Получить встроенный пример",
         "tags": [
           "qag"
         ]

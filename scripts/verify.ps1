@@ -2,6 +2,7 @@
 $qagRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $qagRoot
 try {
+    & "$PSScriptRoot/proto.ps1"
     & "$PSScriptRoot/build.ps1"
     & "$PSScriptRoot/contracts.ps1"
     & go test ./...

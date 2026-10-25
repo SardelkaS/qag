@@ -7,7 +7,7 @@ import (
 )
 
 func TestConfigRejectsUnsafeBindingsAndDoesNotExposeSecrets(t *testing.T) {
-	base := map[string]string{"QAG_DATABASE_URL": "postgres://user:sentinel-password@localhost:5432/qag", "QAG_SECRET_KEY": base64.StdEncoding.EncodeToString(make([]byte, 32))}
+	base := map[string]string{"QAG_DATABASE_URL": "postgres://user:sentinel-password@localhost:5432/qag", "QAG_DEMO_DATABASE_URL": "postgres://demo:reader@localhost:5432/qag", "QAG_SECRET_KEY": base64.StdEncoding.EncodeToString(make([]byte, 32))}
 	for _, address := range []string{"0.0.0.0:8080", ":8080", "example.org:8080", "127.0.0.1:0", "[::]:8080"} {
 		t.Run(address, func(t *testing.T) {
 			base["QAG_ADDRESS"] = address
@@ -33,7 +33,7 @@ func TestConfigRejectsUnsafeBindingsAndDoesNotExposeSecrets(t *testing.T) {
 }
 
 func TestConfigRejectsRemoteDevelopmentOrigin(t *testing.T) {
-	env := map[string]string{"QAG_DATABASE_URL": "postgres://localhost/qag", "QAG_SECRET_KEY": base64.StdEncoding.EncodeToString(make([]byte, 32)), "QAG_DEV_ORIGIN": "http://evil.example"}
+	env := map[string]string{"QAG_DATABASE_URL": "postgres://user@localhost/qag", "QAG_DEMO_DATABASE_URL": "postgres://demo@localhost/qag", "QAG_SECRET_KEY": base64.StdEncoding.EncodeToString(make([]byte, 32)), "QAG_DEV_ORIGIN": "http://evil.example"}
 	if _, err := LoadConfig(func(key string) string { return env[key] }); err == nil {
 		t.Fatal("remote dev origin accepted")
 	}

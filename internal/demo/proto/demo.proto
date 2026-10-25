@@ -1,0 +1,14 @@
+syntax = "proto3";
+package qag.demo.v1;
+option go_package = "qag/internal/demo/proto;demopb";
+
+service DemoService {
+  rpc GetItem(GetItemRequest) returns (Item);
+}
+message GetItemRequest { string id = 1; }
+message Item {
+  string id = 1;
+  string name = 2;
+  string status = 3;
+  string amount = 4;
+}

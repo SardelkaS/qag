@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"qag/internal/builtin"
 	"qag/internal/problem"
 )
 
@@ -54,7 +55,7 @@ func Paginate[T any](items []T, limit int, cursor string, id func(T) string) (Pa
 
 func (r *Repository) ListFolders(ctx context.Context, archived bool, limit int, cursor string) (Page[Folder], error) {
 	items := []Folder{}
-	rows, err := r.pool.Query(ctx, `SELECT id::text,name,archived_at IS NOT NULL,created_at,updated_at FROM qag.folders WHERE (archived_at IS NOT NULL)=$1 ORDER BY name COLLATE qag.russian, normalized_name COLLATE "C", id`, archived)
+	rows, err := r.pool.Query(ctx, `SELECT id::text,name,archived_at IS NOT NULL,created_at,updated_at FROM qag.folders WHERE (archived_at IS NOT NULL)=$1 AND NOT EXISTS(SELECT 1 FROM qag.builtin_demo WHERE folder_id=qag.folders.id) ORDER BY name COLLATE qag.russian, normalized_name COLLATE "C", id`, archived)
 	if err != nil {
 		return Page[Folder]{}, problem.Database(err)
 	}
@@ -91,6 +92,9 @@ func (r *Repository) PatchFolder(ctx context.Context, id string, newName *string
 	}
 	var f Folder
 	err := r.transaction(ctx, func(tx pgx.Tx) error {
+		if err := builtin.Protect(ctx, tx, id); err != nil {
+			return err
+		}
 		if err := tx.QueryRow(ctx, `SELECT id::text,name,archived_at IS NOT NULL,created_at,updated_at FROM qag.folders WHERE id=$1 FOR UPDATE`, id).Scan(&f.ID, &f.Name, &f.Archived, &f.CreatedAt, &f.UpdatedAt); err != nil {
 			return problem.Database(err)
 		}
@@ -116,7 +120,7 @@ func (r *Repository) PatchFolder(ctx context.Context, id string, newName *string
 	return f, err
 }
 
-const caseSelect = `SELECT c.id::text,c.folder_id::text,c.name,c.archived_at IS NOT NULL,f.archived_at IS NOT NULL,c.revision,c.steps,c.created_at,c.updated_at FROM qag.test_cases c JOIN qag.folders f ON f.id=c.folder_id`
+const caseSelect = `SELECT c.id::text,c.folder_id::text,c.name,c.archived_at IS NOT NULL,f.archived_at IS NOT NULL,c.revision,c.steps,c.created_at,c.updated_at,EXISTS(SELECT 1 FROM qag.builtin_demo WHERE test_case_id=c.id) FROM qag.test_cases c JOIN qag.folders f ON f.id=c.folder_id`
 
 type rowScanner interface{ Scan(...any) error }
 type queryer interface {
@@ -125,7 +129,7 @@ type queryer interface {
 
 func scanCase(row rowScanner) (TestCase, error) {
 	var c TestCase
-	err := row.Scan(&c.ID, &c.FolderID, &c.Name, &c.Archived, &c.ParentArchived, &c.Revision, &c.Steps, &c.CreatedAt, &c.UpdatedAt)
+	err := row.Scan(&c.ID, &c.FolderID, &c.Name, &c.Archived, &c.ParentArchived, &c.Revision, &c.Steps, &c.CreatedAt, &c.UpdatedAt, &c.ReadOnly)
 	if c.Steps == nil {
 		c.Steps = []Step{}
 	}
@@ -143,6 +147,18 @@ func getCase(ctx context.Context, db queryer, id string, lock bool) (TestCase, e
 }
 func (r *Repository) GetCase(ctx context.Context, id string) (TestCase, error) {
 	return getCase(ctx, r.pool, id, false)
+}
+func (r *Repository) DemoInfo(ctx context.Context) (builtin.Info, error) {
+	return builtin.Get(ctx, r.pool)
+}
+func (r *Repository) CheckEnvironment(ctx context.Context, id, env string) error {
+	if !ValidID(id) {
+		return problem.Invalid("id", "Некорректный идентификатор тест-кейса")
+	}
+	if !ValidID(env) {
+		return problem.Invalid("environmentId", "Выберите окружение")
+	}
+	return builtin.CheckEnvironment(ctx, r.pool, id, env)
 }
 
 func (r *Repository) ListCases(ctx context.Context, folderID string, limit int, cursor string) (Page[TestCase], error) {
@@ -186,6 +202,9 @@ func (r *Repository) CreateCase(ctx context.Context, folderID, value string) (Te
 	var c TestCase
 	err = r.transaction(ctx, func(tx pgx.Tx) error {
 		var archived bool
+		if err := builtin.Protect(ctx, tx, folderID); err != nil {
+			return err
+		}
 		if err := tx.QueryRow(ctx, `SELECT archived_at IS NOT NULL FROM qag.folders WHERE id=$1 FOR UPDATE`, folderID).Scan(&archived); err != nil {
 			return problem.Database(err)
 		}
@@ -223,6 +242,9 @@ func (r *Repository) SaveCase(ctx context.Context, id, value string, revision in
 		if old.Archived || old.ParentArchived {
 			return problem.Archived()
 		}
+		if old.ReadOnly {
+			return builtin.Protect(ctx, tx, id)
+		}
 		if old.Revision != revision {
 			return problem.Conflict("Сценарий изменён в другой вкладке; ваши правки не перезаписаны")
 		}
@@ -246,6 +268,9 @@ func (r *Repository) PatchCase(ctx context.Context, id string, newName *string, 
 		c, err = getCase(ctx, tx, id, true)
 		if err != nil {
 			return err
+		}
+		if c.ReadOnly {
+			return builtin.Protect(ctx, tx, id)
 		}
 		if c.ParentArchived {
 			return problem.Archived()

@@ -82,6 +82,9 @@ func (e *Engine) StartRun(ctx context.Context, caseID, environmentID string, rev
 	if previous, found, err := e.Runs.LookupRun(ctx, key, hash); err != nil || found {
 		return previous, err
 	}
+	if err := e.Catalog.CheckEnvironment(ctx, caseID, environmentID); err != nil {
+		return runs.Run{}, err
+	}
 	c, err := e.Catalog.GetCase(ctx, caseID)
 	if err != nil {
 		return runs.Run{}, err
@@ -126,6 +129,9 @@ func (e *Engine) EditorAttempt(ctx context.Context, caseID, blockID, environment
 	hash := requestHash("editor", caseID, blockID, environmentID, revision)
 	if previous, found, err := e.Runs.LookupAttempt(ctx, key, hash); err != nil || found {
 		return previous, err
+	}
+	if err := e.Catalog.CheckEnvironment(ctx, caseID, environmentID); err != nil {
+		return execution.Attempt{}, err
 	}
 	c, err := e.Catalog.GetCase(ctx, caseID)
 	if err != nil {

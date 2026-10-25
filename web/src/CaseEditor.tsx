@@ -9,6 +9,7 @@ type Props = {
   resources: Resource[]
   fields: Record<string, string>
   disabled: boolean
+  canExecute: boolean
   busy: boolean
   environmentId: string
   attempts: Record<string, Attempt>
@@ -21,6 +22,7 @@ export default function CaseEditor({
   resources,
   fields,
   disabled,
+  canExecute,
   busy,
   environmentId,
   attempts,
@@ -158,7 +160,7 @@ export default function CaseEditor({
                 <button
                   className="button secondary"
                   disabled={
-                    disabled ||
+                    !canExecute ||
                     busy ||
                     !environmentId ||
                     !resources.some((r) => r.name === block.resource && r.kind === block.kind) ||

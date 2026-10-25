@@ -165,7 +165,11 @@ export default function ResourcesPanel({
                 {environment.secretNames.length} секретных
               </span>
             </div>
-            <button className="button secondary" onClick={() => setEnvDialog(environment)}>
+            <button
+              className="button secondary"
+              disabled={environment.readOnly}
+              onClick={() => setEnvDialog(environment)}
+            >
               Настроить окружение
             </button>
           </div>
@@ -173,7 +177,11 @@ export default function ResourcesPanel({
             <aside className="resource-list">
               <div className="row-heading">
                 <h3>Ресурсы</h3>
-                <button className="text-button" onClick={() => setEditing('new')}>
+                <button
+                  className="text-button"
+                  disabled={environment.readOnly}
+                  onClick={() => setEditing('new')}
+                >
                   + Добавить
                 </button>
               </div>
@@ -208,7 +216,11 @@ export default function ResourcesPanel({
                   <p className="muted">
                     Именованный ресурс объединяет адрес, параметры подключения и сертификаты.
                   </p>
-                  <button className="button" onClick={() => setEditing('new')}>
+                  <button
+                    className="button"
+                    disabled={environment.readOnly}
+                    onClick={() => setEditing('new')}
+                  >
                     Добавить ресурс
                   </button>
                 </div>
@@ -383,7 +395,7 @@ function ResourceForm({
   }
   return (
     <form className="resource-form" onSubmit={(e) => void submit(e)}>
-      <fieldset disabled={busy} className="plain-fieldset">
+      <fieldset disabled={busy || initial?.readOnly} className="plain-fieldset">
         <div className="row-heading">
           <h2>{initial ? initial.name : 'Новый ресурс'}</h2>
           <button type="button" className="text-button" onClick={cancel}>
@@ -571,7 +583,11 @@ function ResourceForm({
         <div className="action-bar">
           <span className="muted small">Изменения применятся к новым прогонам.</span>
           <button className="button" type="submit">
-            {busy ? 'Сохранение…' : 'Сохранить ресурс'}
+            {initial?.readOnly
+              ? 'Системное подключение · только просмотр'
+              : busy
+                ? 'Сохранение…'
+                : 'Сохранить ресурс'}
           </button>
         </div>
       </fieldset>
