@@ -6,6 +6,9 @@ import (
 	"qag/internal/runs"
 )
 
+type TestCaseCreate struct {
+	Name string `json:"name,omitempty"`
+}
 type CreateName struct {
 	Name string `json:"name"`
 }
@@ -14,12 +17,16 @@ type ArchivePatch struct {
 	Archived *bool   `json:"archived,omitempty"`
 }
 type TestCaseWrite struct {
-	Name     string         `json:"name"`
+	Name     string         `json:"name,omitempty"`
 	Revision int64          `json:"revision"`
-	Steps    []catalog.Step `json:"steps"`
+	Steps    []catalog.Step `json:"steps,omitempty"`
 }
 type EnvironmentWrite struct {
-	Name      string                  `json:"name"`
+	Description string `json:"description"`
+	Name        string `json:"name"`
+	Revision    int64  `json:"revision"`
+}
+type VariablesWrite struct {
 	Revision  int64                   `json:"revision"`
 	Variables map[string]string       `json:"variables"`
 	Secrets   resources.SecretChanges `json:"secrets"`

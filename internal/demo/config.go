@@ -28,7 +28,7 @@ func DatabaseConfig(adminURL, demoURL string) (resources.Config, map[string]stri
 		return fail()
 	}
 	pw, _ := u.User.Password()
-	c := resources.Config{Address: u.Host, Database: strings.TrimPrefix(u.Path, "/"), Username: u.User.Username(), Headers: []catalog.KeyValue{}, TLS: resources.TLSConfig{Mode: "tls"}}
+	c := resources.Config{Address: u.Host, Database: strings.TrimPrefix(u.Path, "/"), Username: u.User.Username(), Headers: []catalog.RequestHeader{}, TLS: resources.TLSConfig{Mode: "tls"}}
 	return databaseTLSConfig(c, u, pw, fail)
 }
 func databaseTLSConfig(c resources.Config, u *url.URL, pw string, fail func() (resources.Config, map[string]string, error)) (resources.Config, map[string]string, error) {

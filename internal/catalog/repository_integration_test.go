@@ -65,7 +65,7 @@ func TestCatalogPersistenceRevisionAndArchive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if saved.Revision != 2 || saved.Steps[0].Blocks[0].TimeoutSeconds != 30 {
+	if saved.Revision != 2 || saved.Steps[0].Blocks[0].TimeoutSeconds != 0 {
 		t.Fatal("revision/default not persisted")
 	}
 	_, err = repo.SaveCase(ctx, yadro.ID, "Не должен сохраниться", yadro.Revision, steps)
@@ -73,7 +73,7 @@ func TestCatalogPersistenceRevisionAndArchive(t *testing.T) {
 	if !errors.As(err, &issue) || issue.Code != "conflict" {
 		t.Fatalf("stale save not rejected: %v", err)
 	}
-	bad := []catalog.Step{{ID: catalog.NewID(), Description: ""}}
+	bad := []catalog.Step{{ID: "invalid", Description: ""}}
 	if _, err = repo.SaveCase(ctx, yadro.ID, "Тоже не сохранять", saved.Revision, bad); err == nil {
 		t.Fatal("invalid step saved")
 	}

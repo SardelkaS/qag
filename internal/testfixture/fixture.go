@@ -81,18 +81,43 @@ func (c Certificates) ServerTLS() *tls.Config {
 }
 
 type Targets struct {
-	HTTP  *httptest.Server
-	GRPC  string
-	Calls atomic.Int32
-	Flaky atomic.Int32
-	grpc  *grpc.Server
+	HTTP    *httptest.Server
+	GRPC    string
+	Calls   atomic.Int32
+	Flaky   atomic.Int32
+	Sources atomic.Int32
+	grpc    *grpc.Server
 }
 
 func Start(cert *Certificates, withReflection bool) (*Targets, error) {
 	t := &Targets{}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/stats" {
-			_ = json.NewEncoder(w).Encode(map[string]int32{"calls": t.Calls.Load()})
+			_ = json.NewEncoder(w).Encode(map[string]int32{"calls": t.Calls.Load(), "sources": t.Sources.Load()})
+			return
+		}
+		if r.URL.Path == "/token" {
+			n := t.Sources.Add(1)
+			if r.URL.Query().Get("delay") != "" {
+				select {
+				case <-r.Context().Done():
+					return
+				case <-time.After(60 * time.Second):
+				}
+			}
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Query().Get("result") {
+			case "error":
+				w.WriteHeader(401)
+				return
+			case "invalid":
+				_, _ = w.Write([]byte("{broken"))
+				return
+			case "null":
+				_, _ = w.Write([]byte(`{"tokens":[{"value":null}]}`))
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"tokens": []any{map[string]any{"value": "fixture-secret-token-" + big.NewInt(int64(n)).String()}}})
 			return
 		}
 		t.Calls.Add(1)

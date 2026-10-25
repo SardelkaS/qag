@@ -9,7 +9,7 @@ import (
 func TestPrepareTypedFieldsAndRejectMissingVariables(t *testing.T) {
 	status := 200
 	res := Resolved{Resource: Resource{Config: Config{}}, Variables: map[string]string{"TASK_ID": "a/b ?", "ALIAS": "${TASK_ID}"}, Secrets: map[string]string{"TOKEN": "test-token"}}
-	block := catalog.Block{ID: catalog.NewID(), Kind: "http", Resource: "AI_GW_SERVISE", HTTP: &catalog.HTTPRequest{Method: "POST", Path: "AI_GW_SERVISE/task/${ALIAS}", BodyMode: "json", Body: `{"id":"${TASK_ID}","n":9007199254740993123}`, Headers: []catalog.KeyValue{{Name: "Authorization", Value: "Bearer ${TOKEN}"}}}, Expected: catalog.Expectation{StatusCode: &status, BodyMode: "none"}}
+	block := catalog.Block{ID: catalog.NewID(), Kind: "http", Resource: "AI_GW_SERVISE", HTTP: &catalog.HTTPRequest{Method: "POST", Path: "AI_GW_SERVISE/task/${ALIAS}", BodyMode: "json", Body: `{"id":"${TASK_ID}","n":9007199254740993123}`, Headers: []catalog.RequestHeader{{Name: "Authorization", Value: "Bearer ${TOKEN}"}}}, Expected: catalog.Expectation{StatusCode: &status, BodyMode: "none"}}
 	prepared, _, err := res.Prepare(block)
 	if err != nil {
 		t.Fatal(err)

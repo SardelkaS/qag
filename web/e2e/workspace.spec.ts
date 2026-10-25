@@ -71,7 +71,9 @@ test.beforeAll(async () => {
     windowsHide: true,
     env: process.env,
   })
-  fixture.stderr?.pipe(createWriteStream(resolve(root, '.local/e2e-fixture.log')))
+  fixture.stderr?.pipe(
+    createWriteStream(resolve(root, '.local/e2e-fixture.log')),
+  )
   await eventually(async () => {
     await access(path)
     return true
@@ -83,7 +85,10 @@ test.afterAll(async () => {
   await stopApp()
   if (config) await fetch(config.shutdown, { method: 'POST' }).catch(() => {})
   if (fixture?.exitCode === null)
-    await Promise.race([new Promise((r) => fixture.once('close', r)), pause(5000)])
+    await Promise.race([
+      new Promise((r) => fixture.once('close', r)),
+      pause(5000),
+    ])
   if (fixture?.exitCode === null) fixture.kill()
 })
 
@@ -95,61 +100,109 @@ async function addResource(page: Page, name: string, kind: string) {
   const form = page.locator('.resource-form')
   await form.getByLabel('Имя ресурса', { exact: true }).fill(name)
   await form.getByLabel('Тип ресурса', { exact: true }).selectOption(kind)
-  await form.getByLabel('Защита подключения', { exact: true }).selectOption('plaintext')
+  await form
+    .getByLabel('Защита подключения', { exact: true })
+    .selectOption('plaintext')
   if (kind === 'http')
-    await form.getByLabel('Базовый URL', { exact: false }).fill(config.http + '/api')
-  if (kind === 'grpc') await form.getByLabel('Адрес сервера', { exact: true }).fill(config.grpc)
+    await form
+      .getByLabel('Базовый URL', { exact: false })
+      .fill(config.http + '/api')
+  if (kind === 'grpc')
+    await form.getByLabel('Адрес сервера', { exact: true }).fill(config.grpc)
   if (kind === 'postgresql') {
-    await form.getByLabel('Адрес сервера', { exact: true }).fill(config.target.address)
-    await form.getByLabel('База данных', { exact: true }).fill(config.target.database)
-    await form.getByLabel('Пользователь PostgreSQL', { exact: true }).fill(config.target.username)
-    await form.getByLabel('Действие: PASSWORD', { exact: true }).selectOption('replace')
-    await form.getByLabel('Новое значение: PASSWORD', { exact: false }).fill(config.target.password)
+    await form
+      .getByLabel('Адрес сервера', { exact: true })
+      .fill(config.target.address)
+    await form
+      .getByLabel('База данных', { exact: true })
+      .fill(config.target.database)
+    await form
+      .getByLabel('Пользователь PostgreSQL', { exact: true })
+      .fill(config.target.username)
+    await form
+      .getByLabel('Действие: PASSWORD', { exact: true })
+      .selectOption('replace')
+    await form
+      .getByLabel('Новое значение: PASSWORD', { exact: false })
+      .fill(config.target.password)
   }
-  await form.getByRole('button', { name: 'Сохранить ресурс', exact: true }).click()
-  await expect(page.locator('.resource-item').filter({ hasText: name })).toBeVisible()
+  await form
+    .getByRole('button', { name: 'Сохранить ресурс', exact: true })
+    .click()
+  await expect(
+    page.locator('.resource-item').filter({ hasText: name }),
+  ).toBeVisible()
 }
 async function executeAll(page: Page) {
   const calls = page.locator('.run-view .call-block')
   for (let i = 0; i < 3; i++) {
-    await calls.nth(i).getByRole('button', { name: 'Запустить вызов', exact: true }).click()
-    await expect(calls.nth(i).getByText('Совпадает', { exact: true }).first()).toBeVisible()
+    await calls
+      .nth(i)
+      .getByRole('button', { name: 'Запустить вызов', exact: true })
+      .click()
+    await expect(
+      calls.nth(i).getByText('Совпадает', { exact: true }).first(),
+    ).toBeVisible()
   }
 }
 
-test('встроенный пример: просмотр, три протокола, история и перезапуск', async ({ page }) => {
+test('встроенный пример: просмотр, три протокола, история и перезапуск', async ({
+  page,
+}) => {
   const info = await api('/demo'),
     c = await api(`/test-cases/${info.testCaseId}`)
   expect(c.readOnly).toBe(true)
   expect(c.steps).toHaveLength(5)
   await page.goto('/')
-  const pinned = page.getByRole('button', { name: 'Открыть встроенный пример', exact: true })
+  const pinned = page.getByRole('button', {
+    name: 'Открыть встроенный пример',
+    exact: true,
+  })
   await pinned.waitFor()
 
   await pinned.click()
-  await expect(page.getByRole('heading', { name: c.name, exact: true })).toBeVisible()
-  await expect(page.getByText('Встроенный пример · только просмотр', { exact: true })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: c.name, exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByText('Встроенный пример · только просмотр', { exact: true }),
+  ).toBeVisible()
   await expect(page.getByLabel('Название тест-кейса')).toBeDisabled()
-  await expect(page.getByRole('button', { name: '+ Добавить шаг', exact: true })).toBeDisabled()
+  await expect(
+    page.getByRole('button', { name: '+ Добавить шаг', exact: true }),
+  ).toBeDisabled()
   await expect(page.getByLabel('Текущее окружение')).toBeDisabled()
-  await expect(page.getByLabel('Текущее окружение')).toHaveValue(info.environmentId)
-  await expect(page.locator('.folder-tree')).not.toContainText('Системные примеры')
+  await expect(page.getByLabel('Текущее окружение')).toHaveValue(
+    info.environmentId,
+  )
+  await expect(page.locator('.folder-tree')).not.toContainText(
+    'Системные примеры',
+  )
   // Read-only is enforced by the API for every managed object.
   await expect(
-    api(`/test-cases/${c.id}`, 'PUT', { name: c.name, revision: c.revision, steps: c.steps }),
+    api(`/test-cases/${c.id}`, 'PUT', {
+      name: c.name,
+      revision: c.revision,
+      steps: c.steps,
+    }),
   ).rejects.toThrow('409')
-  await expect(api(`/test-cases/${c.id}`, 'PATCH', { archived: true })).rejects.toThrow('409')
-  await expect(api(`/folders/${c.folderId}`, 'PATCH', { name: 'Изменено' })).rejects.toThrow('409')
+  await expect(
+    api(`/test-cases/${c.id}`, 'PATCH', { archived: true }),
+  ).rejects.toThrow('409')
+  await expect(
+    api(`/folders/${c.folderId}`, 'PATCH', { name: 'Изменено' }),
+  ).rejects.toThrow('409')
   await expect(
     api(`/folders/${c.folderId}/test-cases`, 'POST', { name: 'Изменено' }),
   ).rejects.toThrow('409')
-  const env = (await api('/environments')).items.find((e: any) => e.id === info.environmentId)
+  const env = (await api('/environments')).items.find(
+    (e: any) => e.id === info.environmentId,
+  )
   await expect(
     api(`/environments/${env.id}`, 'PUT', {
       name: env.name,
+      description: env.description,
       revision: env.revision,
-      variables: {},
-      secrets: { replace: {}, clear: [] },
     }),
   ).rejects.toThrow('409')
   const resources = (await api(`/environments/${env.id}/resources`)).items
@@ -167,7 +220,8 @@ test('встроенный пример: просмотр, три протоко
   await expect(
     api(`/resources/${info.grpcResourceId}/proto-bundles`, 'POST', {
       files: {},
-      revision: resources.find((r: any) => r.id === info.grpcResourceId).revision,
+      revision: resources.find((r: any) => r.id === info.grpcResourceId)
+        .revision,
     }),
   ).rejects.toThrow('409')
   await expect(
@@ -189,29 +243,59 @@ test('встроенный пример: просмотр, три протоко
   ).rejects.toThrow('409')
   const editorCalls = page.locator('.editor .call-block')
   await expect(editorCalls).toHaveCount(5)
-  await editorCalls.first().getByRole('button', { name: 'Запустить вызов', exact: true }).click()
-  await expect(editorCalls.first().getByText('Совпадает', { exact: true })).toBeVisible()
+  await editorCalls
+    .first()
+    .getByRole('button', { name: 'Запустить вызов', exact: true })
+    .click()
+  await expect(
+    editorCalls.first().getByText('Совпадает', { exact: true }),
+  ).toBeVisible()
   expect((await api(`/test-cases/${c.id}/runs`)).items).toHaveLength(0)
   for (let cycle = 0; cycle < 2; cycle++) {
-    if (cycle) await page.getByRole('button', { name: 'Редактор 5', exact: true }).click()
-    await page.getByRole('button', { name: 'Начать прогон', exact: true }).click()
+    if (cycle)
+      await page
+        .getByRole('button', { name: 'Редактор 5', exact: true })
+        .click()
+    await page
+      .getByRole('button', { name: 'Начать прогон', exact: true })
+      .click()
     const calls = page.locator('.run-view .call-block')
     for (let n = 0; n < 5; n++) {
-      await calls.nth(n).getByRole('button', { name: 'Запустить вызов', exact: true }).click()
-      await expect(calls.nth(n).getByText('Совпадает', { exact: true }).first()).toBeVisible()
+      await calls
+        .nth(n)
+        .getByRole('button', { name: 'Запустить вызов', exact: true })
+        .click()
+      await expect(
+        calls.nth(n).getByText('Совпадает', { exact: true }).first(),
+      ).toBeVisible()
     }
     for (let n = 1; n <= 5; n++) {
-      await page.getByLabel(`Статус шага ${n}`, { exact: true }).selectOption('passed')
-      await expect(page.getByLabel(`Статус шага ${n}`, { exact: true })).toBeEnabled()
+      await page
+        .getByLabel(`Статус шага ${n}`, { exact: true })
+        .selectOption('passed')
+      await expect(
+        page.getByLabel(`Статус шага ${n}`, { exact: true }),
+      ).toBeEnabled()
     }
-    await page.getByLabel('Комментарий к шагу 5', { exact: true }).fill('Проверены три интерфейса')
-    await page.getByRole('button', { name: 'Сохранить комментарий', exact: true }).click()
-    await page.getByRole('button', { name: 'Завершить прогон', exact: true }).click()
-    await expect(page.locator('.run-view > .page-heading .status')).toHaveText('Пройден')
+    await page
+      .getByLabel('Комментарий к шагу 5', { exact: true })
+      .fill('Проверены три интерфейса')
+    await page
+      .getByRole('button', { name: 'Сохранить комментарий', exact: true })
+      .click()
+    await page
+      .getByRole('button', { name: 'Завершить прогон', exact: true })
+      .click()
+    await expect(page.locator('.run-view > .page-heading .status')).toHaveText(
+      'Пройден',
+    )
   }
   const history = (await api(`/test-cases/${c.id}/runs`)).items
   expect(history).toHaveLength(2)
-  expect(history[1].retentionReasons.sort()).toEqual(['first_run', 'first_success'])
+  expect(history[1].retentionReasons.sort()).toEqual([
+    'first_run',
+    'first_success',
+  ])
   expect(history[0].retentionReasons).toEqual([])
   await stopApp()
   const occupied = createServer()
@@ -230,7 +314,9 @@ test('встроенный пример: просмотр, три протоко
   })
   let rejectedLog = ''
   rejected.stderr?.on('data', (v) => (rejectedLog += String(v)))
-  const exitCode = await new Promise<number | null>((r) => rejected.once('close', r))
+  const exitCode = await new Promise<number | null>((r) =>
+    rejected.once('close', r),
+  )
   await new Promise<void>((r) => occupied.close(() => r()))
   expect(exitCode).toBe(1)
   expect(rejectedLog).toContain('gRPC-порт недоступен')
@@ -249,40 +335,74 @@ test('встроенный пример: просмотр, три протоко
   ])
   await page.getByRole('button', { name: 'Архив', exact: true }).click()
   await expect(pinned).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Начать прогон', exact: true })).toBeEnabled()
-  await page.getByRole('button', { name: 'Окружения и ресурсы', exact: false }).click()
+  await expect(
+    page.getByRole('button', { name: 'Начать прогон', exact: true }),
+  ).toBeEnabled()
+  await page
+    .getByRole('button', { name: 'Окружения и ресурсы', exact: false })
+    .click()
   await expect(
     page.getByRole('button', { name: 'Настроить окружение', exact: true }),
   ).toBeDisabled()
   await page.locator('.resource-item').filter({ hasText: 'DEMO_SQL' }).click()
   await expect(page.getByLabel('Адрес сервера', { exact: true })).toBeDisabled()
-  await expect(page.getByLabel('Действие: PASSWORD', { exact: true })).toBeDisabled()
+  await expect(
+    page.getByLabel('Действие: PASSWORD', { exact: true }),
+  ).toBeDisabled()
   await pinned.click()
-  await page.screenshot({ path: resolve(root, '.local/builtin-demo.png'), fullPage: true })
+  await page.screenshot({
+    path: resolve(root, '.local/builtin-demo.png'),
+    fullPage: true,
+  })
 })
 
-test('каталог → три протокола → история → архив → перезапуск', async ({ page }) => {
+test('каталог → три протокола → история → архив → перезапуск', async ({
+  page,
+}) => {
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
   await page.goto('/')
-  await page.getByRole('button', { name: 'Окружения и ресурсы', exact: false }).click()
-  await page.getByRole('button', { name: 'Создать окружение', exact: true }).click()
+  await page
+    .getByRole('button', { name: 'Окружения и ресурсы', exact: false })
+    .click()
+  await page
+    .getByRole('button', { name: 'Создать окружение', exact: true })
+    .click()
   await page.getByLabel('Имя окружения', { exact: true }).fill('dev')
-  await page.getByRole('button', { name: 'Сохранить окружение', exact: true }).click()
+  await page
+    .getByRole('button', { name: 'Сохранить окружение', exact: true })
+    .click()
   for (const [name, kind] of [
     ['AI_GW_SERVISE', 'http'],
     ['HEALTH', 'grpc'],
     ['TARGET', 'postgresql'],
   ])
     await addResource(page, name, kind)
-  await page.getByRole('button', { name: 'Тест-кейсы', exact: false }).first().click()
-  await page.locator('aside').getByRole('button', { name: 'Создать папку', exact: true }).click()
+  await page
+    .getByRole('button', { name: 'Тест-кейсы', exact: false })
+    .first()
+    .click()
+  await page
+    .locator('aside')
+    .getByRole('button', { name: 'Создать папку', exact: true })
+    .click()
   await page.getByLabel('Название', { exact: true }).fill('Проверки API')
-  await page.getByRole('button', { name: 'Сохранить название', exact: true }).click()
-  await page.getByRole('button', { name: 'Добавить тест-кейс в Проверки API', exact: true }).click()
+  await page
+    .getByRole('button', { name: 'Сохранить название', exact: true })
+    .click()
+  await page
+    .getByRole('button', {
+      name: 'Добавить тест-кейс в Проверки API',
+      exact: true,
+    })
+    .click()
   await page.getByLabel('Название', { exact: true }).fill('Смешанный сценарий')
-  await page.getByRole('button', { name: 'Сохранить название', exact: true }).click()
-  await page.getByRole('button', { name: '+ Добавить шаг', exact: true }).click()
+  await page
+    .getByRole('button', { name: 'Сохранить название', exact: true })
+    .click()
+  await page
+    .getByRole('button', { name: '+ Добавить шаг', exact: true })
+    .click()
   await page
     .getByLabel('Описание шага 1', { exact: true })
     .fill('Проверить ответы и оценить результат вручную')
@@ -297,40 +417,79 @@ test('каталог → три протокола → история → арх
     .nth(0)
     .getByLabel('Ожидаемое тело', { exact: true })
     .fill('{"ok":true,"number":9007199254740993123,"token":""}')
-  await blocks.nth(1).getByLabel('Ресурс', { exact: true }).fill('HEALTH')
-  await blocks.nth(1).getByLabel('Сервис gRPC', { exact: true }).fill('grpc.health.v1.Health')
+  await blocks
+    .nth(1)
+    .getByLabel('Ресурс', { exact: true })
+    .selectOption('HEALTH')
+  await blocks
+    .nth(1)
+    .getByLabel('Сервис gRPC', { exact: true })
+    .fill('grpc.health.v1.Health')
   await blocks.nth(1).getByLabel('Метод gRPC', { exact: true }).fill('Check')
-  await blocks.nth(1).getByLabel('Ожидаемое тело', { exact: true }).fill('{"status":"SERVING"}')
+  await blocks
+    .nth(1)
+    .getByLabel('Ожидаемое тело', { exact: true })
+    .fill('{"status":"SERVING"}')
   const sql = blocks.nth(2)
-  await sql.getByLabel('Ресурс', { exact: true }).fill('TARGET')
-  await sql.getByLabel('SQL-запрос', { exact: false }).fill('SELECT $1::numeric AS amount')
+  await sql.getByLabel('Ресурс', { exact: true }).selectOption('TARGET')
+  await sql
+    .getByLabel('SQL-запрос', { exact: false })
+    .fill('SELECT $1::numeric AS amount')
   await sql.getByRole('button', { name: '+ Параметр', exact: true }).click()
-  await sql.getByLabel('Параметр $1: тип', { exact: true }).selectOption('decimal')
-  await sql.getByLabel('Параметр $1', { exact: true }).fill('9007199254740993123.125')
+  await sql
+    .getByLabel('Параметр $1: тип', { exact: true })
+    .selectOption('decimal')
+  await sql
+    .getByLabel('Параметр $1', { exact: true })
+    .fill('9007199254740993123.125')
   await sql.getByRole('button', { name: '+ Колонка', exact: true }).click()
   await sql.getByLabel('Ожидаемая колонка 1', { exact: true }).fill('amount')
-  await sql.getByLabel('PostgreSQL-тип колонки 1', { exact: true }).fill('numeric')
-  await sql.getByRole('button', { name: '+ Ожидаемая строка', exact: true }).click()
-  await sql.getByLabel('Строка 1, колонка 1: тип', { exact: true }).selectOption('decimal')
-  await sql.getByLabel('Строка 1, колонка 1', { exact: true }).fill('9007199254740993123.125')
+  await sql
+    .getByLabel('PostgreSQL-тип колонки 1', { exact: true })
+    .fill('numeric')
+  await sql
+    .getByRole('button', { name: '+ Ожидаемая строка', exact: true })
+    .click()
+  await sql
+    .getByLabel('Строка 1, колонка 1: тип', { exact: true })
+    .selectOption('decimal')
+  await sql
+    .getByLabel('Строка 1, колонка 1', { exact: true })
+    .fill('9007199254740993123.125')
   await sql.getByLabel('Параметр $1', { exact: true }).fill('wrong')
   await page.getByRole('button', { name: 'Сохранить', exact: true }).click()
-  await expect(sql.locator('.parameter-row [role="alert"]')).toBeVisible()
-  await expect(sql.getByLabel('Параметр $1', { exact: true })).toHaveValue('wrong')
-  await sql.getByLabel('Параметр $1', { exact: true }).fill('9007199254740993123.125')
-  await blocks.nth(0).getByLabel('Ожидаемое тело', { exact: true }).fill('{broken')
-  await page.getByRole('button', { name: 'Сохранить', exact: true }).click()
-  await expect(blocks.nth(0).getByLabel('Ожидаемое тело', { exact: true })).toHaveAttribute(
-    'aria-invalid',
-    'true',
+  await expect(
+    page.getByRole('region', { name: 'Готовность к запуску' }),
+  ).toBeVisible()
+  await expect(sql.getByLabel('Параметр $1', { exact: true })).toHaveValue(
+    'wrong',
   )
+  await sql
+    .getByLabel('Параметр $1', { exact: true })
+    .fill('9007199254740993123.125')
+  await blocks
+    .nth(0)
+    .getByLabel('Ожидаемое тело', { exact: true })
+    .fill('{broken')
+  await page.getByRole('button', { name: 'Сохранить', exact: true }).click()
+  await expect(
+    page.getByRole('region', { name: 'Готовность к запуску' }),
+  ).toBeVisible()
+  await page.reload()
+  await expect(
+    blocks.nth(0).getByLabel('Ожидаемое тело', { exact: true }),
+  ).toHaveValue('{broken')
   await blocks
     .nth(0)
     .getByLabel('Ожидаемое тело', { exact: true })
     .fill('{"ok":true,"number":9007199254740993123,"token":""}')
   // Navigating with unsaved input offers a real choice and preserves the draft.
-  await page.getByRole('button', { name: 'Окружения и ресурсы', exact: false }).click()
-  await expect(page.getByRole('dialog', { name: 'Несохранённые изменения' })).toBeVisible()
+  await page
+    .getByRole('button', { name: 'Окружения и ресурсы', exact: false })
+    .click()
+  await expect(
+    page.getByRole('dialog', { name: 'Несохранённые изменения' }),
+  ).toBeVisible()
   await page.getByRole('button', { name: 'Остаться', exact: true }).click()
   await page.getByRole('button', { name: 'Сохранить', exact: true }).click()
   await expect(page.getByText('Сохранено', { exact: true })).toBeVisible()
@@ -338,15 +497,26 @@ test('каталог → три протокола → история → арх
     folder = folders.items[0],
     cases = await api(`/folders/${folder.id}/test-cases`),
     c = cases.items[0]
-  expect(c.steps[0].blocks.map((b: any) => b.kind)).toEqual(['http', 'grpc', 'postgresql'])
+  expect(c.steps[0].blocks.map((b: any) => b.kind)).toEqual([
+    'http',
+    'grpc',
+    'postgresql',
+  ])
   // Editor trials create attempts without creating a run.
-  await blocks.nth(0).getByRole('button', { name: 'Запустить вызов', exact: true }).click()
-  await expect(blocks.nth(0).getByText('Совпадает', { exact: true })).toBeVisible()
+  await blocks
+    .nth(0)
+    .getByRole('button', { name: 'Запустить вызов', exact: true })
+    .click()
+  await expect(
+    blocks.nth(0).getByText('Совпадает', { exact: true }),
+  ).toBeVisible()
   expect((await api(`/test-cases/${c.id}/runs`)).items).toHaveLength(0)
   await page.getByRole('button', { name: 'Начать прогон', exact: true }).click()
   await executeAll(page)
   await page.getByLabel('Статус шага 1', { exact: true }).selectOption('failed')
-  await page.getByRole('button', { name: 'Завершить прогон', exact: true }).click()
+  await page
+    .getByRole('button', { name: 'Завершить прогон', exact: true })
+    .click()
   await expect(page.getByText('Первый прогон', { exact: true })).toBeVisible()
   const first = (await api(`/test-cases/${c.id}/runs`)).items[0]
   expect(first.status).toBe('failed')
@@ -354,17 +524,23 @@ test('каталог → три протокола → история → арх
   await page.getByRole('button', { name: 'Редактор 1', exact: true }).click()
   await page.getByRole('button', { name: 'Начать прогон', exact: true }).click()
   await executeAll(page)
-  await page.getByLabel('Комментарий к шагу 1', { exact: true }).fill('Ответы проверены')
-  await page.getByRole('button', { name: 'Сохранить комментарий', exact: true }).click()
+  await page
+    .getByLabel('Комментарий к шагу 1', { exact: true })
+    .fill('Ответы проверены')
+  await page
+    .getByRole('button', { name: 'Сохранить комментарий', exact: true })
+    .click()
   await page.getByLabel('Статус шага 1', { exact: true }).selectOption('passed')
   await expect(page.getByLabel('Статус шага 1', { exact: true })).toBeEnabled()
   await page.evaluate(() => sessionStorage.clear())
   await page.reload()
   await page.getByRole('button', { name: 'Прогон', exact: true }).click()
-  await expect(page.getByLabel('Комментарий к шагу 1', { exact: true })).toHaveValue(
-    'Ответы проверены',
-  )
-  await page.getByRole('button', { name: 'Завершить прогон', exact: true }).click()
+  await expect(
+    page.getByLabel('Комментарий к шагу 1', { exact: true }),
+  ).toHaveValue('Ответы проверены')
+  await page
+    .getByRole('button', { name: 'Завершить прогон', exact: true })
+    .click()
   await expect(page.getByText('Первый успешный', { exact: true })).toBeVisible()
   const success = (await api(`/test-cases/${c.id}/runs`)).items[0]
   expect(success.status).toBe('passed')
@@ -377,9 +553,15 @@ test('каталог → три протокола → история → арх
   )
   const bid = c.steps[0].blocks[0].id
   for (let i = 0; i < 2; i++) {
-    const a = await api(`/runs/${third.id}/blocks/${bid}/attempts`, 'POST', {}, randomUUID())
+    const a = await api(
+      `/runs/${third.id}/blocks/${bid}/attempts`,
+      'POST',
+      {},
+      randomUUID(),
+    )
     await eventually(
-      async () => !['queued', 'running'].includes((await api(`/attempts/${a.id}`)).state),
+      async () =>
+        !['queued', 'running'].includes((await api(`/attempts/${a.id}`)).state),
     )
   }
   const terminal = await api(`/runs/${third.id}/finish`, 'POST')
@@ -392,45 +574,76 @@ test('каталог → три протокола → история → арх
     .getByRole('button', { name: 'Сохранить', exact: true })
     .click()
   await page.getByRole('button', { name: 'Сохранённые', exact: true }).click()
-  await expect(page.getByText('Сохранён вручную', { exact: true })).toBeVisible()
+  await expect(
+    page.getByText('Сохранён вручную', { exact: true }),
+  ).toBeVisible()
   // Current edits cannot change the retained scenario snapshot.
   await page.getByRole('button', { name: 'Редактор 1', exact: true }).click()
-  await page.getByLabel('Описание шага 1', { exact: true }).fill('Новое описание')
+  await page
+    .getByLabel('Описание шага 1', { exact: true })
+    .fill('Новое описание')
   await page.getByRole('button', { name: 'Сохранить', exact: true }).click()
   await expect(page.getByText('Сохранено', { exact: true })).toBeVisible()
   expect((await api(`/runs/${first.id}`)).snapshot.steps[0].description).toBe(
     c.steps[0].description,
   )
-  const folderToggle = page.getByRole('button', { name: 'Папка Проверки API', exact: true })
-  if ((await folderToggle.getAttribute('aria-expanded')) === 'false') await folderToggle.click()
+  const folderToggle = page.getByRole('button', {
+    name: 'Папка Проверки API',
+    exact: true,
+  })
+  if ((await folderToggle.getAttribute('aria-expanded')) === 'false')
+    await folderToggle.click()
   await page
-    .getByRole('button', { name: 'Архивировать тест-кейс Смешанный сценарий', exact: true })
+    .getByRole('button', {
+      name: 'Архивировать тест-кейс Смешанный сценарий',
+      exact: true,
+    })
     .click()
   await expect(page.locator('.case-row.archived')).toContainText('Архив')
-  await page.getByRole('button', { name: 'Архивировать папку Проверки API', exact: true }).click()
+  await page
+    .getByRole('button', {
+      name: 'Архивировать папку Проверки API',
+      exact: true,
+    })
+    .click()
   await page.getByRole('button', { name: 'Архив', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Папка Проверки API', exact: true })).toBeVisible()
-  await page.getByRole('button', { name: 'Восстановить папку Проверки API', exact: true }).click()
+  await expect(
+    page.getByRole('button', { name: 'Папка Проверки API', exact: true }),
+  ).toBeVisible()
+  await page
+    .getByRole('button', {
+      name: 'Восстановить папку Проверки API',
+      exact: true,
+    })
+    .click()
   await page.getByRole('button', { name: 'Активные', exact: true }).click()
-  await expect(page.locator('.case-row.archived')).toContainText('Смешанный сценарий')
+  await expect(page.locator('.case-row.archived')).toContainText(
+    'Смешанный сценарий',
+  )
   await stopApp()
   await startApp()
   await page.reload()
-  await expect(page.getByText('Архив · только просмотр', { exact: true })).toBeVisible()
+  await expect(
+    page.getByText('Архив · только просмотр', { exact: true }),
+  ).toBeVisible()
   await page.getByRole('button', { name: 'История', exact: true }).click()
   await expect(page.locator('.history-table tbody tr')).toHaveCount(3)
-  await page.screenshot({ path: resolve(root, '.local/workspace.png'), fullPage: true })
+  await page.screenshot({
+    path: resolve(root, '.local/workspace.png'),
+    fullPage: true,
+  })
   expect(errors).toEqual([])
   expect(logs).not.toContain(config.target.password)
 })
 
-test('остановка процесса не повторяет внешний эффект и сохраняет ручной шаг', async ({ page }) => {
+test('остановка процесса не повторяет внешний эффект и сохраняет ручной шаг', async ({
+  page,
+}) => {
   let env = (await api('/environments')).items.find((e: any) => !e.readOnly)
   if (!env) {
     env = await api('/environments', 'POST', {
       name: 'recovery',
-      variables: {},
-      secrets: { replace: {}, clear: [] },
+      description: '',
     })
     await api(`/environments/${env.id}/resources`, 'POST', {
       name: 'AI_GW_SERVISE',
@@ -445,7 +658,9 @@ test('остановка процесса не повторяет внешний
     })
   }
   const folder = await api('/folders', 'POST', { name: 'Восстановление' })
-  let c = await api(`/folders/${folder.id}/test-cases`, 'POST', { name: 'Прерванный вызов' })
+  let c = await api(`/folders/${folder.id}/test-cases`, 'POST', {
+    name: 'Прерванный вызов',
+  })
   const step = randomUUID(),
     block = randomUUID()
   c = await api(`/test-cases/${c.id}`, 'PUT', {
@@ -463,9 +678,26 @@ test('остановка процесса не повторяет внешний
             timeoutSeconds: 120,
             http: {
               method: 'POST',
-              path: '/slow',
+              path: '/task',
               query: [],
-              headers: [],
+              headers: [
+                {
+                  id: randomUUID(),
+                  name: 'Authorization',
+                  source: {
+                    method: 'POST',
+                    url: config.http + '/token?delay=1',
+                    query: [],
+                    headers: [],
+                    bodyMode: 'none',
+                    body: '',
+                    tls: { mode: 'plaintext' },
+                    jsonPointer: '/tokens/0/value',
+                    prefix: 'Bearer ',
+                    fetchMode: 'per_run',
+                  },
+                },
+              ],
               bodyMode: 'none',
               body: '',
             },
@@ -486,10 +718,17 @@ test('остановка процесса не повторяет внешний
     comment: 'До остановки',
     revision: run.stepStates[0].revision,
   })
-  const before = (await (await fetch(config.http + '/stats')).json()).calls
-  const a = await api(`/runs/${run.id}/blocks/${block}/attempts`, 'POST', {}, randomUUID())
+  const before = await (await fetch(config.http + '/stats')).json()
+  const a = await api(
+    `/runs/${run.id}/blocks/${block}/attempts`,
+    'POST',
+    {},
+    randomUUID(),
+  )
   await eventually(
-    async () => (await (await fetch(config.http + '/stats')).json()).calls === before + 1,
+    async () =>
+      (await (await fetch(config.http + '/stats')).json()).sources ===
+      before.sources + 1,
   )
   await stopApp()
   await startApp()
@@ -498,21 +737,29 @@ test('остановка процесса не повторяет внешний
   expect(restored.stepStates[0].comment).toBe('До остановки')
   expect(restored.attempts[0].id).toBe(a.id)
   expect(restored.attempts[0].state).toBe('interrupted')
-  expect((await (await fetch(config.http + '/stats')).json()).calls).toBe(before + 1)
+  const after = await (await fetch(config.http + '/stats')).json()
+  expect(after.calls).toBe(before.calls)
+  expect(after.sources).toBe(before.sources + 1)
   await page.goto('/')
-  await page.getByRole('button', { name: 'Открыть встроенный пример', exact: true }).waitFor()
+  await page
+    .getByRole('button', { name: 'Открыть встроенный пример', exact: true })
+    .waitFor()
   await page.evaluate((id) => localStorage.setItem('qag.case', id), c.id)
   await page.reload()
   await page.getByRole('button', { name: 'История', exact: true }).click()
   await expect(page.getByText('Прерван', { exact: true })).toBeVisible()
 })
 
-test('сортировка, конфликт редактора, секреты и повтор потерянной команды', async ({ page }) => {
+test('сортировка, конфликт редактора, секреты и повтор потерянной команды', async ({
+  page,
+}) => {
   const folder = await api('/folders', 'POST', { name: 'Порядок и конфликты' })
   const names = ['Ядро', 'бета', 'Альфа', 'Beta', 'alpha'],
     created = []
   for (const name of names)
-    created.push(await api(`/folders/${folder.id}/test-cases`, 'POST', { name }))
+    created.push(
+      await api(`/folders/${folder.id}/test-cases`, 'POST', { name }),
+    )
   let values: any[] = [],
     cursor = ''
   do {
@@ -525,13 +772,16 @@ test('сортировка, конфликт редактора, секреты 
   expect(values.map((v) => v.name)).toEqual(
     [...names].sort(new Intl.Collator('ru', { sensitivity: 'base' }).compare),
   )
-  const rename = await api(`/test-cases/${created[0].id}`, 'PATCH', { name: 'Авангард' })
+  const rename = await api(`/test-cases/${created[0].id}`, 'PATCH', {
+    name: 'Авангард',
+  })
   await api(`/test-cases/${rename.id}`, 'PATCH', { archived: true })
-  expect((await api(`/folders/${folder.id}/test-cases`)).items.at(-1).id).toBe(rename.id)
+  expect((await api(`/folders/${folder.id}/test-cases`)).items.at(-1).id).toBe(
+    rename.id,
+  )
   const env = await api('/environments', 'POST', {
     name: 'security',
-    variables: {},
-    secrets: { replace: {}, clear: [] },
+    description: '',
   })
   const token = 'sentinel-"<>&-e2e-token'
   const resource = await api(`/environments/${env.id}/resources`, 'POST', {
@@ -548,8 +798,7 @@ test('сортировка, конфликт редактора, секреты 
   expect(JSON.stringify(resource)).not.toContain(token)
   const other = await api('/environments', 'POST', {
     name: 'stage',
-    variables: {},
-    secrets: { replace: {}, clear: [] },
+    description: '',
   })
   const stage = await api(`/environments/${other.id}/resources`, 'POST', {
     name: 'GW',
@@ -595,7 +844,9 @@ test('сортировка, конфликт редактора, секреты 
     ],
   })
   await page.goto('/')
-  await page.getByRole('button', { name: 'Открыть встроенный пример', exact: true }).waitFor()
+  await page
+    .getByRole('button', { name: 'Открыть встроенный пример', exact: true })
+    .waitFor()
   await page.evaluate(
     ({ id, env }) => {
       localStorage.setItem('qag.case', id)
@@ -605,37 +856,62 @@ test('сортировка, конфликт редактора, секреты 
   )
   await page.reload()
   // Empty manual titles and author order survive moving and reopening.
-  await page.getByRole('button', { name: 'Переместить шаг 2 вверх', exact: true }).click()
+  await page
+    .getByRole('button', { name: 'Переместить шаг 2 вверх', exact: true })
+    .click()
   await page.getByRole('button', { name: 'Сохранить', exact: true }).click()
   await expect(page.getByText('Сохранено', { exact: true })).toBeVisible()
   await page.reload()
-  await expect(page.getByLabel('Описание шага 1', { exact: true })).toHaveValue('Второй ручной шаг')
+  await expect(page.getByLabel('Описание шага 1', { exact: true })).toHaveValue(
+    'Второй ручной шаг',
+  )
   c = await api(`/test-cases/${c.id}`)
-  await api(`/test-cases/${c.id}`, 'PUT', { name: c.name, revision: c.revision, steps: c.steps })
-  await page.getByLabel('Описание шага 1', { exact: true }).fill('Мой несохранённый текст')
+  await api(`/test-cases/${c.id}`, 'PUT', {
+    name: c.name,
+    revision: c.revision,
+    steps: c.steps,
+  })
+  await page
+    .getByLabel('Описание шага 1', { exact: true })
+    .fill('Мой несохранённый текст')
   await page.getByRole('button', { name: 'Сохранить', exact: true }).click()
   await expect(page.getByRole('alert').first()).toBeVisible()
   await expect(page.getByLabel('Описание шага 1', { exact: true })).toHaveValue(
     'Мой несохранённый текст',
   )
   await page.reload()
-  await page.getByRole('button', { name: 'Запустить вызов', exact: true }).click()
-  await expect(page.locator('.results').getByText('Есть различия', { exact: true })).toBeVisible()
+  await page
+    .getByRole('button', { name: 'Запустить вызов', exact: true })
+    .click()
+  await expect(
+    page.locator('.results').getByText('Есть различия', { exact: true }),
+  ).toBeVisible()
   expect(await page.locator('.results').textContent()).not.toContain(token)
   // Lose one response after the server accepted it, then explicitly retry.
   const before = (await (await fetch(config.http + '/stats')).json()).calls
   let accepted = ''
-  await page.route(`**/test-cases/${c.id}/blocks/${block}/attempts`, async (route) => {
-    const response = await route.fetch()
-    accepted = (await response.json()).id
-    await route.abort('failed')
-    await page.unroute(`**/test-cases/${c.id}/blocks/${block}/attempts`)
-  })
-  await page.getByRole('button', { name: 'Запустить вызов', exact: true }).click()
+  await page.route(
+    `**/test-cases/${c.id}/blocks/${block}/attempts`,
+    async (route) => {
+      const response = await route.fetch()
+      accepted = (await response.json()).id
+      await route.abort('failed')
+      await page.unroute(`**/test-cases/${c.id}/blocks/${block}/attempts`)
+    },
+  )
+  await page
+    .getByRole('button', { name: 'Запустить вызов', exact: true })
+    .click()
   await expect(page.getByRole('alert').first()).toBeVisible()
-  await page.getByRole('button', { name: 'Запустить вызов', exact: true }).click()
-  await expect(page.locator('.results').getByText('Совпадает', { exact: true })).toBeVisible()
-  expect((await (await fetch(config.http + '/stats')).json()).calls).toBe(before + 1)
+  await page
+    .getByRole('button', { name: 'Запустить вызов', exact: true })
+    .click()
+  await expect(
+    page.locator('.results').getByText('Совпадает', { exact: true }),
+  ).toBeVisible()
+  expect((await (await fetch(config.http + '/stats')).json()).calls).toBe(
+    before + 1,
+  )
   expect((await api(`/attempts/${accepted}`)).result.redacted).toBe(true)
   // Retry within a run preserves both outcomes; the last completed attempt wins.
   c = await api(`/test-cases/${c.id}`)
@@ -652,35 +928,568 @@ test('сортировка, конфликт редактора, секреты 
       revision: s.revision,
     })
   for (let n = 0; n < 2; n++) {
-    const a = await api(`/runs/${run.id}/blocks/${block}/attempts`, 'POST', {}, randomUUID())
+    const a = await api(
+      `/runs/${run.id}/blocks/${block}/attempts`,
+      'POST',
+      {},
+      randomUUID(),
+    )
     await eventually(
-      async () => !['queued', 'running'].includes((await api(`/attempts/${a.id}`)).state),
+      async () =>
+        !['queued', 'running'].includes((await api(`/attempts/${a.id}`)).state),
     )
   }
   const finished = await api(`/runs/${run.id}/finish`, 'POST')
   expect(finished.status).toBe('passed')
-  expect(finished.retentionReasons.sort()).toEqual(['first_run', 'first_success'])
-  expect(finished.attempts.map((a: any) => a.result.comparison.status)).toEqual([
-    'mismatch',
-    'match',
+  expect(finished.retentionReasons.sort()).toEqual([
+    'first_run',
+    'first_success',
   ])
+  expect(finished.attempts.map((a: any) => a.result.comparison.status)).toEqual(
+    ['mismatch', 'match'],
+  )
   expect(logs).not.toContain(token)
   expect(await page.content()).not.toContain(token)
-  const previousEnvironment = await page.getByLabel('Текущее окружение').inputValue()
-  await page.getByLabel('Описание шага 1', { exact: true }).fill('Черновик перед примером')
-  const pinned = page.getByRole('button', { name: 'Открыть встроенный пример', exact: true })
+  const previousEnvironment = await page
+    .getByLabel('Текущее окружение')
+    .inputValue()
+  await page
+    .getByLabel('Описание шага 1', { exact: true })
+    .fill('Черновик перед примером')
+  const pinned = page.getByRole('button', {
+    name: 'Открыть встроенный пример',
+    exact: true,
+  })
   await pinned.click()
-  await expect(page.getByRole('dialog', { name: 'Несохранённые изменения' })).toBeVisible()
+  await expect(
+    page.getByRole('dialog', { name: 'Несохранённые изменения' }),
+  ).toBeVisible()
   await page.getByRole('button', { name: 'Остаться', exact: true }).click()
   await expect(page.getByLabel('Описание шага 1', { exact: true })).toHaveValue(
     'Черновик перед примером',
   )
   await pinned.click()
-  await page.getByRole('button', { name: 'Отбросить изменения', exact: true }).click()
+  await page
+    .getByRole('button', { name: 'Отбросить изменения', exact: true })
+    .click()
   await expect(page.getByLabel('Текущее окружение')).toBeDisabled()
-  await page.getByRole('button', { name: `Папка ${folder.name}`, exact: true }).click()
-  await page.getByRole('button', { name: `Открыть тест-кейс ${c.name}`, exact: true }).click()
+  await page
+    .getByRole('button', { name: `Папка ${folder.name}`, exact: true })
+    .click()
+  await page
+    .getByRole('button', { name: `Открыть тест-кейс ${c.name}`, exact: true })
+    .click()
   await expect(page.getByLabel('Текущее окружение')).toBeEnabled()
-  await expect(page.getByLabel('Текущее окружение')).toHaveValue(previousEnvironment)
-  await expect(page.getByLabel('Описание шага 1', { exact: true })).toHaveValue('Второй ручной шаг')
+  await expect(page.getByLabel('Текущее окружение')).toHaveValue(
+    previousEnvironment,
+  )
+  await expect(page.getByLabel('Описание шага 1', { exact: true })).toHaveValue(
+    'Второй ручной шаг',
+  )
+})
+
+test('новые формы: черновики, изображения, переменные, заголовки и темы', async ({
+  page,
+}) => {
+  const errors: string[] = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  await page.goto('/')
+  await page
+    .getByRole('button', { name: 'Окружения и ресурсы', exact: false })
+    .click()
+  await page.getByRole('button', { name: '+ Окружение', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Новое окружение' })
+  await expect(dialog.locator('input')).toHaveCount(1)
+  await expect(dialog.locator('textarea')).toHaveCount(1)
+  await dialog.getByLabel('Имя окружения', { exact: true }).fill('authoring')
+  await dialog
+    .getByLabel('Описание окружения', { exact: false })
+    .fill('Окружение для новых форм')
+  await dialog
+    .getByRole('button', { name: 'Сохранить окружение', exact: true })
+    .click()
+  await page
+    .getByRole('button', { name: 'Настроить переменные', exact: true })
+    .click()
+  const vars = page.getByRole('dialog', { name: 'Переменные окружения' })
+  const pairs = vars.getByRole('group', {
+    name: 'Открытые переменные',
+    exact: true,
+  })
+  for (const [i, name, value] of [
+    [1, 'API_HOST', config.http],
+    [2, 'AUTH_HOST', config.http],
+  ] as const) {
+    await pairs.getByRole('button', { name: '+ Добавить', exact: true }).click()
+    await pairs
+      .getByLabel(`Открытые переменные: имя ${i}`, { exact: true })
+      .fill(name)
+    await pairs
+      .getByLabel(`Открытые переменные: значение ${i}`, { exact: true })
+      .fill(value)
+  }
+  await vars
+    .getByRole('button', { name: '+ Секретная переменная', exact: true })
+    .click()
+  await vars.getByLabel('Имя секрета', { exact: false }).fill('CLIENT_SECRET')
+  await vars
+    .getByLabel('Новое значение: CLIENT_SECRET', { exact: false })
+    .fill('e2e-source-secret')
+  await vars
+    .getByRole('button', { name: 'Сохранить переменные', exact: true })
+    .click()
+  await expect(page.locator('.environment-variables')).toContainText('API_HOST')
+  await expect(page.locator('.environment-variables')).not.toContainText(
+    'e2e-source-secret',
+  )
+  const env = (await api('/environments')).items.find(
+    (e: any) => e.name === 'authoring',
+  )
+  await page
+    .locator('.resource-list')
+    .getByRole('button', { name: '+ Добавить', exact: true })
+    .click()
+  const form = page.locator('.resource-form')
+  await form.getByLabel('Имя ресурса', { exact: true }).fill('AUTO_GW')
+  await form
+    .getByLabel('Базовый URL', { exact: false })
+    .fill(config.http + '/api')
+  await form
+    .getByLabel('Защита подключения', { exact: true })
+    .selectOption('plaintext')
+  const common = form.getByRole('group', {
+    name: 'Общие заголовки',
+    exact: true,
+  })
+  for (const [i, name, mode] of [
+    [0, 'Authorization', 'per_run'],
+    [1, 'X-Request-Token', 'per_attempt'],
+  ] as const) {
+    await common
+      .getByRole('button', { name: '+ Добавить', exact: true })
+      .last()
+      .click()
+    const row = common.locator('.header-row').nth(i)
+    await row
+      .getByLabel(`Общие заголовки: имя ${i + 1}`, { exact: true })
+      .fill(name)
+    await row
+      .getByLabel(`Общие заголовки: способ значения ${i + 1}`, { exact: true })
+      .selectOption('http')
+    await row
+      .getByLabel('Источник: метод', { exact: true })
+      .selectOption('POST')
+    await row
+      .getByLabel('Источник: URL', { exact: false })
+      .fill(config.http + '/token?host=${AUTH_HOST}')
+    await row
+      .getByLabel('Источник: формат тела', { exact: true })
+      .selectOption('json')
+    await row
+      .getByLabel('Источник: тело запроса', { exact: false })
+      .fill('{"secret":"${CLIENT_SECRET}"}')
+    await row
+      .getByLabel('Источник: Защита подключения', { exact: true })
+      .selectOption('plaintext')
+    await row
+      .getByLabel('Источник: поле JSON', { exact: false })
+      .fill('/tokens/0/value')
+    await row.getByLabel('Источник: префикс', { exact: false }).fill('Bearer ')
+    await row
+      .getByLabel('Источник: когда получать', { exact: false })
+      .selectOption(mode)
+  }
+  const stats = async () => await (await fetch(config.http + '/stats')).json()
+  const initial = await stats()
+  await form
+    .getByRole('button', { name: 'Сохранить ресурс', exact: true })
+    .click()
+  await expect(
+    page.locator('.resource-item').filter({ hasText: 'AUTO_GW' }),
+  ).toBeVisible()
+  expect((await stats()).sources).toBe(initial.sources)
+  await page
+    .getByRole('button', { name: 'Тест-кейсы', exact: false })
+    .first()
+    .click()
+  await page
+    .locator('aside')
+    .getByRole('button', { name: 'Создать папку', exact: true })
+    .click()
+  await page.getByLabel('Название', { exact: true }).fill('Новые возможности')
+  await page
+    .getByRole('button', { name: 'Сохранить название', exact: true })
+    .click()
+  await page
+    .getByRole('button', {
+      name: 'Добавить тест-кейс в Новые возможности',
+      exact: true,
+    })
+    .click()
+  await page
+    .getByRole('button', { name: 'Сохранить название', exact: true })
+    .click()
+  await expect(page.getByLabel('Название тест-кейса')).toHaveValue(
+    'Новый тест-кейс',
+  )
+  await page.getByLabel('Название тест-кейса').fill('')
+  await page
+    .getByRole('button', { name: '+ Добавить шаг', exact: true })
+    .click()
+  await page.getByRole('button', { name: '+ HTTP', exact: true }).click()
+  const blocks = page.locator('.editor .call-block')
+  await blocks
+    .first()
+    .getByLabel('Ожидаемый HTTP-статус', { exact: true })
+    .fill('')
+  await page.getByRole('button', { name: 'Сохранить', exact: true }).click()
+  await expect(
+    page.getByRole('region', { name: 'Готовность к запуску' }),
+  ).toBeVisible()
+  await page.reload()
+  await expect(
+    blocks.first().getByLabel('Ресурс', { exact: true }),
+  ).toHaveValue('')
+  await expect(
+    blocks.first().getByLabel('Ожидаемый HTTP-статус', { exact: true }),
+  ).toHaveValue('')
+  await expect(
+    page.getByRole('button', { name: 'Начать прогон', exact: true }),
+  ).toBeDisabled()
+  await page
+    .getByLabel('Описание шага 1', { exact: true })
+    .fill('Сравнить эталоны вручную')
+  await page
+    .getByLabel('Ожидаемый результат шага 1', { exact: false })
+    .fill('Экран соответствует изображению')
+  const manual = page.locator('.editor .step-card > .image-gallery')
+  await manual
+    .getByLabel('Добавить изображения', { exact: true })
+    .setInputFiles(resolve(root, 'internal/catalog/testdata/pixel.webp'))
+  await expect(manual.locator('.image-reference')).toHaveCount(1)
+  await manual
+    .getByLabel('Подпись изображения 1', { exact: true })
+    .fill('Эталон шага')
+  await page.getByRole('button', { name: '+ HTTP', exact: true }).click()
+  for (let i = 0; i < 2; i++) {
+    const b = blocks.nth(i),
+      select = b.getByLabel('Ресурс', { exact: true })
+    await select.focus()
+    await select.press('Home')
+    await select.press('ArrowDown')
+    await select.press('Enter')
+    await expect(select).toHaveValue('AUTO_GW')
+    await b
+      .getByLabel('Путь или ссылка на ресурс', { exact: false })
+      .fill('/task')
+    await b.getByLabel('Ожидаемый HTTP-статус', { exact: true }).fill('200')
+    await b.getByLabel('Проверка тела', { exact: true }).selectOption('none')
+  }
+  await blocks
+    .first()
+    .getByLabel('Добавить изображения', { exact: true })
+    .setInputFiles(resolve(root, 'internal/catalog/testdata/pixel.webp'))
+  await expect(blocks.first().locator('.image-reference')).toHaveCount(1)
+  await blocks
+    .first()
+    .getByLabel('Подпись изображения 1', { exact: true })
+    .fill('Эталон вызова')
+  await page.getByLabel('Цветовая тема').selectOption('dark')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await expect(page.getByLabel('Описание шага 1', { exact: true })).toHaveValue(
+    'Сравнить эталоны вручную',
+  )
+  await page.getByRole('button', { name: 'Сохранить', exact: true }).click()
+  await expect(page.getByText('Сохранено', { exact: true })).toBeVisible()
+  await page.reload()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await expect(
+    manual.getByLabel('Подпись изображения 1', { exact: true }),
+  ).toHaveValue('Эталон шага')
+  await manual
+    .getByRole('button', { name: 'Открыть изображение 1', exact: true })
+    .click()
+  await expect(
+    page.getByRole('dialog', { name: 'Изображение ожидаемого результата' }),
+  ).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(
+    page.getByRole('dialog', { name: 'Изображение ожидаемого результата' }),
+  ).toHaveCount(0)
+  const folder = (await api('/folders')).items.find(
+    (f: any) => f.name === 'Новые возможности',
+  )
+  const c = (await api(`/folders/${folder.id}/test-cases`)).items[0]
+  const before = await stats()
+  await blocks
+    .first()
+    .getByRole('button', { name: 'Запустить вызов', exact: true })
+    .click()
+  await expect(
+    blocks.first().getByText('Совпадает', { exact: true }),
+  ).toBeVisible()
+  expect((await stats()).sources).toBe(before.sources + 2)
+  await page.getByRole('button', { name: 'Начать прогон', exact: true }).click()
+  expect((await stats()).sources).toBe(before.sources + 2)
+  const calls = page.locator('.run-view .call-block')
+  await calls
+    .first()
+    .getByRole('button', { name: 'Запустить вызов', exact: true })
+    .click()
+  await expect(
+    calls.first().getByText('Совпадает', { exact: true }),
+  ).toBeVisible()
+  await page.reload()
+  await page
+    .getByRole('button', { name: 'Прогон', exact: false })
+    .filter({ hasText: /^Прогон/ })
+    .first()
+    .click()
+  await calls
+    .nth(1)
+    .getByRole('button', { name: 'Запустить вызов', exact: true })
+    .click()
+  await expect(
+    calls.nth(1).getByText('Совпадает', { exact: true }),
+  ).toBeVisible()
+  expect((await stats()).sources).toBe(before.sources + 5)
+  await expect(calls.nth(1)).toContainText('Значение из текущего прогона')
+  await page.getByLabel('Статус шага 1', { exact: true }).selectOption('passed')
+  await page
+    .getByRole('button', { name: 'Завершить прогон', exact: true })
+    .click()
+  await expect(page.getByText('Первый успешный', { exact: true })).toBeVisible()
+  const completed = (await api(`/test-cases/${c.id}/runs`)).items[0]
+  expect(completed.retentionReasons).toEqual(['first_run', 'first_success'])
+  const full = await api(`/runs/${completed.id}`)
+  expect(JSON.stringify(full)).not.toContain('fixture-secret-token-')
+  expect(JSON.stringify(full)).not.toContain('e2e-source-secret')
+  for (const theme of ['light', 'dark']) {
+    await page.getByLabel('Цветовая тема').selectOption(theme)
+    await page.evaluate(() => window.scrollTo(0, 0))
+    await page.screenshot({
+      path: resolve(root, `.local/authoring-run-${theme}.png`),
+      fullPage: true,
+    })
+  }
+  await page.getByRole('button', { name: 'Редактор 1', exact: true }).click()
+  await manual
+    .getByRole('button', { name: 'Удалить изображение', exact: true })
+    .click()
+  await blocks
+    .first()
+    .getByRole('button', { name: 'Удалить изображение', exact: true })
+    .click()
+  await page.getByRole('button', { name: 'Сохранить', exact: true }).click()
+  await page.getByRole('button', { name: 'История', exact: true }).click()
+  await page
+    .locator('.history-table')
+    .getByRole('button', { name: 'Открыть', exact: true })
+    .first()
+    .click()
+  await expect(page.locator('.run-view')).toContainText('Эталон шага')
+  await expect(page.locator('.run-view')).toContainText('Эталон вызова')
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Закрыть', exact: true })
+    .click()
+  // A new run obtains fresh values; cancelling clears its cache.
+  await page.getByRole('button', { name: 'Редактор 1', exact: true }).click()
+  await page.getByRole('button', { name: 'Начать прогон', exact: true }).click()
+  await calls
+    .first()
+    .getByRole('button', { name: 'Запустить вызов', exact: true })
+    .click()
+  await expect(
+    calls.first().getByText('Совпадает', { exact: true }),
+  ).toBeVisible()
+  expect((await stats()).sources).toBe(before.sources + 7)
+  await page
+    .getByRole('button', { name: 'Отменить прогон', exact: true })
+    .click()
+  await page.getByLabel('Цветовая тема').selectOption('system')
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await page.emulateMedia({ colorScheme: 'light' })
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+  expect(errors).toEqual([])
+  expect(env.description).toBe('Окружение для новых форм')
+})
+
+test('тема работает без localStorage и до загрузки интерфейса', async ({
+  browser,
+}) => {
+  const context = await browser.newContext({ colorScheme: 'dark' })
+  await context.addInitScript(() => {
+    Object.defineProperty(window, 'localStorage', {
+      get() {
+        throw new DOMException('disabled', 'SecurityError')
+      },
+    })
+  })
+  const page = await context.newPage()
+  const errors: string[] = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  await page.goto(base)
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await page.getByLabel('Цветовая тема').selectOption('light')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+  expect(errors).toEqual([])
+  const csp = (await page.request.get(base)).headers()[
+    'content-security-policy'
+  ]
+  expect(csp.split(';').find((v) => v.trim().startsWith('script-src'))).toBe(
+    " script-src 'self'",
+  )
+  await context.close()
+})
+
+test('mTLS в форме ресурса и отдельного источника, сохранённый ключ не раскрывается', async ({
+  page,
+}) => {
+  let env = await api('/environments', 'POST', {
+    name: 'mtls-ui',
+    description: 'Два защищённых подключения',
+  })
+  env = await api(`/environments/${env.id}/variables`, 'PUT', {
+    revision: env.revision,
+    variables: {},
+    secrets: { replace: { SOURCE_KEY: config.privateKey }, clear: [] },
+  })
+  await page.goto('/')
+  await page
+    .getByRole('button', { name: 'Окружения и ресурсы', exact: false })
+    .click()
+  await page
+    .getByLabel('Текущее окружение', { exact: true })
+    .selectOption(env.id)
+  await page
+    .locator('.resource-list')
+    .getByRole('button', { name: '+ Добавить', exact: true })
+    .click()
+  const form = page.locator('.resource-form')
+  await form.getByLabel('Имя ресурса', { exact: true }).fill('SECURE_GW')
+  await form
+    .getByLabel('Базовый URL', { exact: false })
+    .fill(config.mtlsHttp + '/api')
+  await form
+    .getByLabel('Защита подключения', { exact: true })
+    .selectOption('mtls')
+  await form.getByLabel('CA-сертификат PEM', { exact: false }).fill(config.ca)
+  await form
+    .getByLabel('Клиентский сертификат PEM', { exact: false })
+    .fill(config.certificate)
+  await form
+    .getByLabel('Действие: PRIVATE_KEY', { exact: true })
+    .selectOption('replace')
+  await form
+    .getByLabel('Новое значение: PRIVATE_KEY', { exact: false })
+    .fill(config.privateKey)
+  const common = form.getByRole('group', {
+    name: 'Общие заголовки',
+    exact: true,
+  })
+  await common.getByRole('button', { name: '+ Добавить', exact: true }).click()
+  await common
+    .getByLabel('Общие заголовки: имя 1', { exact: true })
+    .fill('Authorization')
+  await common
+    .getByLabel('Общие заголовки: способ значения 1', { exact: true })
+    .selectOption('http')
+  await common
+    .getByLabel('Источник: URL', { exact: false })
+    .fill(config.mtlsHttp + '/token')
+  await common
+    .getByLabel('Источник: Защита подключения', { exact: true })
+    .selectOption('mtls')
+  await common
+    .getByLabel('Источник: CA-сертификат PEM', { exact: false })
+    .fill(config.ca)
+  await common
+    .getByLabel('Источник: Клиентский сертификат PEM', { exact: false })
+    .fill(config.certificate)
+  await common
+    .getByLabel('Источник: Секрет приватного ключа', { exact: true })
+    .fill('SOURCE_KEY')
+  await common
+    .getByLabel('Источник: поле JSON', { exact: false })
+    .fill('/tokens/0/value')
+  await common
+    .getByLabel('Источник: когда получать', { exact: false })
+    .selectOption('per_run')
+  await form
+    .getByRole('button', { name: 'Сохранить ресурс', exact: true })
+    .click()
+  await expect(
+    page.locator('.resource-item').filter({ hasText: 'SECURE_GW' }),
+  ).toBeVisible()
+  await expect(
+    form.getByLabel('Защита подключения', { exact: true }),
+  ).toHaveValue('mtls')
+  await expect(
+    form.getByLabel('Новое значение: PRIVATE_KEY', { exact: false }),
+  ).toHaveCount(0)
+  let resource = (await api(`/environments/${env.id}/resources`)).items[0]
+  expect(JSON.stringify(resource)).not.toContain(config.privateKey)
+  expect(resource.config.headers[0].source.privateKeySecret).toBe('SOURCE_KEY')
+  const folder = await api('/folders', 'POST', {
+    name: 'Защищённые подключения',
+  })
+  let c = await api(`/folders/${folder.id}/test-cases`, 'POST', {})
+  c = await api(`/test-cases/${c.id}`, 'PUT', {
+    name: c.name,
+    revision: c.revision,
+    steps: [
+      {
+        id: randomUUID(),
+        description: 'Проверить mTLS',
+        blocks: [
+          {
+            id: randomUUID(),
+            kind: 'http',
+            resource: 'SECURE_GW',
+            timeoutSeconds: 5,
+            http: {
+              method: 'GET',
+              path: '/task',
+              query: [],
+              headers: [],
+              bodyMode: 'none',
+              body: '',
+            },
+            expected: { statusCode: 200, bodyMode: 'none' },
+          },
+        ],
+      },
+    ],
+  })
+  let attempt = await api(
+    `/test-cases/${c.id}/blocks/${c.steps[0].blocks[0].id}/attempts`,
+    'POST',
+    { environmentId: env.id, revision: c.revision },
+    randomUUID(),
+  )
+  await eventually(async () => {
+    attempt = await api(`/attempts/${attempt.id}`)
+    return attempt.state === 'completed'
+  })
+  expect(attempt.result.comparison.status).toBe('match')
+  expect(attempt.result.headerSources[0].state).toBe('fetched')
+  // Switching off client authentication changes the public mode, keeping the
+  // encrypted private key until an explicit secret-delete action.
+  await form
+    .getByLabel('Защита подключения', { exact: true })
+    .selectOption('tls')
+  await form
+    .getByRole('button', { name: 'Сохранить ресурс', exact: true })
+    .click()
+  await expect(
+    form.getByLabel('Защита подключения', { exact: true }),
+  ).toHaveValue('tls')
+  await eventually(async () => {
+    resource = (await api(`/environments/${env.id}/resources`)).items[0]
+    return resource.config.tls.mode === 'tls'
+  })
+  expect(resource.secretNames).toContain('PRIVATE_KEY')
+  expect(resource.config.tls.certificate ?? '').toBe('')
 })

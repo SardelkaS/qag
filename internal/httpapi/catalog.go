@@ -68,6 +68,7 @@ func pageOptions(r *http.Request) (int, string, error) {
 }
 
 func (s *Server) RegisterCatalog(repo *catalog.Repository) {
+	s.RegisterImages(repo)
 	s.register("GET /api/v1/folders", func(r *http.Request) (any, error) {
 		limit, cursor, err := pageOptions(r)
 		if err != nil {
@@ -104,7 +105,7 @@ func (s *Server) RegisterCatalog(repo *catalog.Repository) {
 		return repo.ListCases(r.Context(), r.PathValue("id"), limit, cursor)
 	})
 	s.register("POST /api/v1/folders/{id}/test-cases", func(r *http.Request) (any, error) {
-		var body CreateName
+		var body TestCaseCreate
 		if err := readJSON(r, &body); err != nil {
 			return nil, err
 		}

@@ -49,7 +49,7 @@ func TestHTTPCompareRedirectRedactionAndLimits(t *testing.T) {
 	defer server.Close()
 	res := resources.Resolved{Resource: resources.Resource{Config: resources.Config{BaseURL: server.URL + "/api", TLS: resources.TLSConfig{Mode: "plaintext"}}}, Secrets: map[string]string{"TOKEN": "test-token"}}
 	statusCode := 200
-	b := catalog.Block{Kind: "http", Resource: "GW", HTTP: &catalog.HTTPRequest{Method: "GET", Path: "/task", BodyMode: "none", Headers: []catalog.KeyValue{{Name: "Authorization", Value: "Bearer test-token"}}, Query: []catalog.KeyValue{{Name: "name", Value: "O'Reilly"}}}, Expected: catalog.Expectation{StatusCode: &statusCode, BodyMode: "json", Body: `{"token":"test-token","n":9007199254740993123}`}}
+	b := catalog.Block{Kind: "http", Resource: "GW", HTTP: &catalog.HTTPRequest{Method: "GET", Path: "/task", BodyMode: "none", Headers: []catalog.RequestHeader{{Name: "Authorization", Value: "Bearer test-token"}}, Query: []catalog.KeyValue{{Name: "name", Value: "O'Reilly"}}}, Expected: catalog.Expectation{StatusCode: &statusCode, BodyMode: "json", Body: `{"token":"test-token","n":9007199254740993123}`}}
 	runner := NewRunner()
 	state, result := runner.Execute(context.Background(), "test", b, res)
 	if state != "completed" || result.Comparison.Status != "match" || strings.Contains(result.Body, "test-token") || !result.Redacted {

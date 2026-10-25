@@ -76,18 +76,25 @@ func (res Resolved) Prepare(original catalog.Block) (catalog.Block, Resolved, er
 	data, _ := json.Marshal(original)
 	var b catalog.Block
 	_ = json.Unmarshal(data, &b)
+	resourceData, _ := json.Marshal(res.Resource)
+	var resourceCopy Resource
+	_ = json.Unmarshal(resourceData, &resourceCopy)
+	res.Resource = resourceCopy
 	fail := func(err error) (catalog.Block, Resolved, error) { return b, res, err }
 	var err error
-	res.Resource.Config.Headers = append([]catalog.KeyValue{}, res.Resource.Config.Headers...)
-	for i := range res.Resource.Config.Headers {
-		res.Resource.Config.Headers[i].Value, err = res.Expand(res.Resource.Config.Headers[i].Value, true, nil)
+	if b.HTTP != nil {
+		b.HTTP.Headers, err = res.prepareRequestHeaders(catalog.MergeRequestHeaders(res.Resource.Config.Headers, b.HTTP.Headers))
 		if err != nil {
 			return fail(err)
 		}
 	}
-	if err := catalog.ValidateHeaders(res.Resource.Config.Headers); err != nil {
-		return fail(problem.Invalid("config.headers", err.Error()))
+	if b.GRPC != nil {
+		b.GRPC.Metadata, err = res.prepareRequestHeaders(catalog.MergeRequestHeaders(res.Resource.Config.Headers, b.GRPC.Metadata))
+		if err != nil {
+			return fail(err)
+		}
 	}
+	res.Resource.Config.Headers = []catalog.RequestHeader{}
 	if b.HTTP != nil {
 		b.HTTP.Path = strings.TrimPrefix(b.HTTP.Path, b.Resource+"/")
 		b.HTTP.Path, err = res.Expand(b.HTTP.Path, false, url.PathEscape)
@@ -96,12 +103,6 @@ func (res Resolved) Prepare(original catalog.Block) (catalog.Block, Resolved, er
 		}
 		for i := range b.HTTP.Query {
 			b.HTTP.Query[i].Value, err = res.Expand(b.HTTP.Query[i].Value, false, nil)
-			if err != nil {
-				return fail(err)
-			}
-		}
-		for i := range b.HTTP.Headers {
-			b.HTTP.Headers[i].Value, err = res.Expand(b.HTTP.Headers[i].Value, true, nil)
 			if err != nil {
 				return fail(err)
 			}
@@ -119,12 +120,6 @@ func (res Resolved) Prepare(original catalog.Block) (catalog.Block, Resolved, er
 		b.GRPC.Body, err = res.expandJSON(b.GRPC.Body)
 		if err != nil {
 			return fail(err)
-		}
-		for i := range b.GRPC.Metadata {
-			b.GRPC.Metadata[i].Value, err = res.Expand(b.GRPC.Metadata[i].Value, true, nil)
-			if err != nil {
-				return fail(err)
-			}
 		}
 	}
 	if b.SQL != nil {
@@ -158,6 +153,9 @@ func (res Resolved) Prepare(original catalog.Block) (catalog.Block, Resolved, er
 }
 
 func (res Resolved) expandJSON(text string) (string, error) {
+	return res.expandJSONAllowed(text, false)
+}
+func (res Resolved) expandJSONAllowed(text string, secretAllowed bool) (string, error) {
 	decoder := json.NewDecoder(bytes.NewBufferString(text))
 	decoder.UseNumber()
 	var value any
@@ -169,7 +167,7 @@ func (res Resolved) expandJSON(text string) (string, error) {
 	visit = func(input any) any {
 		switch v := input.(type) {
 		case string:
-			result, err := res.Expand(v, false, nil)
+			result, err := res.Expand(v, secretAllowed, nil)
 			if err != nil {
 				failure = err
 			}

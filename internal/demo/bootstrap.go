@@ -81,8 +81,8 @@ func Bootstrap(ctx context.Context, pool *pgxpool.Pool, vault *resources.Vault, 
 		c              resources.Config
 		s              map[string]string
 	}{
-		{i.HTTPResourceID, "DEMO_HTTP", "http", resources.Config{BaseURL: httpURL + "/demo/v1", Headers: []catalog.KeyValue{}, TLS: resources.TLSConfig{Mode: "plaintext"}}, map[string]string{}},
-		{i.GRPCResourceID, "DEMO_GRPC", "grpc", resources.Config{Address: grpcAddress, Headers: []catalog.KeyValue{}, TLS: resources.TLSConfig{Mode: "plaintext"}}, map[string]string{}},
+		{i.HTTPResourceID, "DEMO_HTTP", "http", resources.Config{BaseURL: httpURL + "/demo/v1", Headers: []catalog.RequestHeader{}, TLS: resources.TLSConfig{Mode: "plaintext"}}, map[string]string{}},
+		{i.GRPCResourceID, "DEMO_GRPC", "grpc", resources.Config{Address: grpcAddress, Headers: []catalog.RequestHeader{}, TLS: resources.TLSConfig{Mode: "plaintext"}}, map[string]string{}},
 		{i.SQLResourceID, "DEMO_SQL", "postgresql", sql, secrets},
 	} {
 		if err = seedResource(ctx, tx, vault, i.EnvironmentID, r.id, r.name, r.kind, r.c, r.s, create); err != nil {

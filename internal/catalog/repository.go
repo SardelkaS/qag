@@ -3,6 +3,8 @@ package catalog
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
+	"strings"
 
 	"time"
 
@@ -133,6 +135,7 @@ func scanCase(row rowScanner) (TestCase, error) {
 	if c.Steps == nil {
 		c.Steps = []Step{}
 	}
+	c.ValidationIssues = ValidationIssues(c.Steps)
 	return c, problem.Database(err)
 }
 func getCase(ctx context.Context, db queryer, id string, lock bool) (TestCase, error) {
@@ -195,10 +198,8 @@ func (r *Repository) CreateCase(ctx context.Context, folderID, value string) (Te
 	if !ValidID(folderID) {
 		return TestCase{}, problem.Invalid("id", "Некорректный идентификатор папки")
 	}
-	name, normalized, err := Name(value)
-	if err != nil {
-		return TestCase{}, err
-	}
+	var name, normalized string
+	var err error
 	var c TestCase
 	err = r.transaction(ctx, func(tx pgx.Tx) error {
 		var archived bool
@@ -210,6 +211,10 @@ func (r *Repository) CreateCase(ctx context.Context, folderID, value string) (Te
 		}
 		if archived {
 			return problem.Archived()
+		}
+		name, normalized, err = caseName(ctx, tx, folderID, "", value)
+		if err != nil {
+			return err
 		}
 		var id string
 		if err := tx.QueryRow(ctx, `INSERT INTO qag.test_cases(folder_id,name,normalized_name) VALUES($1,$2,$3) RETURNING id::text`, folderID, name, normalized).Scan(&id); err != nil {
@@ -223,14 +228,12 @@ func (r *Repository) CreateCase(ctx context.Context, folderID, value string) (Te
 }
 
 func (r *Repository) SaveCase(ctx context.Context, id, value string, revision int64, steps []Step) (TestCase, error) {
-	name, normalized, err := Name(value)
-	if err != nil {
-		return TestCase{}, err
-	}
+	var name, normalized string
+	var err error
 	if steps == nil {
 		steps = []Step{}
 	}
-	if err = ValidateSteps(steps); err != nil {
+	if err = ValidateDraft(steps); err != nil {
 		return TestCase{}, err
 	}
 	var c TestCase
@@ -247,6 +250,13 @@ func (r *Repository) SaveCase(ctx context.Context, id, value string, revision in
 		}
 		if old.Revision != revision {
 			return problem.Conflict("Сценарий изменён в другой вкладке; ваши правки не перезаписаны")
+		}
+		name, normalized, err = caseName(ctx, tx, old.FolderID, id, value)
+		if err != nil {
+			return err
+		}
+		if err = validateImageOwners(ctx, tx, id, steps); err != nil {
+			return err
 		}
 		_, err = tx.Exec(ctx, `UPDATE qag.test_cases SET name=$2,normalized_name=$3,steps=$4,revision=revision+1,updated_at=now() WHERE id=$1`, id, name, normalized, steps)
 		if err != nil {
@@ -316,4 +326,24 @@ func (r *Repository) transaction(ctx context.Context, apply func(pgx.Tx) error) 
 		return err
 	}
 	return problem.Database(tx.Commit(ctx))
+}
+
+func caseName(ctx context.Context, tx pgx.Tx, folder, id, value string) (string, string, error) {
+	if strings.TrimSpace(value) != "" {
+		return Name(value)
+	}
+	for n := 1; ; n++ {
+		name := "Новый тест-кейс"
+		if n > 1 {
+			name = fmt.Sprintf("Новый тест-кейс %d", n)
+		}
+		_, norm, _ := Name(name)
+		var used bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM qag.test_cases WHERE folder_id=$1 AND normalized_name=$2 AND id::text<>$3)`, folder, norm, id).Scan(&used); err != nil {
+			return "", "", problem.Database(err)
+		}
+		if !used {
+			return name, norm, nil
+		}
+	}
 }

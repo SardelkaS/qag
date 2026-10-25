@@ -1,5 +1,53 @@
 # Проверки реализации
 
+## Расширенный редактор и ресурсы — 26.10.2026
+
+Изменение [enhance-test-authoring-and-resources](../openspec/changes/archive/2026-10-26-enhance-test-authoring-and-resources/tasks.md), `spec-driven`. Общий `scripts/verify.ps1` завершился успешно после реализации всех восьми возможностей. Проверки выполнялись на Windows, Go 1.26.4, Node 24.18.0, PostgreSQL 18.6 и Chromium.
+
+Архивирование — 26.10.2026: завершены все четыре артефакта и 35/35 задач. Синхронизированы восемь разделов: созданы `dynamic-request-headers` и `expected-result-images`, обновлены `call-execution`, `local-app-runtime`, `resource-environments`, `test-case-authoring`, `test-case-catalog` и `test-run-history`. Перенесены 22 новых и 9 изменённых требований; все 31 требование и 83 сценария delta совпадают с основными спецификациями, прежние требования и остальные сценарии сохранены. Повторное слияние не меняет результат. После синхронизации в десяти основных спецификациях — 71 требование и 167 сценариев. Все 12 файлов изменения, включая `.openspec.yaml`, перенесены без изменения содержимого; SHA-256 проверены при переносе. При подготовке коммита удалены лишние пустые строки в конце шести delta-файлов; текст требований и сценариев сохранён. Строгая валидация и отсутствие активных изменений проверены после переноса.
+
+| Проверка | Фактический результат |
+|---|---|
+| protobuf/OpenAPI/TypeScript generation и Redocly lint | Пройдены, контракт включает новые DTO, upload/download и отдельный API переменных |
+| React/TypeScript/Vite и встроенный Go-бинарник | Собраны; `npm ci` по lockfile, 0 уязвимостей в отчёте установки |
+| `go test ./...`, `go vet ./...`, frontend typecheck | Пройдены |
+| Vitest / Testing Library | 10 тестов в 4 файлах, пройдены |
+| `go test -p=1 -tags=integration -count=1 ./...` | Пройдены: реальные PostgreSQL, обновление заполненной схемы 4→6, backup/restore, отказ записи попытки/результата |
+| HTTP/gRPC/PostgreSQL mTLS | Правильная пара принята; неверный CA, hostname, несовместимая/неподтверждённая клиентская пара и отсутствие сертификата отклонены. Legacy TLS с парой работает |
+| Отдельная PostgreSQL mTLS-цель | Временный контейнер с собственным PKI, обязательным клиентским сертификатом и случайным loopback-портом; удаляется с собственными томами. Рабочий и общий тестовый серверы не перенастраиваются |
+| Playwright / Chromium | Все 7 сценариев пройдены, итоговый прогон — 27,8 с |
+| `openspec.cmd validate --all --strict --no-interactive` | 9 объектов, 0 ошибок |
+| `git diff --check` | Ошибок нет |
+| Рабочий `dist/qag.exe`, HTTP 8080 / gRPC 9091 | Readiness, 6 миграций, все 5 пробных вызовов встроенного примера совпали; smoke-тест не создавал прогонов |
+
+До запуска новой версии создан backup `.local/backups/before-authoring-resources`; ключ сохранён отдельно от дампа. Контрольные суммы пользовательских кейсов, окружений без нового поля, всех прежних версий переменных/ресурсов с ciphertext и ID встроенного примера совпали после миграций. Единственный ранее незавершённый прогон восстановлен как `interrupted` с причиной `first_run`; его прежний статус `running` отдельно подтверждён чтением только таблицы прогонов из backup. Внешние действия при старте не повторялись.
+
+В Chromium пройден путь: создание окружения только с именем/описанием → открытые и секретные переменные на странице ресурсов → общий HTTP-источник с POST/JSON → кейс без имени → сохранение пустого блока и незавершённого ввода → перезагрузка → ручной эталон шага и вызова → выбор ресурса клавиатурой → два HTTP-блока → пробная попытка → полный прогон с обоими режимами источников → перезагрузка между вызовами → ручная оценка → неизменяемая история после удаления текущих ссылок → новый прогон с новыми значениями. Отдельно проверены mTLS-форма источника/ресурса, скрытый сохранённый ключ, системная тема и запрет localStorage. Четыре прежних сценария каталога, архивов, конфликтов, секретов, протоколов, истории и перезапуска проходят с адаптацией явно изменённых контрактов.
+
+Визуально просмотрены `.local/authoring-run-light.png` и `.local/authoring-run-dark.png`: два HTTP-блока одного шага имеют отдельные рамки и номера, подписанные запрос/ожидание/ответ, читаемые статусы, галереи и безопасную диагностику fetched/reused. Настройка темы не ослабляет `script-src 'self'`.
+
+### Соответствие требованиям изменения
+
+Названия в таблице охватывают все 31 требование восьми delta-разделов; исходные спецификации содержат 83 сценария. Ссылки ведут на проверяющие тесты; Chromium-сценарии находятся в [workspace.spec.ts](../web/e2e/workspace.spec.ts).
+
+| Раздел и требования | Проверки |
+|---|---|
+| `test-case-catalog`: создание и переименование элементов каталога | [authoring integration](../internal/service/authoring_integration_test.go): конкурентные свободные имена; Chromium: пустое имя, сортировка и конфликт |
+| `test-case-authoring`: открытие/сохранение сценария; последовательность ручных шагов; типизированные блоки; сохранённая версия как основа выполнения | [draft validation](../internal/catalog/authoring_test.go), [authoring integration](../internal/service/authoring_integration_test.go), Chromium: сырой JSON/SQL-параметр после reload, готовый блок среди черновиков, guard и конфликт |
+| `test-case-authoring`: селектор совместимых ресурсов; явные границы вызовов | [компоненты](../web/src/AuthoringWidgets.test.tsx): фильтрация и отсутствующее имя, Chromium: выбор клавиатурой и снимки двух блоков в обеих темах |
+| `resource-environments`: управление окружениями/ресурсами; переменные на странице окружения | [authoring integration](../internal/service/authoring_integration_test.go): метаданные не меняют версии/секреты, stale revision и read-only; Chromium: новые формы |
+| `resource-environments`: настройки подключения и TLS | [HTTP/gRPC mTLS](../internal/execution/tls_test.go), [PostgreSQL mTLS](../internal/execution/postgres_mtls_integration_test.go), [неактивный ключ](../internal/resources/tls_modes_test.go), Chromium: mTLS-форма |
+| `resource-environments`: версии настроек источника заголовка | [authoring integration](../internal/service/authoring_integration_test.go): изменение режима/префикса ресурса между блоками не меняет активный прогон |
+| `call-execution`: явный запуск/состояние; тайм-ауты/отмена/лимиты; подготовка без сети; приоритет заголовков до получения | [header runner](../internal/execution/header_sources_test.go), [authoring integration](../internal/service/authoring_integration_test.go): отказ регистрации без сети, retry только записи результата; Chromium: потерянная команда и остановка процесса во время источника |
+| `expected-result-images`: изображения ожидаемого результата; постоянство/неизменность; проверка файлов/ограничений; ручная оценка; доступ и режим просмотра | [декодирование PNG/JPEG/WebP](../internal/catalog/images_test.go), [лимиты ссылок](../internal/catalog/authoring_test.go), [ownership/archive/read-only/history](../internal/service/authoring_integration_test.go), [readonly zoom](../web/src/AuthoringWidgets.test.tsx), Chromium: upload, подпись, Escape, прежняя галерея после удаления ссылки |
+| `dynamic-request-headers`: настройка HTTP-источника; однозначное извлечение JSON-поля | [header runner](../internal/execution/header_sources_test.go): POST/query/body, JSON Pointer, `~0`/`~1`, массив, точный numeric/boolean; [отдельные пары mTLS и заголовок reflection](../internal/execution/tls_test.go); Chromium: формы ресурса/источника |
+| `dynamic-request-headers`: получение перед каждым вызовом; переиспользование в прогоне; источник при пробном запуске | [header runner](../internal/execution/header_sources_test.go): режимы, новая конфигурация, ошибка не кэшируется и очистка; [authoring integration](../internal/service/authoring_integration_test.go), Chromium: счётчики двух блоков, reload, trial и новый прогон |
+| `dynamic-request-headers`: ошибки/ограничения; секретность полученных значений | [header runner](../internal/execution/header_sources_test.go): non-2xx, redirect, неверный JSON/поле, CRLF, усечение, cancel/timeout; [authoring integration](../internal/service/authoring_integration_test.go): секреты отсутствуют в сохранённом результате/safe_request; [backup](../internal/storage/backup_integration_test.go): токен отсутствует в открытом дампе |
+| `test-run-history`: эталоны в снимках/ручной оценке; безопасная история источников | [authoring integration](../internal/service/authoring_integration_test.go), [backup](../internal/storage/backup_integration_test.go), Chromium: изображения старого прогона, fetched/reused, отсутствие токенов и прежние правила first/success/manual |
+| `local-app-runtime`: светлая/тёмная/системная тема; совместимое обновление/backup новых данных | [компоненты темы](../web/src/AuthoringWidgets.test.tsx), Chromium: reload, system media, недоступный localStorage и CSP; [upgrade 4→6](../internal/storage/upgrade_integration_test.go), [backup/restore](../internal/storage/backup_integration_test.go), проверка готового бинарника |
+
+Ограничения соответствуют принятому плану: изображения сравниваются вручную; SQL-цель — PostgreSQL; динамический источник — HTTP, включая TLS/mTLS; на диске не создаётся кэш полученных токенов. Изменение синхронизировано с основными спецификациями и архивировано.
+
 ## Встроенный демонстрационный сервис — 25.10.2026
 
 Архивирование — 26.10.2026: [add-local-demo-service](../openspec/changes/archive/2026-10-26-add-local-demo-service/tasks.md), все 25 задач и четыре артефакта завершены. Синхронизированы пять разделов: создан `local-demo-service`, обновлены `local-app-runtime`, `resource-environments`, `test-case-authoring` и `test-case-catalog`. Перенесены 10 новых и 3 изменённых требования; все 13 требований и 33 сценария delta сверены с основными спецификациями, прежние требования и сценарии сохранены. Повторное слияние не меняет результат. В актуальных восьми спецификациях — 49 требований и 104 сценария. Все девять файлов изменения, включая `.openspec.yaml`, перенесены без изменения содержимого; проверены SHA-256 и отсутствие активных изменений. Строгая валидация основных спецификаций прошла.

@@ -1,32 +1,57 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Attempt, DemoInfo, Environment, Folder, Resource, Run, TestCase } from './api'
-import { all, command, fieldErrors, message, RequestError, request } from './api'
+import type {
+  Attempt,
+  DemoInfo,
+  Environment,
+  Folder,
+  Resource,
+  Run,
+  TestCase,
+} from './api'
+import {
+  all,
+  command,
+  fieldErrors,
+  message,
+  RequestError,
+  request,
+} from './api'
 import { Field, Modal, Notice } from './ui'
 import CaseEditor from './CaseEditor'
 import Sidebar from './Sidebar'
 import ResourcesPanel from './ResourcesPanel'
 import RunView, { mergeRun } from './RunView'
 import History from './History'
+import { ThemeSwitch } from './ThemeSwitch'
+import { readPreference, writePreference } from './preferences'
 
-type NameDialog = { title: string; initial: string; submit: (name: string) => Promise<void> }
+type NameDialog = {
+  allowEmpty?: boolean
+  title: string
+  initial: string
+  submit: (name: string) => Promise<void>
+}
 const clone = <T,>(value: T): T => structuredClone(value)
-const content = (c: TestCase | null) => (c ? JSON.stringify({ name: c.name, steps: c.steps }) : '')
+const content = (c: TestCase | null) =>
+  c ? JSON.stringify({ name: c.name, steps: c.steps }) : ''
 
 export default function App() {
   const [demo, setDemo] = useState<DemoInfo | null>(null)
   const demoRef = useRef<DemoInfo | null>(null),
-    userEnvironment = useRef(localStorage.getItem('qag.environment') ?? '')
+    userEnvironment = useRef(readPreference('qag.environment') ?? '')
   const [view, setView] = useState<'cases' | 'resources'>('cases'),
     [archive, setArchive] = useState(false)
   const [folders, setFolders] = useState<Folder[]>([]),
     [cases, setCases] = useState<Record<string, TestCase[]>>({}),
     [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [environments, setEnvironments] = useState<Environment[]>([]),
-    [environmentId, setEnvironmentId] = useState(localStorage.getItem('qag.environment') ?? ''),
+    [environmentId, setEnvironmentId] = useState(
+      readPreference('qag.environment') ?? '',
+    ),
     [resources, setResources] = useState<Resource[]>([])
   const [document, setDocument] = useState<TestCase | null>(null),
     [saved, setSaved] = useState<TestCase | null>(null),
-    [selectedId, setSelectedId] = useState(localStorage.getItem('qag.case') ?? '')
+    [selectedId, setSelectedId] = useState(readPreference('qag.case') ?? '')
   const [tab, setTab] = useState<'editor' | 'run' | 'history'>('editor'),
     [runId, setRunId] = useState(''),
     [run, setRun] = useState<Run | null>(null)
@@ -52,7 +77,7 @@ export default function App() {
   const chooseEnvironment = (id: string, persist = true) => {
     environment.current = id
     if (persist) {
-      localStorage.setItem('qag.environment', id)
+      writePreference('qag.environment', id)
       userEnvironment.current = id
     }
     setEnvironmentId(id)
@@ -63,10 +88,12 @@ export default function App() {
   }
   const guard = (action: () => void) => {
     if (busy) return
+    if (busy) return
     if (content(current.current) !== content(saved)) setPending(() => action)
     else action()
   }
-  const reloadFolders = async () => setFolders(await all<Folder>(`/folders?archived=${archive}`))
+  const reloadFolders = async () =>
+    setFolders(await all<Folder>(`/folders?archived=${archive}`))
   const reloadFolder = async (id: string) => {
     const values = await all<TestCase>(`/folders/${id}/test-cases`)
     setCases((old) => ({ ...old, [id]: values }))
@@ -81,22 +108,24 @@ export default function App() {
     setResources(id ? await all<Resource>(`/environments/${id}/resources`) : [])
   }
   const accept = (c: TestCase) => {
-    if (c.readOnly && demoRef.current) chooseEnvironment(demoRef.current.environmentId, false)
-    else if (current.current?.readOnly) chooseEnvironment(userEnvironment.current, false)
+    if (c.readOnly && demoRef.current)
+      chooseEnvironment(demoRef.current.environmentId, false)
+    else if (current.current?.readOnly)
+      chooseEnvironment(userEnvironment.current, false)
     current.current = clone(c)
     setDocument(clone(c))
     setSaved(c)
     setFields({})
     selection.current = c.id
     setSelectedId(c.id)
-    localStorage.setItem('qag.case', c.id)
+    writePreference('qag.case', c.id)
   }
   const loadCase = async (id: string) => {
     if (current.current?.readOnly && id !== demoRef.current?.testCaseId)
       chooseEnvironment(userEnvironment.current, false)
     selection.current = id
     setSelectedId(id)
-    localStorage.setItem('qag.case', id)
+    writePreference('qag.case', id)
     writeDocument(null)
     setSaved(null)
     setLoadingCase(true)
@@ -133,7 +162,10 @@ export default function App() {
     })
   useEffect(() => {
     let live = true
-    void Promise.all([all<Environment>('/environments'), request<DemoInfo>('/demo')])
+    void Promise.all([
+      all<Environment>('/environments'),
+      request<DemoInfo>('/demo'),
+    ])
       .then(([values, info]) => {
         if (!live) return
         demoRef.current = info
@@ -200,7 +232,8 @@ export default function App() {
         const next = await request<Run>(`/runs/${runId}`)
         if (!live) return
         setRun((old) => mergeRun(old, next))
-        if (next.status === 'running') timer = setTimeout(() => void poll(), 800)
+        if (next.status === 'running')
+          timer = setTimeout(() => void poll(), 800)
       } catch (e) {
         if (!live) return
         fail(e)
@@ -233,7 +266,8 @@ export default function App() {
             setAttempts((old) => {
               const next = { ...old }
               for (const a of values)
-                if (!next[a.blockId]?.finishedAt || a.finishedAt) next[a.blockId] = a
+                if (!next[a.blockId]?.finishedAt || a.finishedAt)
+                  next[a.blockId] = a
               return next
             })
         })
@@ -297,9 +331,14 @@ export default function App() {
     guard(() =>
       setNameDialog({
         title: 'Новый тест-кейс',
+        allowEmpty: true,
         initial: '',
         submit: async (name) => {
-          const c = await request<TestCase>(`/folders/${f.id}/test-cases`, 'POST', { name })
+          const c = await request<TestCase>(
+            `/folders/${f.id}/test-cases`,
+            'POST',
+            { name },
+          )
           setExpanded((old) => new Set(old).add(f.id))
           setView('cases')
           setTab('editor')
@@ -336,9 +375,14 @@ export default function App() {
     guard(() =>
       setNameDialog({
         title: 'Переименовать тест-кейс',
+        allowEmpty: true,
         initial: c.name,
         submit: async (name) => {
-          const changed = await request<TestCase>(`/test-cases/${c.id}`, 'PATCH', { name })
+          const changed = await request<TestCase>(
+            `/test-cases/${c.id}`,
+            'PATCH',
+            { name },
+          )
           await reloadFolder(c.folderId)
           if (selection.current === c.id) accept(changed)
         },
@@ -348,9 +392,13 @@ export default function App() {
     guard(
       () =>
         void mutate(async () => {
-          const changed = await request<TestCase>(`/test-cases/${c.id}`, 'PATCH', {
-            archived: !c.archived,
-          })
+          const changed = await request<TestCase>(
+            `/test-cases/${c.id}`,
+            'PATCH',
+            {
+              archived: !c.archived,
+            },
+          )
           await reloadFolder(c.folderId)
           if (selection.current === c.id) accept(changed)
         }),
@@ -390,17 +438,22 @@ export default function App() {
         void mutate(async () => {
           const c = current.current
           if (!c) return
-          const a = await command<Attempt>(`/test-cases/${c.id}/blocks/${blockId}/attempts`, {
-            environmentId: environment.current,
-            revision: c.revision,
-          })
-          if (selection.current === c.id) setAttempts((old) => ({ ...old, [blockId]: a }))
+          const a = await command<Attempt>(
+            `/test-cases/${c.id}/blocks/${blockId}/attempts`,
+            {
+              environmentId: environment.current,
+              revision: c.revision,
+            },
+          )
+          if (selection.current === c.id)
+            setAttempts((old) => ({ ...old, [blockId]: a }))
         }),
     )
   const cancelAttempt = (id: string) =>
     void mutate(async () => {
       const a = await request<Attempt>(`/attempts/${id}/cancel`, 'POST')
-      if (selection.current === a.testCaseId) setAttempts((old) => ({ ...old, [a.blockId]: a }))
+      if (selection.current === a.testCaseId)
+        setAttempts((old) => ({ ...old, [a.blockId]: a }))
     })
   return (
     <div className="app-shell">
@@ -435,10 +488,15 @@ export default function App() {
         <header className="toolbar">
           <div className="inline">
             <span className="breadcrumb">
-              {view === 'resources' ? 'Настройки подключений' : document?.name || 'Тест-кейсы'}
+              {view === 'resources'
+                ? 'Настройки подключений'
+                : document?.name || 'Тест-кейсы'}
             </span>
             {dirty && view === 'cases' && (
-              <span className="unsaved-dot" title="Есть несохранённые изменения" />
+              <span
+                className="unsaved-dot"
+                title="Есть несохранённые изменения"
+              />
             )}
           </div>
           <div className="inline">
@@ -451,7 +509,9 @@ export default function App() {
                 onChange={(e) => chooseEnvironment(e.target.value)}
               >
                 <option value="">
-                  {environments.length ? 'Выберите окружение' : 'Окружений пока нет'}
+                  {environments.length
+                    ? 'Выберите окружение'
+                    : 'Окружений пока нет'}
                 </option>
                 {environments.map((e) => (
                   <option key={e.id} value={e.id}>
@@ -460,6 +520,7 @@ export default function App() {
                 ))}
               </select>
             </label>
+            <ThemeSwitch />
             <span className="badge local-badge">Локально</span>
           </div>
         </header>
@@ -495,14 +556,17 @@ export default function App() {
               <br />к результату.
             </h1>
             <p className="muted">
-              Создайте папку и тест-кейс. Добавьте ручные шаги и вызовы — ответы будут рядом с
-              ожиданиями.
+              Создайте папку и тест-кейс. Добавьте ручные шаги и вызовы — ответы
+              будут рядом с ожиданиями.
             </p>
             <div className="inline">
               <button className="button" onClick={createFolder}>
                 Создать папку
               </button>
-              <button className="button secondary" onClick={() => setView('resources')}>
+              <button
+                className="button secondary"
+                onClick={() => setView('resources')}
+              >
                 Настроить ресурсы
               </button>
             </div>
@@ -512,17 +576,26 @@ export default function App() {
             <div className="document-header">
               <div className="page-heading">
                 <div>
-                  <p className="section-label">ТЕСТ-КЕЙС · ВЕРСИЯ {document.revision}</p>
+                  <p className="section-label">
+                    ТЕСТ-КЕЙС · ВЕРСИЯ {document.revision}
+                  </p>
                   <h1>{saved?.name}</h1>
                 </div>
                 <div className="inline">
-                  {archived && <span className="badge">Архив · только просмотр</span>}
-                  {document.readOnly && (
-                    <span className="badge">Встроенный пример · только просмотр</span>
+                  {archived && (
+                    <span className="badge">Архив · только просмотр</span>
                   )}
+                  {document.readOnly && (
+                    <span className="badge">
+                      Встроенный пример · только просмотр
+                    </span>
+                  )}
+
                   {tab === 'editor' && (
                     <>
-                      <span className="muted small">{dirty ? 'Есть изменения' : 'Сохранено'}</span>
+                      <span className="muted small">
+                        {dirty ? 'Есть изменения' : 'Сохранено'}
+                      </span>
                       <button
                         className="button secondary"
                         disabled={readonly || busy || !dirty}
@@ -532,7 +605,14 @@ export default function App() {
                       </button>
                       <button
                         className="button"
-                        disabled={archived || busy || !document.steps.length || !environmentId}
+                        disabled={
+                          archived ||
+                          busy ||
+                          !document.steps.length ||
+                          (!dirty &&
+                            (document.validationIssues ?? []).length > 0) ||
+                          !environmentId
+                        }
                         title={!environmentId ? 'Выберите окружение' : ''}
                         onClick={startRun}
                       >
@@ -542,6 +622,25 @@ export default function App() {
                   )}
                 </div>
               </div>
+              {tab === 'editor' &&
+                !dirty &&
+                (document.validationIssues ?? []).length > 0 && (
+                  <section
+                    className="readiness"
+                    aria-label="Готовность к запуску"
+                  >
+                    <strong>Черновик сохранён</strong>
+                    <p>
+                      Для полного прогона заполните отмеченные параметры.
+                      Готовые блоки можно запускать отдельно.
+                    </p>
+                    <ul>
+                      {document.validationIssues.map((issue, i) => (
+                        <li key={i}>{issue.message}</li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
               <div className="document-tabs">
                 <button
                   className={tab === 'editor' ? 'selected' : ''}
@@ -549,8 +648,12 @@ export default function App() {
                 >
                   Редактор <span>{document.steps.length}</span>
                 </button>
-                <button className={tab === 'run' ? 'selected' : ''} onClick={() => setTab('run')}>
-                  Прогон {run?.status === 'running' && <i className="live-dot" />}
+                <button
+                  className={tab === 'run' ? 'selected' : ''}
+                  onClick={() => setTab('run')}
+                >
+                  Прогон{' '}
+                  {run?.status === 'running' && <i className="live-dot" />}
                 </button>
                 <button
                   className={tab === 'history' ? 'selected' : ''}
@@ -563,6 +666,12 @@ export default function App() {
             {tab === 'editor' && (
               <CaseEditor
                 document={document}
+                dirty={dirty}
+                onBusy={setBusy}
+                secrets={
+                  environments.find((e) => e.id === environmentId)
+                    ?.secretNames ?? []
+                }
                 resources={resources}
                 fields={fields}
                 disabled={readonly || busy}
@@ -570,7 +679,9 @@ export default function App() {
                 busy={busy}
                 environmentId={environmentId}
                 attempts={attempts}
-                change={writeDocument}
+                change={(next) => {
+                  if (selection.current === next.id) writeDocument(next)
+                }}
                 launch={launch}
                 cancel={cancelAttempt}
               />
@@ -591,11 +702,17 @@ export default function App() {
                 <section className="empty-card">
                   <h2>Начните ручное прохождение</h2>
                   <p className="muted">
-                    Сценарий и настройки ресурсов будут зафиксированы на начало прогона.
+                    Сценарий и настройки ресурсов будут зафиксированы на начало
+                    прогона.
                   </p>
                   <button
                     className="button"
-                    disabled={archived || !document.steps.length || !environmentId || busy}
+                    disabled={
+                      archived ||
+                      !document.steps.length ||
+                      !environmentId ||
+                      busy
+                    }
                     onClick={startRun}
                   >
                     Начать прогон
@@ -603,12 +720,18 @@ export default function App() {
                 </section>
               ))}
             {tab === 'history' && (
-              <History key={document.id} caseId={document.id} version={historyVersion} />
+              <History
+                key={document.id}
+                caseId={document.id}
+                version={historyVersion}
+              />
             )}
           </>
         )}
       </main>
-      {nameDialog && <NameForm dialog={nameDialog} close={() => setNameDialog(null)} />}
+      {nameDialog && (
+        <NameForm dialog={nameDialog} close={() => setNameDialog(null)} />
+      )}
       {pending && (
         <Modal
           title="Несохранённые изменения"
@@ -618,7 +741,11 @@ export default function App() {
         >
           <p>В тест-кейсе есть изменения. Сохранить их перед продолжением?</p>
           <div className="modal-actions">
-            <button className="button secondary" disabled={busy} onClick={() => setPending(null)}>
+            <button
+              className="button secondary"
+              disabled={busy}
+              onClick={() => setPending(null)}
+            >
               Остаться
             </button>
             <button
@@ -655,7 +782,13 @@ export default function App() {
   )
 }
 
-function NameForm({ dialog, close }: { dialog: NameDialog; close: () => void }) {
+function NameForm({
+  dialog,
+  close,
+}: {
+  dialog: NameDialog
+  close: () => void
+}) {
   const [name, setName] = useState(dialog.initial),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false)
@@ -676,7 +809,7 @@ function NameForm({ dialog, close }: { dialog: NameDialog; close: () => void }) 
         <Field label="Название" error={error}>
           <input
             autoFocus
-            required
+            required={!dialog.allowEmpty}
             maxLength={200}
             value={name}
             disabled={busy}

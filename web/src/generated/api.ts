@@ -108,6 +108,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/environments/{id}/variables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Сохранить переменные */
+        put: operations["saveVariables"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/folders": {
         parameters: {
             query?: never;
@@ -368,6 +385,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/test-cases/{id}/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Загрузить эталон */
+        post: operations["uploadExpectedImage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/test-cases/{id}/images/{imageId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Прочитать эталон */
+        get: operations["readExpectedImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/test-cases/{id}/runs": {
         parameters: {
             query?: never;
@@ -470,6 +521,7 @@ export interface components {
             path: string;
         };
         Environment: {
+            description: string;
             id: string;
             name: string;
             readOnly: boolean;
@@ -485,13 +537,10 @@ export interface components {
             nextCursor?: string;
         };
         EnvironmentWrite: {
+            description: string;
             name: string;
             /** Format: int64 */
             revision: number;
-            secrets: components["schemas"]["SecretChanges"];
-            variables: {
-                [key: string]: string;
-            };
         };
         ExecutionResult: {
             body: string;
@@ -500,7 +549,9 @@ export interface components {
             error?: string;
             errorCode?: string;
             grpcCode?: string;
+            headerSources?: components["schemas"]["HeaderSourceResult"][];
             headers: components["schemas"]["KeyValue"][];
+            mainRequestStarted?: boolean;
             protocol: string;
             redacted: boolean;
             rows?: components["schemas"]["TypedValue"][][];
@@ -518,10 +569,23 @@ export interface components {
             columns?: components["schemas"]["Column"][];
             grpcCode?: string;
             headers?: components["schemas"]["KeyValue"][];
+            images?: components["schemas"]["ImageRef"][];
             rows?: components["schemas"]["TypedValue"][][];
             rowsAffected?: string;
             /** Format: int64 */
             statusCode?: number;
+        };
+        ExpectedImage: {
+            contentType: string;
+            filename: string;
+            /** Format: int64 */
+            height: number;
+            id: string;
+            sha256: string;
+            /** Format: int64 */
+            sizeBytes: number;
+            /** Format: int64 */
+            width: number;
         };
         Folder: {
             archived: boolean;
@@ -538,22 +602,56 @@ export interface components {
         };
         GRPCRequest: {
             body: string;
-            metadata: components["schemas"]["KeyValue"][];
+            metadata: components["schemas"]["RequestHeader"][];
             method: string;
             service: string;
+        };
+        HTTPHeaderSource: {
+            body: string;
+            /** @enum {string} */
+            bodyMode: "none" | "text" | "json";
+            /** @enum {string} */
+            fetchMode: "per_attempt" | "per_run";
+            headers: components["schemas"]["KeyValue"][];
+            jsonPointer: string;
+            method: string;
+            prefix?: string;
+            privateKeySecret?: string;
+            query: components["schemas"]["KeyValue"][];
+            tls: components["schemas"]["TLSConfig"];
+            url: string;
         };
         HTTPRequest: {
             body: string;
             /** @enum {string} */
             bodyMode: "none" | "text" | "json";
-            headers: components["schemas"]["KeyValue"][];
+            headers: components["schemas"]["RequestHeader"][];
             method: string;
             path: string;
             query: components["schemas"]["KeyValue"][];
         };
+        HeaderSourceResult: {
+            /** Format: int64 */
+            durationMs: number;
+            errorCode?: string;
+            fetchMode: string;
+            headerId: string;
+            headerName: string;
+            state: string;
+            /** Format: int64 */
+            statusCode?: number;
+        };
         Health: {
             /** @enum {string} */
             status: "ready";
+        };
+        ImageRef: {
+            caption?: string;
+            imageId: string;
+        };
+        ImageUpload: {
+            dataBase64: string;
+            filename: string;
         };
         KeyValue: {
             name: string;
@@ -565,6 +663,12 @@ export interface components {
             };
             /** Format: int64 */
             revision: number;
+        };
+        RequestHeader: {
+            id?: string;
+            name: string;
+            source?: components["schemas"]["HTTPHeaderSource"];
+            value?: string;
         };
         Resource: {
             config: components["schemas"]["ResourceConfig"];
@@ -585,7 +689,7 @@ export interface components {
             address?: string;
             baseUrl?: string;
             database?: string;
-            headers: components["schemas"]["KeyValue"][];
+            headers: components["schemas"]["RequestHeader"][];
             protoFiles?: {
                 [key: string]: string;
             };
@@ -649,8 +753,13 @@ export interface components {
         Step: {
             blocks: components["schemas"]["Block"][];
             description: string;
+            expected?: components["schemas"]["StepExpectation"];
             id: string;
             title?: string;
+        };
+        StepExpectation: {
+            images?: components["schemas"]["ImageRef"][];
+            text?: string;
         };
         StepState: {
             comment: string;
@@ -671,7 +780,7 @@ export interface components {
             ca?: string;
             certificate?: string;
             /** @enum {string} */
-            mode: "tls" | "plaintext";
+            mode: "tls" | "mtls" | "plaintext";
             serverName?: string;
         };
         TestCase: {
@@ -688,21 +797,37 @@ export interface components {
             steps: components["schemas"]["Step"][];
             /** Format: date-time */
             updatedAt: string;
+            validationIssues: components["schemas"]["ValidationIssue"][];
+        };
+        TestCaseCreate: {
+            name?: string;
         };
         TestCasePage: {
             items: components["schemas"]["TestCase"][];
             nextCursor?: string;
         };
         TestCaseWrite: {
-            name: string;
+            name?: string;
             /** Format: int64 */
             revision: number;
-            steps: components["schemas"]["Step"][];
+            steps?: components["schemas"]["Step"][];
         };
         TypedValue: {
             /** @enum {string} */
             type: "null" | "string" | "boolean" | "integer" | "decimal" | "timestamp" | "bytes" | "json";
             value?: string;
+        };
+        ValidationIssue: {
+            message: string;
+            path: string;
+        };
+        VariablesWrite: {
+            /** Format: int64 */
+            revision: number;
+            secrets: components["schemas"]["SecretChanges"];
+            variables: {
+                [key: string]: string;
+            };
         };
     };
     responses: {
@@ -987,6 +1112,37 @@ export interface operations {
             503: components["responses"]["Unavailable"];
         };
     };
+    saveVariables: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VariablesWrite"];
+            };
+        };
+        responses: {
+            /** @description Успешный ответ */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Environment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
     listFolders: {
         parameters: {
             query?: {
@@ -1117,7 +1273,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreateName"];
+                "application/json": components["schemas"]["TestCaseCreate"];
             };
         };
         responses: {
@@ -1562,6 +1718,67 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Attempt"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    uploadExpectedImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImageUpload"];
+            };
+        };
+        responses: {
+            /** @description Успешный ответ */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpectedImage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    readExpectedImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                imageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Изображение-эталон */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                    "image/png": string;
+                    "image/webp": string;
                 };
             };
             400: components["responses"]["BadRequest"];

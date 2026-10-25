@@ -1,8 +1,15 @@
 import type { Attempt, Block, Column, TypedValue } from './api'
 import { protocolLabel, statusLabel } from './api'
 import { Code, Notice } from './ui'
+import { ImageGallery } from './ImageGallery'
 
-export function SQLTable({ columns, rows }: { columns: Column[]; rows: TypedValue[][] }) {
+export function SQLTable({
+  columns,
+  rows,
+}: {
+  columns: Column[]
+  rows: TypedValue[][]
+}) {
   return (
     <div className="table-scroll">
       <table className="sql-table">
@@ -26,7 +33,11 @@ export function SQLTable({ columns, rows }: { columns: Column[]; rows: TypedValu
                   ) : cell.type === 'json' ? (
                     <Code text={cell.value ?? ''} json />
                   ) : (
-                    <code>{cell.type === 'string' && !cell.value ? '""' : cell.value}</code>
+                    <code>
+                      {cell.type === 'string' && !cell.value
+                        ? '""'
+                        : cell.value}
+                    </code>
                   )}
                 </td>
               ))}
@@ -36,6 +47,53 @@ export function SQLTable({ columns, rows }: { columns: Column[]; rows: TypedValu
       </table>
       <p className="muted small">Строк: {rows.length}</p>
     </div>
+  )
+}
+
+export function RequestSummary({ block }: { block: Block }) {
+  const payload = block.http ?? block.grpc ?? block.sql
+  const label = block.http
+    ? `${block.http.method} ${block.http.path}`
+    : block.grpc
+      ? `${block.grpc.service}/${block.grpc.method}`
+      : block.sql?.query
+  return (
+    <details className="request-preview">
+      <summary>Запрос · {label}</summary>
+      <Code text={JSON.stringify(payload, null, 2)} json />
+    </details>
+  )
+}
+
+export function ExpectedPreview({
+  block,
+  caseId,
+}: {
+  block: Block
+  caseId: string
+}) {
+  const expected = block.expected
+  return (
+    <section className="expected-preview">
+      <h5>Ожидаемый результат</h5>
+      <p className="protocol-summary">
+        {block.kind === 'http'
+          ? `HTTP ${expected.statusCode ?? '—'}`
+          : block.kind === 'grpc'
+            ? expected.grpcCode
+            : expected.bodyMode === 'exec'
+              ? `Затронуто строк: ${expected.rowsAffected ?? '—'}`
+              : 'Строки PostgreSQL'}
+      </p>
+      {expected.bodyMode === 'rows' ? (
+        <SQLTable columns={expected.columns ?? []} rows={expected.rows ?? []} />
+      ) : (
+        expected.body && (
+          <Code text={expected.body} json={expected.bodyMode === 'json'} />
+        )
+      )}
+      <ImageGallery caseId={caseId} images={expected.images} />
+    </section>
   )
 }
 
@@ -55,13 +113,17 @@ export function Results({
   const busy = attempt.state === 'queued' || attempt.state === 'running'
   return (
     <section className="results" aria-label="Результат вызова">
+      <RequestSummary block={original} />
       <div className="row-heading">
         <div className="inline">
           <strong>
             {protocolLabel[original.kind]} · версия сценария {attempt.revision}
           </strong>
-          <span className={`status ${result?.comparison.status ?? attempt.state}`}>
-            {statusLabel[result?.comparison.status ?? attempt.state] ?? attempt.state}
+          <span
+            className={`status ${result?.comparison.status ?? attempt.state}`}
+          >
+            {statusLabel[result?.comparison.status ?? attempt.state] ??
+              attempt.state}
           </span>
         </div>
         {busy && cancel && (
@@ -74,31 +136,60 @@ export function Results({
           </button>
         )}
       </div>
+      <ImageGallery caseId={attempt.testCaseId} images={expected.images} />
+      {result?.headerSources?.map((source, i) => (
+        <div className={`source-result ${source.state}`} key={i}>
+          <strong>Заголовок {source.headerName}</strong>
+          <span>
+            {source.state === 'reused'
+              ? 'Значение из текущего прогона'
+              : source.state === 'error'
+                ? 'Ошибка HTTP-источника'
+                : 'Значение получено из HTTP-источника'}
+          </span>
+          {source.statusCode && <span>HTTP {source.statusCode}</span>}
+          <span>{source.durationMs} мс</span>
+        </div>
+      ))}
+      {result?.mainRequestStarted === false && (
+        <p className="muted small">Основной запрос не запускался.</p>
+      )}
       <div className="result-meta">
         <span>
-          {attempt.environmentName} / {attempt.resource?.name ?? original.resource}
+          {attempt.environmentName} /{' '}
+          {attempt.resource?.name ?? original.resource}
         </span>
-        <span>{attempt.resource?.config.baseUrl || attempt.resource?.config.address}</span>
+        <span>
+          {attempt.resource?.config.baseUrl || attempt.resource?.config.address}
+        </span>
         <span>{attempt.durationMs} мс</span>
       </div>
       {attempt.persistencePending && (
         <Notice>
-          Результат ещё не подтверждён PostgreSQL. Приложение повторяет только сохранение
-          результата.
+          Результат ещё не подтверждён PostgreSQL. Приложение повторяет только
+          сохранение результата.
         </Notice>
       )}
-      {busy && !result && <p className="muted">{statusLabel[attempt.state]}…</p>}
+      {busy && !result && (
+        <p className="muted">{statusLabel[attempt.state]}…</p>
+      )}
       {result && (
         <>
           {result.error && <Notice>{result.error}</Notice>}
-          {result.statusMessage && <p className="protocol-message">{result.statusMessage}</p>}
-          {result.truncated && <Notice>Ответ усечён. Полное совпадение не подтверждено.</Notice>}
+          {result.statusMessage && (
+            <p className="protocol-message">{result.statusMessage}</p>
+          )}
+          {result.truncated && (
+            <Notice>Ответ усечён. Полное совпадение не подтверждено.</Notice>
+          )}
           {result.redacted && (
             <p className="muted small">
               Известные секреты скрыты. Сравнение выполнено до скрытия значений.
             </p>
           )}
-          {result.comparison.reason && <p className="muted small">{result.comparison.reason}</p>}
+          {result.comparison.reason && (
+            <p className="muted small">{result.comparison.reason}</p>
+          )}
           <div className="comparison-grid">
             <div>
               <h5>Ожидалось</h5>
@@ -112,12 +203,18 @@ export function Results({
                       : 'Строки PostgreSQL'}
               </div>
               {expected.bodyMode === 'rows' ? (
-                <SQLTable columns={expected.columns ?? []} rows={expected.rows ?? []} />
+                <SQLTable
+                  columns={expected.columns ?? []}
+                  rows={expected.rows ?? []}
+                />
               ) : expected.bodyMode === 'none' ? (
                 <p className="muted small">Тело не проверяется</p>
               ) : (
                 expected.bodyMode !== 'exec' && (
-                  <Code text={expected.body ?? ''} json={expected.bodyMode === 'json'} />
+                  <Code
+                    text={expected.body ?? ''}
+                    json={expected.bodyMode === 'json'}
+                  />
                 )
               )}
             </div>
@@ -155,7 +252,8 @@ export function Results({
               ))}
             </details>
           )}
-          {(result.headers.length > 0 || (result.trailers?.length ?? 0) > 0) && (
+          {(result.headers.length > 0 ||
+            (result.trailers?.length ?? 0) > 0) && (
             <details>
               <summary>Заголовки и метаданные ответа</summary>
               <Code

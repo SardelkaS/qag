@@ -104,7 +104,7 @@ func ValidateBlock(b *Block, field string) error {
 		if strings.Contains(r.Path, "://") || strings.HasPrefix(r.Path, "//") {
 			return invalid("http.path", "Укажите путь относительно ресурса")
 		}
-		if err := validateHeaders(r.Headers); err != nil {
+		if err := ValidateRequestHeaders(r.Headers); err != nil {
 			return invalid("http.headers", err.Error())
 		}
 		if r.BodyMode != "none" && r.BodyMode != "text" && r.BodyMode != "json" {
@@ -132,7 +132,7 @@ func ValidateBlock(b *Block, field string) error {
 		if !grpcCodes[b.Expected.GRPCCode] {
 			return invalid("expected.grpcCode", "Укажите ожидаемый gRPC-код")
 		}
-		if err := validateHeaders(b.GRPC.Metadata); err != nil {
+		if err := ValidateRequestHeaders(b.GRPC.Metadata); err != nil {
 			return invalid("grpc.metadata", err.Error())
 		}
 	case "postgresql":

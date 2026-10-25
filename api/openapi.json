@@ -342,6 +342,9 @@
       "Environment": {
         "additionalProperties": false,
         "properties": {
+          "description": {
+            "type": "string"
+          },
           "id": {
             "type": "string"
           },
@@ -369,6 +372,7 @@
           }
         },
         "required": [
+          "description",
           "readOnly",
           "id",
           "name",
@@ -399,28 +403,21 @@
       "EnvironmentWrite": {
         "additionalProperties": false,
         "properties": {
+          "description": {
+            "type": "string"
+          },
           "name": {
             "type": "string"
           },
           "revision": {
             "format": "int64",
             "type": "integer"
-          },
-          "secrets": {
-            "$ref": "#/components/schemas/SecretChanges"
-          },
-          "variables": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "type": "object"
           }
         },
         "required": [
+          "description",
           "name",
-          "revision",
-          "variables",
-          "secrets"
+          "revision"
         ],
         "type": "object"
       },
@@ -448,11 +445,20 @@
           "grpcCode": {
             "type": "string"
           },
+          "headerSources": {
+            "items": {
+              "$ref": "#/components/schemas/HeaderSourceResult"
+            },
+            "type": "array"
+          },
           "headers": {
             "items": {
               "$ref": "#/components/schemas/KeyValue"
             },
             "type": "array"
+          },
+          "mainRequestStarted": {
+            "type": "boolean"
           },
           "protocol": {
             "type": "string"
@@ -530,6 +536,12 @@
             },
             "type": "array"
           },
+          "images": {
+            "items": {
+              "$ref": "#/components/schemas/ImageRef"
+            },
+            "type": "array"
+          },
           "rows": {
             "items": {
               "items": {
@@ -549,6 +561,45 @@
         },
         "required": [
           "bodyMode"
+        ],
+        "type": "object"
+      },
+      "ExpectedImage": {
+        "additionalProperties": false,
+        "properties": {
+          "contentType": {
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "height": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "width": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "filename",
+          "contentType",
+          "sizeBytes",
+          "width",
+          "height",
+          "sha256"
         ],
         "type": "object"
       },
@@ -608,7 +659,7 @@
           },
           "metadata": {
             "items": {
-              "$ref": "#/components/schemas/KeyValue"
+              "$ref": "#/components/schemas/RequestHeader"
             },
             "type": "array"
           },
@@ -624,6 +675,71 @@
           "method",
           "body",
           "metadata"
+        ],
+        "type": "object"
+      },
+      "HTTPHeaderSource": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "bodyMode": {
+            "enum": [
+              "none",
+              "text",
+              "json"
+            ],
+            "type": "string"
+          },
+          "fetchMode": {
+            "enum": [
+              "per_attempt",
+              "per_run"
+            ],
+            "type": "string"
+          },
+          "headers": {
+            "items": {
+              "$ref": "#/components/schemas/KeyValue"
+            },
+            "type": "array"
+          },
+          "jsonPointer": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "prefix": {
+            "type": "string"
+          },
+          "privateKeySecret": {
+            "type": "string"
+          },
+          "query": {
+            "items": {
+              "$ref": "#/components/schemas/KeyValue"
+            },
+            "type": "array"
+          },
+          "tls": {
+            "$ref": "#/components/schemas/TLSConfig"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "method",
+          "url",
+          "query",
+          "headers",
+          "bodyMode",
+          "body",
+          "tls",
+          "jsonPointer",
+          "fetchMode"
         ],
         "type": "object"
       },
@@ -643,7 +759,7 @@
           },
           "headers": {
             "items": {
-              "$ref": "#/components/schemas/KeyValue"
+              "$ref": "#/components/schemas/RequestHeader"
             },
             "type": "array"
           },
@@ -670,6 +786,42 @@
         ],
         "type": "object"
       },
+      "HeaderSourceResult": {
+        "additionalProperties": false,
+        "properties": {
+          "durationMs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "errorCode": {
+            "type": "string"
+          },
+          "fetchMode": {
+            "type": "string"
+          },
+          "headerId": {
+            "type": "string"
+          },
+          "headerName": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "statusCode": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "headerId",
+          "headerName",
+          "fetchMode",
+          "state",
+          "durationMs"
+        ],
+        "type": "object"
+      },
       "Health": {
         "properties": {
           "status": {
@@ -681,6 +833,37 @@
         },
         "required": [
           "status"
+        ],
+        "type": "object"
+      },
+      "ImageRef": {
+        "additionalProperties": false,
+        "properties": {
+          "caption": {
+            "type": "string"
+          },
+          "imageId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "imageId"
+        ],
+        "type": "object"
+      },
+      "ImageUpload": {
+        "additionalProperties": false,
+        "properties": {
+          "dataBase64": {
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "filename",
+          "dataBase64"
         ],
         "type": "object"
       },
@@ -717,6 +900,27 @@
         "required": [
           "files",
           "revision"
+        ],
+        "type": "object"
+      },
+      "RequestHeader": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/HTTPHeaderSource"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
         ],
         "type": "object"
       },
@@ -792,7 +996,7 @@
           },
           "headers": {
             "items": {
-              "$ref": "#/components/schemas/KeyValue"
+              "$ref": "#/components/schemas/RequestHeader"
             },
             "type": "array"
           },
@@ -1051,6 +1255,9 @@
           "description": {
             "type": "string"
           },
+          "expected": {
+            "$ref": "#/components/schemas/StepExpectation"
+          },
           "id": {
             "type": "string"
           },
@@ -1063,6 +1270,22 @@
           "description",
           "blocks"
         ],
+        "type": "object"
+      },
+      "StepExpectation": {
+        "additionalProperties": false,
+        "properties": {
+          "images": {
+            "items": {
+              "$ref": "#/components/schemas/ImageRef"
+            },
+            "type": "array"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [],
         "type": "object"
       },
       "StepState": {
@@ -1137,6 +1360,7 @@
           "mode": {
             "enum": [
               "tls",
+              "mtls",
               "plaintext"
             ],
             "type": "string"
@@ -1188,9 +1412,16 @@
           "updatedAt": {
             "format": "date-time",
             "type": "string"
+          },
+          "validationIssues": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationIssue"
+            },
+            "type": "array"
           }
         },
         "required": [
+          "validationIssues",
           "readOnly",
           "id",
           "folderId",
@@ -1202,6 +1433,16 @@
           "createdAt",
           "updatedAt"
         ],
+        "type": "object"
+      },
+      "TestCaseCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [],
         "type": "object"
       },
       "TestCasePage": {
@@ -1240,9 +1481,7 @@
           }
         },
         "required": [
-          "name",
-          "revision",
-          "steps"
+          "revision"
         ],
         "type": "object"
       },
@@ -1268,6 +1507,46 @@
         },
         "required": [
           "type"
+        ],
+        "type": "object"
+      },
+      "ValidationIssue": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "message"
+        ],
+        "type": "object"
+      },
+      "VariablesWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "revision": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "secrets": {
+            "$ref": "#/components/schemas/SecretChanges"
+          },
+          "variables": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "revision",
+          "variables",
+          "secrets"
         ],
         "type": "object"
       }
@@ -1701,6 +1980,63 @@
         ]
       }
     },
+    "/environments/{id}/variables": {
+      "put": {
+        "operationId": "saveVariables",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VariablesWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Environment"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "summary": "Сохранить переменные",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
     "/folders": {
       "get": {
         "operationId": "listFolders",
@@ -1947,7 +2283,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateName"
+                "$ref": "#/components/schemas/TestCaseCreate"
               }
             }
           },
@@ -2775,6 +3111,133 @@
           }
         },
         "summary": "Проверить блок из редактора",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/test-cases/{id}/images": {
+      "post": {
+        "operationId": "uploadExpectedImage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImageUpload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpectedImage"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "summary": "Загрузить эталон",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/test-cases/{id}/images/{imageId}": {
+      "get": {
+        "operationId": "readExpectedImage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "imageId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Изображение-эталон"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "security": [],
+        "summary": "Прочитать эталон",
         "tags": [
           "qag"
         ]

@@ -28,12 +28,15 @@ import (
 )
 
 type Runner struct {
-	mu    sync.Mutex
-	cache map[string]*protoregistry.Files
-	order []string
+	headers map[string]*headerScope
+	mu      sync.Mutex
+	cache   map[string]*protoregistry.Files
+	order   []string
 }
 
-func NewRunner() *Runner { return &Runner{cache: map[string]*protoregistry.Files{}} }
+func NewRunner() *Runner {
+	return &Runner{cache: map[string]*protoregistry.Files{}, headers: map[string]*headerScope{}}
+}
 
 func (r *Runner) grpc(ctx context.Context, scope string, b catalog.Block, res resources.Resolved) (Result, error) {
 	result := Result{Protocol: "grpc"}
@@ -51,6 +54,11 @@ func (r *Runner) grpc(ctx context.Context, scope string, b catalog.Block, res re
 		return result, err
 	}
 	defer conn.Close()
+	md := metadata.MD{}
+	for _, h := range mergedHeaders(res.Resource.Config.Headers, b.GRPC.Metadata) {
+		md.Append(strings.ToLower(h.Name), h.Value)
+	}
+	ctx = metadata.NewOutgoingContext(ctx, md)
 	key := scope + ":" + res.Resource.VersionID + ":" + b.GRPC.Service
 	r.mu.Lock()
 	files := r.cache[key]
@@ -95,11 +103,7 @@ func (r *Runner) grpc(ctx context.Context, scope string, b catalog.Block, res re
 	if err = (protojson.UnmarshalOptions{Resolver: resolver}).Unmarshal([]byte(b.GRPC.Body), request); err != nil {
 		return result, fmt.Errorf("сообщение не соответствует описанию: %w", err)
 	}
-	md := metadata.MD{}
-	for _, h := range mergedHeaders(res.Resource.Config.Headers, b.GRPC.Metadata) {
-		md.Append(strings.ToLower(h.Name), h.Value)
-	}
-	callCtx := metadata.NewOutgoingContext(ctx, md)
+	callCtx := ctx
 	var initial, trailers metadata.MD
 	err = conn.Invoke(callCtx, "/"+b.GRPC.Service+"/"+b.GRPC.Method, request, response, grpc.Header(&initial), grpc.Trailer(&trailers))
 	result.Headers = headers(initial)

@@ -11,23 +11,25 @@ type Folder struct {
 }
 
 type TestCase struct {
-	ReadOnly       bool      `json:"readOnly"`
-	ID             string    `json:"id"`
-	FolderID       string    `json:"folderId"`
-	Name           string    `json:"name"`
-	Archived       bool      `json:"archived"`
-	ParentArchived bool      `json:"parentArchived"`
-	Revision       int64     `json:"revision"`
-	Steps          []Step    `json:"steps"`
-	CreatedAt      time.Time `json:"createdAt"`
-	UpdatedAt      time.Time `json:"updatedAt"`
+	ValidationIssues []ValidationIssue `json:"validationIssues"`
+	ReadOnly         bool              `json:"readOnly"`
+	ID               string            `json:"id"`
+	FolderID         string            `json:"folderId"`
+	Name             string            `json:"name"`
+	Archived         bool              `json:"archived"`
+	ParentArchived   bool              `json:"parentArchived"`
+	Revision         int64             `json:"revision"`
+	Steps            []Step            `json:"steps"`
+	CreatedAt        time.Time         `json:"createdAt"`
+	UpdatedAt        time.Time         `json:"updatedAt"`
 }
 
 type Step struct {
-	ID          string  `json:"id"`
-	Title       string  `json:"title,omitempty"`
-	Description string  `json:"description"`
-	Blocks      []Block `json:"blocks"`
+	Expected    *StepExpectation `json:"expected,omitempty"`
+	ID          string           `json:"id"`
+	Title       string           `json:"title,omitempty"`
+	Description string           `json:"description"`
+	Blocks      []Block          `json:"blocks"`
 }
 
 type KeyValue struct {
@@ -59,19 +61,19 @@ type Block struct {
 }
 
 type HTTPRequest struct {
-	Method   string     `json:"method"`
-	Path     string     `json:"path"`
-	Query    []KeyValue `json:"query"`
-	Headers  []KeyValue `json:"headers"`
-	BodyMode string     `json:"bodyMode"`
-	Body     string     `json:"body"`
+	Method   string          `json:"method"`
+	Path     string          `json:"path"`
+	Query    []KeyValue      `json:"query"`
+	Headers  []RequestHeader `json:"headers"`
+	BodyMode string          `json:"bodyMode"`
+	Body     string          `json:"body"`
 }
 
 type GRPCRequest struct {
-	Service  string     `json:"service"`
-	Method   string     `json:"method"`
-	Body     string     `json:"body"`
-	Metadata []KeyValue `json:"metadata"`
+	Service  string          `json:"service"`
+	Method   string          `json:"method"`
+	Body     string          `json:"body"`
+	Metadata []RequestHeader `json:"metadata"`
 }
 
 type SQLRequest struct {
@@ -81,6 +83,7 @@ type SQLRequest struct {
 }
 
 type Expectation struct {
+	Images       []ImageRef     `json:"images,omitempty"`
 	StatusCode   *int           `json:"statusCode,omitempty"`
 	GRPCCode     string         `json:"grpcCode,omitempty"`
 	Headers      []KeyValue     `json:"headers,omitempty"`

@@ -7,10 +7,10 @@ const ExpectedItem = `{"id":"example-001","name":"Локальный приме�
 
 func Scenario() []catalog.Step {
 	httpBlock := func(id string, code int) catalog.Block {
-		return catalog.Block{ID: catalog.NewID(), Kind: "http", Resource: "DEMO_HTTP", TimeoutSeconds: 30, HTTP: &catalog.HTTPRequest{Method: "GET", Path: "/items/" + id, BodyMode: "none", Headers: []catalog.KeyValue{}, Query: []catalog.KeyValue{}}, Expected: catalog.Expectation{StatusCode: &code, BodyMode: "json", Body: ExpectedItem}}
+		return catalog.Block{ID: catalog.NewID(), Kind: "http", Resource: "DEMO_HTTP", TimeoutSeconds: 30, HTTP: &catalog.HTTPRequest{Method: "GET", Path: "/items/" + id, BodyMode: "none", Headers: []catalog.RequestHeader{}, Query: []catalog.KeyValue{}}, Expected: catalog.Expectation{StatusCode: &code, BodyMode: "json", Body: ExpectedItem}}
 	}
 	grpcBlock := func(id, code string) catalog.Block {
-		return catalog.Block{ID: catalog.NewID(), Kind: "grpc", Resource: "DEMO_GRPC", TimeoutSeconds: 30, GRPC: &catalog.GRPCRequest{Service: "qag.demo.v1.DemoService", Method: "GetItem", Body: `{"id":"` + id + `"}`, Metadata: []catalog.KeyValue{}}, Expected: catalog.Expectation{GRPCCode: code, BodyMode: "json", Body: ExpectedItem}}
+		return catalog.Block{ID: catalog.NewID(), Kind: "grpc", Resource: "DEMO_GRPC", TimeoutSeconds: 30, GRPC: &catalog.GRPCRequest{Service: "qag.demo.v1.DemoService", Method: "GetItem", Body: `{"id":"` + id + `"}`, Metadata: []catalog.RequestHeader{}}, Expected: catalog.Expectation{GRPCCode: code, BodyMode: "json", Body: ExpectedItem}}
 	}
 	missingHTTP, missingGRPC := httpBlock("missing-item", 404), grpcBlock("missing-item", "NOT_FOUND")
 	missingHTTP.Expected.BodyMode = "none"

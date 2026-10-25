@@ -110,7 +110,7 @@ func TestRunsRetentionIdempotencyAndSnapshots(t *testing.T) {
 	defer target.Close()
 	second := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1); fmt.Fprint(w, `{"ok":false}`) }))
 	defer second.Close()
-	resource, err := res.SaveResource(ctx, "", env.ID, "GW", "http", 0, resources.Config{BaseURL: target.URL + "/api", Headers: []catalog.KeyValue{{Name: "Authorization", Value: "Bearer ${TOKEN}"}}, TLS: resources.TLSConfig{Mode: "plaintext"}}, resources.SecretChanges{Replace: map[string]string{"TOKEN": "original-token"}})
+	resource, err := res.SaveResource(ctx, "", env.ID, "GW", "http", 0, resources.Config{BaseURL: target.URL + "/api", Headers: []catalog.RequestHeader{{Name: "Authorization", Value: "Bearer ${TOKEN}"}}, TLS: resources.TLSConfig{Mode: "plaintext"}}, resources.SecretChanges{Replace: map[string]string{"TOKEN": "original-token"}})
 	if err != nil {
 		t.Fatal(err)
 	}

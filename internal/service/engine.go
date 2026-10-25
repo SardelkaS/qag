@@ -39,7 +39,7 @@ func New(ctx context.Context, c *catalog.Repository, res *resources.Repository, 
 	root, stop := context.WithCancel(ctx)
 	return &Engine{Catalog: c, Resources: res, Runs: r, Runner: execution.NewRunner(), ctx: root, stop: stop, jobs: map[string]job{}, slots: make(chan struct{}, 4)}
 }
-func (e *Engine) Close() { e.stop(); e.wg.Wait() }
+func (e *Engine) Close() { e.stop(); e.wg.Wait(); e.Runner.ClearHeaderScopes() }
 func requestHash(values ...any) string {
 	data, _ := json.Marshal(values)
 	sum := sha256.Sum256(data)
@@ -98,7 +98,10 @@ func (e *Engine) StartRun(ctx context.Context, caseID, environmentID string, rev
 	if len(c.Steps) == 0 {
 		return runs.Run{}, problem.Invalid("steps", "Добавьте хотя бы один шаг")
 	}
-	if err = catalog.ValidateSteps(c.Steps); err != nil {
+	if err = catalog.ValidateExecutable(c.Steps); err != nil {
+		return runs.Run{}, err
+	}
+	if err = e.Catalog.CheckImages(ctx, c.ID, c.Steps); err != nil {
 		return runs.Run{}, err
 	}
 	required, err := needs(c)
@@ -145,6 +148,12 @@ func (e *Engine) EditorAttempt(ctx context.Context, caseID, blockID, environment
 	}
 	b, err := findBlock(c, blockID)
 	if err != nil {
+		return execution.Attempt{}, err
+	}
+	if err = catalog.ValidateBlock(&b, "block"); err != nil {
+		return execution.Attempt{}, err
+	}
+	if err = e.Catalog.CheckImages(ctx, c.ID, []catalog.Step{{Blocks: []catalog.Block{b}}}); err != nil {
 		return execution.Attempt{}, err
 	}
 	snapshot, err := e.Resources.Freeze(ctx, environmentID, map[string]string{b.Resource: b.Kind})
@@ -224,6 +233,7 @@ func (e *Engine) execute(ctx context.Context, cancel context.CancelFunc, attempt
 	scope := attempt.RunID
 	if scope == "" {
 		scope = attempt.ID
+		defer e.Runner.ForgetScope(scope)
 	}
 	started := time.Now()
 	state, result := e.Runner.Execute(ctx, scope, block, res)
@@ -265,7 +275,11 @@ func (e *Engine) CancelRun(ctx context.Context, id string) (runs.Run, error) {
 		}
 	}
 	e.mu.Unlock()
-	return e.Runs.Cancel(ctx, id)
+	run, err := e.Runs.Cancel(ctx, id)
+	if err == nil {
+		e.Runner.ForgetScope(id)
+	}
+	return run, err
 }
 
 // GetAttempt reports an unconfirmed persistence result without changing data.
@@ -310,5 +324,9 @@ func (e *Engine) FinishRun(ctx context.Context, id string) (runs.Run, error) {
 	if _, err := e.GetRun(ctx, id); err != nil {
 		return runs.Run{}, err
 	}
-	return e.Runs.Finish(ctx, id)
+	run, err := e.Runs.Finish(ctx, id)
+	if err == nil {
+		e.Runner.ForgetScope(id)
+	}
+	return run, err
 }

@@ -1,12 +1,20 @@
 import { useState } from 'react'
-import type { Environment, KeyValue, Resource, ResourceConfig, SecretChanges } from './api'
+import type {
+  Environment,
+  KeyValue,
+  Resource,
+  ResourceConfig,
+  SecretChanges,
+} from './api'
 import { fieldErrors, message, protocolLabel, request } from './api'
 import { Field, Modal, Notice, Pairs } from './ui'
+import { HeaderEditor, TLSFields } from './HeaderEditor'
 
 type SecretRow = {
   name: string
   mode: 'keep' | 'replace' | 'clear'
   value: string
+  originalName?: string
   exists: boolean
 }
 const labels: Record<string, string> = {
@@ -20,6 +28,7 @@ function initialSecrets(names: string[], presets: string[] = []): SecretRow[] {
     mode: 'keep',
     value: '',
     exists: names.includes(name),
+    originalName: names.includes(name) ? name : undefined,
   }))
 }
 function secretChanges(rows: SecretRow[]): SecretChanges {
@@ -30,6 +39,11 @@ function secretChanges(rows: SecretRow[]): SecretChanges {
     if (!row.name || names.has(row.name))
       throw new Error('Имена секретов должны быть непустыми и уникальными')
     names.add(row.name)
+    if (row.originalName && row.originalName !== row.name) {
+      if (row.mode !== 'replace')
+        throw new Error('Для переименования секрета задайте новое значение')
+      clear.push(row.originalName)
+    }
     if (row.mode === 'replace') replace[row.name] = row.value
     if (row.mode === 'clear') clear.push(row.name)
   }
@@ -50,7 +64,8 @@ function Secrets({
     <fieldset className="secret-editor">
       <legend>Секреты</legend>
       <p className="muted small">
-        Сохранённые значения не показываются. Для заголовков и метаданных используйте ${'{TOKEN}'}.
+        Сохранённые значения не показываются. Для заголовков и метаданных
+        используйте ${'{TOKEN}'}.
       </p>
       {rows.map((row, i) => (
         <div className="secret-row" key={i}>
@@ -62,7 +77,9 @@ function Secrets({
               <input
                 value={row.name}
                 readOnly={presets.includes(row.name)}
-                onChange={(e) => update(i, { name: e.target.value.toUpperCase() })}
+                onChange={(e) =>
+                  update(i, { name: e.target.value.toUpperCase() })
+                }
                 placeholder="TOKEN_NAME"
               />
             </Field>
@@ -70,10 +87,15 @@ function Secrets({
               <select
                 value={row.mode}
                 onChange={(e) =>
-                  update(i, { mode: e.target.value as SecretRow['mode'], value: '' })
+                  update(i, {
+                    mode: e.target.value as SecretRow['mode'],
+                    value: '',
+                  })
                 }
               >
-                <option value="keep">{row.exists ? 'Оставить сохранённое' : 'Не задавать'}</option>
+                <option value="keep">
+                  {row.exists ? 'Оставить сохранённое' : 'Не задавать'}
+                </option>
                 <option value="replace">Задать новое значение</option>
                 <option value="clear">Удалить значение</option>
               </select>
@@ -107,7 +129,12 @@ function Secrets({
       <button
         type="button"
         className="text-button"
-        onClick={() => change([...rows, { name: '', value: '', mode: 'replace', exists: false }])}
+        onClick={() =>
+          change([
+            ...rows,
+            { name: '', value: '', mode: 'replace', exists: false },
+          ])
+        }
       >
         + Секретная переменная
       </button>
@@ -130,6 +157,7 @@ export default function ResourcesPanel({
 }) {
   const [envDialog, setEnvDialog] = useState<'new' | Environment | null>(null)
   const [editing, setEditing] = useState<Resource | 'new' | null>(null)
+  const [variablesOpen, setVariablesOpen] = useState(false)
   const environment = environments.find((e) => e.id === environmentId)
   return (
     <section className="resources-page">
@@ -138,10 +166,14 @@ export default function ResourcesPanel({
           <p className="section-label">ПОДКЛЮЧЕНИЯ И ПЕРЕМЕННЫЕ</p>
           <h1>Окружения и ресурсы</h1>
           <p className="muted">
-            Адреса и сертификаты задаются здесь, сценарии используют имена ресурсов.
+            Адреса и сертификаты задаются здесь, сценарии используют имена
+            ресурсов.
           </p>
         </div>
-        <button className="button secondary" onClick={() => setEnvDialog('new')}>
+        <button
+          className="button secondary"
+          onClick={() => setEnvDialog('new')}
+        >
           + Окружение
         </button>
       </div>
@@ -149,7 +181,8 @@ export default function ResourcesPanel({
         <div className="empty-card">
           <h2>Создайте первое окружение</h2>
           <p className="muted">
-            Например, dev или stage. Затем добавьте HTTP, gRPC или PostgreSQL-ресурс.
+            Например, dev или stage. Затем добавьте HTTP, gRPC или
+            PostgreSQL-ресурс.
           </p>
           <button className="button" onClick={() => setEnvDialog('new')}>
             Создать окружение
@@ -160,9 +193,10 @@ export default function ResourcesPanel({
           <div className="environment-banner">
             <div>
               <strong>{environment.name}</strong>
+              <p className="muted">{environment.description}</p>
               <span className="muted small">
-                {Object.keys(environment.variables).length} открытых переменных ·{' '}
-                {environment.secretNames.length} секретных
+                {Object.keys(environment.variables).length} открытых переменных
+                · {environment.secretNames.length} секретных
               </span>
             </div>
             <button
@@ -173,6 +207,50 @@ export default function ResourcesPanel({
               Настроить окружение
             </button>
           </div>
+          <section className="environment-variables">
+            <div className="row-heading">
+              <h3>Переменные</h3>
+              <button
+                className="text-button"
+                disabled={environment.readOnly}
+                onClick={() => setVariablesOpen(true)}
+              >
+                Настроить переменные
+              </button>
+            </div>
+            {!Object.keys(environment.variables).length &&
+              !environment.secretNames.length && (
+                <p className="muted small">Переменных пока нет.</p>
+              )}
+            <div className="variable-list">
+              {Object.entries(environment.variables)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([name, value]) => (
+                  <div key={name}>
+                    <code>{name}</code>
+                    <span className="badge">Открытая</span>
+                    <span>{value || 'Пустая строка'}</span>
+                  </div>
+                ))}
+              {environment.secretNames.map((name) => (
+                <div key={name}>
+                  <code>{name}</code>
+                  <span className="badge">Секретная</span>
+                  <span className="muted">Значение задано</span>
+                </div>
+              ))}
+            </div>
+            {variablesOpen && (
+              <VariablesForm
+                initial={environment}
+                close={() => setVariablesOpen(false)}
+                saved={async () => {
+                  await reload()
+                  setVariablesOpen(false)
+                }}
+              />
+            )}
+          </section>
           <div className="resources-grid">
             <aside className="resource-list">
               <div className="row-heading">
@@ -185,14 +263,18 @@ export default function ResourcesPanel({
                   + Добавить
                 </button>
               </div>
-              {resources.length === 0 && <p className="muted small">Ресурсов пока нет.</p>}
+              {resources.length === 0 && (
+                <p className="muted small">Ресурсов пока нет.</p>
+              )}
               {resources.map((r) => (
                 <button
                   key={r.id}
                   className={`resource-item ${editing !== 'new' && editing?.id === r.id ? 'selected' : ''}`}
                   onClick={() => setEditing(r)}
                 >
-                  <span className={`protocol ${r.kind}`}>{protocolLabel[r.kind]}</span>
+                  <span className={`protocol ${r.kind}`}>
+                    {protocolLabel[r.kind]}
+                  </span>
                   <strong>{r.name}</strong>
                   <small>{r.config.baseUrl || r.config.address}</small>
                 </button>
@@ -201,9 +283,14 @@ export default function ResourcesPanel({
             <div>
               {editing ? (
                 <ResourceForm
-                  key={editing === 'new' ? 'new' : `${editing.id}:${editing.revision}`}
+                  key={
+                    editing === 'new'
+                      ? 'new'
+                      : `${editing.id}:${editing.revision}`
+                  }
                   initial={editing === 'new' ? undefined : editing}
                   environmentId={environmentId}
+                  environmentsSecretNames={environment.secretNames}
                   saved={async (r) => {
                     setEditing(r)
                     await reload()
@@ -214,7 +301,8 @@ export default function ResourcesPanel({
                 <div className="empty-card compact">
                   <h3>Выберите ресурс</h3>
                   <p className="muted">
-                    Именованный ресурс объединяет адрес, параметры подключения и сертификаты.
+                    Именованный ресурс объединяет адрес, параметры подключения и
+                    сертификаты.
                   </p>
                   <button
                     className="button"
@@ -255,57 +343,50 @@ function EnvironmentForm({
   saved: (env: Environment) => Promise<void>
 }) {
   const [name, setName] = useState(initial?.name ?? ''),
-    [variables, setVariables] = useState<KeyValue[]>(
-      Object.entries(initial?.variables ?? {}).map(([name, value]) => ({ name, value })),
-    )
-  const [secrets, setSecrets] = useState(initialSecrets(initial?.secretNames ?? [])),
+    [description, setDescription] = useState(initial?.description ?? ''),
     [error, setError] = useState(''),
-    [fields, setFields] = useState<Record<string, string>>({}),
     [busy, setBusy] = useState(false)
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault()
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
     setBusy(true)
     setError('')
-    setFields({})
     try {
-      if (new Set(variables.map((v) => v.name)).size !== variables.length)
-        throw new Error('Имена переменных должны быть уникальными')
       const env = await request<Environment>(
-        initial ? `/environments/${initial.id}` : '/environments',
+        initial ? '/environments/' + initial.id : '/environments',
         initial ? 'PUT' : 'POST',
-        {
-          name,
-          revision: initial?.revision ?? 0,
-          variables: Object.fromEntries(variables.map((v) => [v.name, v.value])),
-          secrets: secretChanges(secrets),
-        },
+        { name, description, revision: initial?.revision ?? 0 },
       )
       await saved(env)
     } catch (e) {
       setError(message(e))
-      setFields(fieldErrors(e))
     } finally {
       setBusy(false)
     }
   }
   return (
-    <Modal title={initial ? 'Настройки окружения' : 'Новое окружение'} onClose={close}>
+    <Modal
+      title={initial ? 'Настройки окружения' : 'Новое окружение'}
+      onClose={close}
+    >
       <form onSubmit={(e) => void submit(e)}>
-        <fieldset disabled={busy} className="plain-fieldset">
+        <fieldset className="plain-fieldset" disabled={busy}>
           {error && <Notice>{error}</Notice>}
-          <Field label="Имя окружения" error={fields.name}>
+          <Field label="Имя окружения">
             <input
               autoFocus
               required
               maxLength={200}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="dev"
             />
           </Field>
-          <Pairs label="Открытые переменные" value={variables} onChange={setVariables} />
-          {fields.variables && <p className="field-error">{fields.variables}</p>}
-          <Secrets rows={secrets} change={setSecrets} />
+          <Field label="Описание окружения" hint="Необязательно">
+            <textarea
+              rows={3}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </Field>
           <div className="modal-actions">
             <button type="button" className="button secondary" onClick={close}>
               Отмена
@@ -320,36 +401,132 @@ function EnvironmentForm({
   )
 }
 
+function VariablesForm({
+  initial,
+  close,
+  saved,
+}: {
+  initial?: Environment
+  close: () => void
+  saved: (env: Environment) => Promise<void>
+}) {
+  const [variables, setVariables] = useState<KeyValue[]>(
+    Object.entries(initial?.variables ?? {}).map(([name, value]) => ({
+      name,
+      value,
+    })),
+  )
+  const [secrets, setSecrets] = useState(
+      initialSecrets(initial?.secretNames ?? []),
+    ),
+    [error, setError] = useState(''),
+    [fields, setFields] = useState<Record<string, string>>({}),
+    [busy, setBusy] = useState(false)
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    setFields({})
+    try {
+      if (new Set(variables.map((v) => v.name)).size !== variables.length)
+        throw new Error('Имена переменных должны быть уникальными')
+      const env = await request<Environment>(
+        `/environments/${initial!.id}/variables`,
+        'PUT',
+        {
+          revision: initial?.revision ?? 0,
+          variables: Object.fromEntries(
+            variables.map((v) => [v.name, v.value]),
+          ),
+          secrets: secretChanges(secrets),
+        },
+      )
+      await saved(env)
+    } catch (e) {
+      setError(message(e))
+      setFields(fieldErrors(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Modal title="Переменные окружения" onClose={close}>
+      <form onSubmit={(e) => void submit(e)}>
+        <fieldset disabled={busy} className="plain-fieldset">
+          {error && <Notice>{error}</Notice>}
+          <Pairs
+            label="Открытые переменные"
+            value={variables}
+            onChange={setVariables}
+          />
+          {fields.variables && (
+            <p className="field-error">{fields.variables}</p>
+          )}
+          <Secrets rows={secrets} change={setSecrets} />
+          <div className="modal-actions">
+            <button type="button" className="button secondary" onClick={close}>
+              Отмена
+            </button>
+            <button className="button" type="submit">
+              {busy ? 'Сохранение…' : 'Сохранить переменные'}
+            </button>
+          </div>
+        </fieldset>
+      </form>
+    </Modal>
+  )
+}
+
 function ResourceForm({
   initial,
   environmentId,
+  environmentsSecretNames,
   saved,
   cancel,
 }: {
   initial?: Resource
   environmentId: string
+  environmentsSecretNames?: string[]
   saved: (r: Resource) => Promise<void>
   cancel: () => void
 }) {
   const [name, setName] = useState(initial?.name ?? ''),
     [kind, setKind] = useState<Resource['kind']>(initial?.kind ?? 'http')
   const [config, setConfig] = useState<ResourceConfig>(
-    initial?.config ?? {
-      baseUrl: '',
-      address: '',
-      database: '',
-      username: '',
-      headers: [],
-      tls: { mode: 'tls' },
-      protoFiles: {},
-    },
+    initial?.config
+      ? {
+          ...initial.config,
+          tls: {
+            ...initial.config.tls,
+            mode:
+              initial.config.tls.mode === 'tls' &&
+              initial.config.tls.certificate
+                ? 'mtls'
+                : initial.config.tls.mode,
+          },
+        }
+      : {
+          baseUrl: '',
+          address: '',
+          database: '',
+          username: '',
+          headers: [],
+          tls: { mode: 'tls' },
+          protoFiles: {},
+        },
   )
-  const presets = kind === 'postgresql' ? ['PASSWORD', 'PRIVATE_KEY'] : ['TOKEN', 'PRIVATE_KEY']
-  const [secrets, setSecrets] = useState(initialSecrets(initial?.secretNames ?? [], presets)),
+  const presets =
+    kind === 'postgresql'
+      ? ['PASSWORD', 'PRIVATE_KEY']
+      : ['TOKEN', 'PRIVATE_KEY']
+  const [secrets, setSecrets] = useState(
+      initialSecrets(initial?.secretNames ?? [], presets),
+    ),
     [error, setError] = useState(''),
     [fields, setFields] = useState<Record<string, string>>({}),
     [busy, setBusy] = useState(false)
-  const change = (patch: Partial<ResourceConfig>) => setConfig((old) => ({ ...old, ...patch }))
+  const change = (patch: Partial<ResourceConfig>) =>
+    setConfig((old) => ({ ...old, ...patch }))
   const tls = (patch: Partial<ResourceConfig['tls']>) =>
     change({ tls: { ...config.tls, ...patch } })
   const submit = async (event: React.FormEvent) => {
@@ -359,9 +536,17 @@ function ResourceForm({
     setFields({})
     try {
       const result = await request<Resource>(
-        initial ? `/resources/${initial.id}` : `/environments/${environmentId}/resources`,
+        initial
+          ? `/resources/${initial.id}`
+          : `/environments/${environmentId}/resources`,
         initial ? 'PUT' : 'POST',
-        { name, kind, revision: initial?.revision ?? 0, config, secrets: secretChanges(secrets) },
+        {
+          name,
+          kind,
+          revision: initial?.revision ?? 0,
+          config,
+          secrets: secretChanges(secrets),
+        },
       )
       await saved(result)
     } catch (e) {
@@ -375,7 +560,10 @@ function ResourceForm({
     if (!list) return
     try {
       const files = Array.from(list)
-      if (files.reduce((n, f) => n + f.size, 0) > 5 * 1024 * 1024 || files.length > 100)
+      if (
+        files.reduce((n, f) => n + f.size, 0) > 5 * 1024 * 1024 ||
+        files.length > 100
+      )
         throw new Error('Не больше 100 файлов и 5 MiB')
       const values = await Promise.all(
         files.map(
@@ -388,7 +576,9 @@ function ResourceForm({
             ] as const,
         ),
       )
-      change({ protoFiles: { ...config.protoFiles, ...Object.fromEntries(values) } })
+      change({
+        protoFiles: { ...config.protoFiles, ...Object.fromEntries(values) },
+      })
     } catch (e) {
       setError(message(e))
     }
@@ -404,7 +594,11 @@ function ResourceForm({
         </div>
         {error && <Notice>{error}</Notice>}
         <div className="form-grid">
-          <Field label="Имя ресурса" error={fields.name} hint="Имя для ссылок в запросах.">
+          <Field
+            label="Имя ресурса"
+            error={fields.name}
+            hint="Имя для ссылок в запросах."
+          >
             <input
               required
               value={name}
@@ -423,7 +617,9 @@ function ResourceForm({
                 setSecrets(
                   initialSecrets(
                     [],
-                    next === 'postgresql' ? ['PASSWORD', 'PRIVATE_KEY'] : ['TOKEN', 'PRIVATE_KEY'],
+                    next === 'postgresql'
+                      ? ['PASSWORD', 'PRIVATE_KEY']
+                      : ['TOKEN', 'PRIVATE_KEY'],
                   ),
                 )
               }}
@@ -480,62 +676,24 @@ function ResourceForm({
           </div>
         )}
         {kind !== 'postgresql' && (
-          <Pairs
+          <HeaderEditor
+            secrets={[
+              ...(environmentsSecretNames ?? []),
+              ...secrets.map((s) => s.name),
+            ]}
             label={kind === 'http' ? 'Общие заголовки' : 'Общие метаданные'}
             value={config.headers}
             onChange={(v) => change({ headers: v })}
           />
         )}
-        <Field label="Защита подключения" error={fields['config.tls.mode']}>
-          <select
-            value={config.tls.mode}
-            onChange={(e) => tls({ mode: e.target.value as 'tls' | 'plaintext' })}
-          >
-            <option value="tls">TLS — с проверкой сертификата</option>
-            <option value="plaintext">Без TLS — plaintext</option>
-          </select>
-        </Field>
-        {config.tls.mode === 'tls' && (
-          <details className="tls-settings">
-            <summary>CA и клиентский сертификат</summary>
-            <Field label="Имя сервера TLS">
-              <input
-                className="mono"
-                value={config.tls.serverName ?? ''}
-                placeholder="По умолчанию — имя хоста"
-                onChange={(e) => tls({ serverName: e.target.value })}
-              />
-            </Field>
-            <Field label="CA-сертификат PEM" error={fields['config.tls.ca']}>
-              <textarea
-                className="mono"
-                rows={3}
-                value={config.tls.ca ?? ''}
-                placeholder="Необязательно, системные CA используются автоматически"
-                onChange={(e) => tls({ ca: e.target.value })}
-              />
-            </Field>
-            <Field
-              label="Клиентский сертификат PEM"
-              error={fields['config.tls.certificate']}
-              hint="Для mTLS задайте также приватный ключ в секретах."
-            >
-              <textarea
-                className="mono"
-                rows={3}
-                value={config.tls.certificate ?? ''}
-                onChange={(e) => tls({ certificate: e.target.value })}
-              />
-            </Field>
-          </details>
-        )}
+        <TLSFields config={config.tls} change={tls} />
         <Secrets rows={secrets} change={setSecrets} presets={presets} />
         {kind === 'grpc' && (
           <fieldset className="proto-files">
             <legend>Описание gRPC</legend>
             <p className="muted small">
-              Без файлов используется server reflection. Если его нет, загрузите .proto вместе с
-              импортами.
+              Без файлов используется server reflection. Если его нет, загрузите
+              .proto вместе с импортами.
             </p>
             <div className="inline">
               <label className="file-button">
@@ -581,7 +739,9 @@ function ResourceForm({
           </fieldset>
         )}
         <div className="action-bar">
-          <span className="muted small">Изменения применятся к новым прогонам.</span>
+          <span className="muted small">
+            Изменения применятся к новым прогонам.
+          </span>
           <button className="button" type="submit">
             {initial?.readOnly
               ? 'Системное подключение · только просмотр'

@@ -6,6 +6,13 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"image"
+	"image/png"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"os/exec"
@@ -97,7 +104,21 @@ func TestBackupRestoreCatalogHistoryAndSecret(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = res.SaveResource(ctx, "", env.ID, "GW", "http", 0, resources.Config{BaseURL: "http://127.0.0.1:1/api", TLS: resources.TLSConfig{Mode: "plaintext"}}, resources.SecretChanges{Replace: map[string]string{"TOKEN": "backup-test-token"}})
+	env, err = res.SaveEnvironmentMetadata(ctx, env.ID, env.Name, "Описание из резервной копии", env.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const derived = "backup-derived-secret-sentinel"
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/token" {
+			fmt.Fprintf(w, `{"token":%q}`, derived)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"reflected": r.Header.Get("Authorization")})
+	}))
+	defer target.Close()
+	header := catalog.RequestHeader{ID: catalog.NewID(), Name: "Authorization", Source: &catalog.HTTPHeaderSource{Method: "POST", URL: target.URL + "/token", BodyMode: "json", Body: `{"client":"${TOKEN}"}`, TLS: catalog.TLSConfig{Mode: "plaintext"}, JSONPointer: "/token", Prefix: "Bearer ", FetchMode: "per_run"}}
+	_, err = res.SaveResource(ctx, "", env.ID, "GW", "http", 0, resources.Config{BaseURL: target.URL, TLS: resources.TLSConfig{Mode: "plaintext"}, Headers: []catalog.RequestHeader{header}}, resources.SecretChanges{Replace: map[string]string{"TOKEN": "backup-test-token"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +128,16 @@ func TestBackupRestoreCatalogHistoryAndSecret(t *testing.T) {
 	}
 	code := 200
 	step := catalog.NewID()
-	doc, err = c.SaveCase(ctx, doc.ID, doc.Name, doc.Revision, []catalog.Step{{ID: step, Description: "Сценарий в backup", Blocks: []catalog.Block{{ID: catalog.NewID(), Kind: "http", Resource: "GW", HTTP: &catalog.HTTPRequest{Method: "GET", Path: "/task", BodyMode: "none"}, Expected: catalog.Expectation{StatusCode: &code, BodyMode: "none"}}}}})
+	var pngBytes bytes.Buffer
+	if err = png.Encode(&pngBytes, image.NewRGBA(image.Rect(0, 0, 3, 2))); err != nil {
+		t.Fatal(err)
+	}
+	picture, err := c.UploadImage(ctx, doc.ID, catalog.ImageUpload{Filename: "backup.png", DataBase64: base64.StdEncoding.EncodeToString(pngBytes.Bytes())})
+	if err != nil {
+		t.Fatal(err)
+	}
+	refs := []catalog.ImageRef{{ImageID: picture.ID, Caption: "Исходный эталон"}}
+	doc, err = c.SaveCase(ctx, doc.ID, doc.Name, doc.Revision, []catalog.Step{{ID: step, Description: "Сценарий в backup", Expected: &catalog.StepExpectation{Text: "Ручная проверка", Images: refs}, Blocks: []catalog.Block{{ID: catalog.NewID(), Kind: "http", Resource: "GW", HTTP: &catalog.HTTPRequest{Method: "GET", Path: "/task", BodyMode: "none"}, Expected: catalog.Expectation{StatusCode: &code, BodyMode: "none", Images: refs}}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,10 +145,30 @@ func TestBackupRestoreCatalogHistoryAndSecret(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	attempt, err := engine.RunAttempt(ctx, run.ID, doc.Steps[0].Blocks[0].ID, catalog.NewID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for attempt.State == "queued" || attempt.State == "running" {
+		time.Sleep(10 * time.Millisecond)
+		attempt, err = engine.GetAttempt(ctx, attempt.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if attempt.State != "completed" || !attempt.Result.Redacted {
+		t.Fatal("backup source execution failed")
+	}
 	if _, err = history.UpdateStep(ctx, run.ID, step, "blocked", "Сохранённый комментарий", 1); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = history.Finish(ctx, run.ID); err != nil {
+		t.Fatal(err)
+	}
+	doc.Steps[0].Expected.Images = nil
+	doc.Steps[0].Blocks[0].Expected.Images = nil
+	doc, err = c.SaveCase(ctx, doc.ID, doc.Name, doc.Revision, doc.Steps)
+	if err != nil {
 		t.Fatal(err)
 	}
 	demoAdminURL, _ := url.Parse(os.Getenv("QAG_TEST_DATABASE_URL"))
@@ -171,6 +221,11 @@ func TestBackupRestoreCatalogHistoryAndSecret(t *testing.T) {
 	if err != nil {
 		t.Fatal("pg_dump failed")
 	}
+	// Check the expanded dump in memory, without printing any of its contents.
+	plainDump, err := exec.CommandContext(ctx, docker, "exec", "qag-postgres-test-1", "pg_dump", "-U", cfg.User, "-d", names[0], "--format=plain", "--no-owner", "--no-acl").Output()
+	if err != nil || bytes.Contains(plainDump, []byte(derived)) || bytes.Contains(plainDump, []byte("backup-test-token")) {
+		t.Fatal("secret leaked into dump")
+	}
 	in, err := os.Open(path)
 	if err != nil {
 		t.Fatal(err)
@@ -195,7 +250,18 @@ func TestBackupRestoreCatalogHistoryAndSecret(t *testing.T) {
 	if err != nil || r.StepStates[0].Comment != "Сохранённый комментарий" || len(r.RetentionReasons) != 1 {
 		t.Fatal("history not restored")
 	}
+	if len(got.Steps[0].Expected.Images) != 0 || r.Snapshot.Steps[0].Expected.Images[0].Caption != "Исходный эталон" || r.Snapshot.Steps[0].Blocks[0].Expected.Images[0].ImageID != picture.ID {
+		t.Fatal("restored historic gallery changed")
+	}
+	restoredPicture, restoredBytes, err := catalog.NewRepository(restored.Pool).ReadImage(ctx, doc.ID, picture.ID)
+	if err != nil || !bytes.Equal(restoredBytes, pngBytes.Bytes()) || restoredPicture.SHA256 != picture.SHA256 || restoredPicture.Width != 3 {
+		t.Fatal("image bytes or metadata not restored")
+	}
 	rr := resources.NewRepository(restored.Pool, vault)
+	restoredEnv, err := rr.GetEnvironment(ctx, env.ID)
+	if err != nil || restoredEnv.Description != "Описание из резервной копии" {
+		t.Fatal("environment description not restored")
+	}
 	snapshot, err := rr.Freeze(ctx, env.ID, map[string]string{"GW": "http"})
 	if err != nil {
 		t.Fatal(err)
@@ -203,6 +269,9 @@ func TestBackupRestoreCatalogHistoryAndSecret(t *testing.T) {
 	resolved, err := rr.Resolve(ctx, snapshot, "GW")
 	if err != nil || resolved.Secrets["TOKEN"] != "backup-test-token" {
 		t.Fatal("separate master key cannot decrypt restored resource")
+	}
+	if resolved.Resource.Config.Headers[0].Source.JSONPointer != "/token" || resolved.Resource.Config.Headers[0].Source.Body != `{"client":"${TOKEN}"}` {
+		t.Fatal("source configuration not restored")
 	}
 	wrong, _ := resources.NewVault(bytes.Repeat([]byte{9}, 32))
 	if _, err = resources.NewRepository(restored.Pool, wrong).Resolve(ctx, snapshot, "GW"); err == nil {

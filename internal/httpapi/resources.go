@@ -18,14 +18,21 @@ func (s *Server) RegisterResources(repo *resources.Repository) {
 		if err := readJSON(r, &body); err != nil {
 			return nil, err
 		}
-		return repo.SaveEnvironment(r.Context(), "", body.Name, 0, body.Variables, body.Secrets)
+		return repo.SaveEnvironmentMetadata(r.Context(), "", body.Name, body.Description, 0)
 	})
 	s.register("PUT /api/v1/environments/{id}", func(r *http.Request) (any, error) {
 		var body EnvironmentWrite
 		if err := readJSON(r, &body); err != nil {
 			return nil, err
 		}
-		return repo.SaveEnvironment(r.Context(), r.PathValue("id"), body.Name, body.Revision, body.Variables, body.Secrets)
+		return repo.SaveEnvironmentMetadata(r.Context(), r.PathValue("id"), body.Name, body.Description, body.Revision)
+	})
+	s.register("PUT /api/v1/environments/{id}/variables", func(r *http.Request) (any, error) {
+		var body VariablesWrite
+		if err := readJSON(r, &body); err != nil {
+			return nil, err
+		}
+		return repo.SaveVariables(r.Context(), r.PathValue("id"), body.Revision, body.Variables, body.Secrets)
 	})
 	s.register("GET /api/v1/environments/{id}/resources", func(r *http.Request) (any, error) {
 		limit, cursor, err := pageOptions(r)

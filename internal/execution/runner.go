@@ -27,16 +27,24 @@ func (r *Runner) Execute(ctx context.Context, scope string, block catalog.Block,
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(seconds)*time.Second)
 	defer cancel()
 	var result Result
-	var err error
-	switch block.Kind {
-	case "http":
-		result, err = r.http(ctx, block, res)
-	case "grpc":
-		result, err = r.grpc(ctx, scope, block, res)
-	case "postgresql":
-		result, err = r.sql(ctx, block, res)
-	default:
-		err = fmt.Errorf("неподдерживаемый протокол")
+	block, res, traces, err := r.resolveHeaders(ctx, scope, block, res)
+	sourceFailed := err != nil
+	if err == nil {
+		switch block.Kind {
+		case "http":
+			result, err = r.http(ctx, block, res)
+		case "grpc":
+			result, err = r.grpc(ctx, scope, block, res)
+		case "postgresql":
+			result, err = r.sql(ctx, block, res)
+		default:
+			err = fmt.Errorf("неподдерживаемый протокол")
+		}
+	}
+	result.HeaderSources = traces
+	if len(traces) > 0 {
+		started := !sourceFailed
+		result.MainRequestStarted = &started
 	}
 	result.Protocol = block.Kind
 	if result.Headers == nil {
@@ -114,19 +122,10 @@ func MaskResult(result *Result, redactor *resources.Redactor) {
 	}
 }
 
-func mergedHeaders(base, override []catalog.KeyValue) []catalog.KeyValue {
-	names := map[string]bool{}
-	for _, v := range override {
-		names[strings.ToLower(v.Name)] = true
-	}
-	result := []catalog.KeyValue{}
-	for _, v := range base {
-		if !names[strings.ToLower(v.Name)] {
-			result = append(result, v)
-		}
-	}
-	return append(result, override...)
+func mergedHeaders(base, override []catalog.RequestHeader) []catalog.RequestHeader {
+	return catalog.MergeRequestHeaders(base, override)
 }
+
 func headers(values map[string][]string) []catalog.KeyValue {
 	keys := []string{}
 	for key := range values {

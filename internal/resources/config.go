@@ -15,8 +15,8 @@ import (
 
 var variableName = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
 
-func ValidateConfig(kind string, c Config, secrets map[string]string) error {
-	if c.TLS.Mode != "tls" && c.TLS.Mode != "plaintext" {
+func ValidateConfig(kind string, c Config, secrets map[string]string, sourceSecrets ...map[string]string) error {
+	if c.TLS.Mode != "tls" && c.TLS.Mode != "mtls" && c.TLS.Mode != "plaintext" {
 		return problem.Invalid("config.tls.mode", "Выберите TLS или явный plaintext")
 	}
 	switch kind {
@@ -25,7 +25,7 @@ func ValidateConfig(kind string, c Config, secrets map[string]string) error {
 		if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "http" && u.Scheme != "https") {
 			return problem.Invalid("config.baseUrl", "Укажите базовый http(s) URL без секретов, query и fragment")
 		}
-		if (u.Scheme == "https") != (c.TLS.Mode == "tls") {
+		if (u.Scheme == "https") != (c.TLS.Mode != "plaintext") {
 			return problem.Invalid("config.tls.mode", "Режим TLS должен соответствовать схеме URL")
 		}
 	case "grpc", "postgresql":
@@ -40,8 +40,22 @@ func ValidateConfig(kind string, c Config, secrets map[string]string) error {
 	default:
 		return problem.Invalid("kind", "Поддерживаются HTTP, gRPC и PostgreSQL")
 	}
-	if err := catalog.ValidateHeaders(c.Headers); err != nil {
+	if err := catalog.ValidateRequestHeaders(c.Headers); err != nil {
 		return problem.Invalid("config.headers", err.Error())
+	}
+	sourceValues := secrets
+	if len(sourceSecrets) > 0 {
+		sourceValues = sourceSecrets[0]
+	}
+	for _, h := range c.Headers {
+		if h.Source != nil {
+			if kind == "postgresql" {
+				return problem.Invalid("config.headers", "SQL не использует источники заголовков")
+			}
+			if _, err := HeaderTLS(*h.Source, sourceValues); err != nil {
+				return err
+			}
+		}
 	}
 	if len(c.ProtoFiles) > 100 {
 		return problem.Invalid("config.protoFiles", "Не более 100 proto-файлов")
@@ -62,7 +76,7 @@ func ValidateConfig(kind string, c Config, secrets map[string]string) error {
 
 func TLS(c Config, secrets map[string]string) (*tls.Config, error) {
 	if c.TLS.Mode == "plaintext" {
-		if c.TLS.CA != "" || c.TLS.Certificate != "" || secrets["PRIVATE_KEY"] != "" {
+		if c.TLS.CA != "" || c.TLS.Certificate != "" {
 			return nil, problem.Invalid("config.tls", "Сертификаты требуют режима TLS")
 		}
 		return nil, nil
@@ -75,8 +89,8 @@ func TLS(c Config, secrets map[string]string) (*tls.Config, error) {
 		return nil, problem.Invalid("config.tls.ca", "Не удалось прочитать CA-сертификат")
 	}
 	config := &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: pool, ServerName: c.TLS.ServerName}
-	key, hasKey := secrets["PRIVATE_KEY"]
-	if c.TLS.Certificate != "" || hasKey {
+	key := secrets["PRIVATE_KEY"]
+	if c.TLS.Mode == "mtls" || c.TLS.Certificate != "" {
 		pair, err := tls.X509KeyPair([]byte(c.TLS.Certificate), []byte(key))
 		if err != nil {
 			return nil, problem.Invalid("config.tls.certificate", "Некорректная или несовместимая пара сертификата и ключа")
@@ -113,7 +127,7 @@ func ValidateVariables(values map[string]string, secrets map[string]string) erro
 
 func normalizeConfig(c *Config) {
 	if c.Headers == nil {
-		c.Headers = []catalog.KeyValue{}
+		c.Headers = []catalog.RequestHeader{}
 	}
 	if c.ProtoFiles == nil {
 		c.ProtoFiles = map[string]string{}

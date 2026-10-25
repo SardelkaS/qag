@@ -1,12 +1,22 @@
 import { useState } from 'react'
 import type { Block, Run, StepState } from './api'
-import { command, date, message, protocolLabel, reasonLabel, request, statusLabel } from './api'
+import {
+  command,
+  date,
+  message,
+  protocolLabel,
+  reasonLabel,
+  request,
+  statusLabel,
+} from './api'
 import { Notice } from './ui'
-import { Results } from './Results'
+import { Results, RequestSummary, ExpectedPreview } from './Results'
+import { ImageGallery } from './ImageGallery'
 
 export function mergeRun(previous: Run | null, next: Run): Run {
   if (!previous || previous.id !== next.id) return next
-  if (previous.status !== 'running' && next.status === 'running') return previous
+  if (previous.status !== 'running' && next.status === 'running')
+    return previous
   const steps = new Map(previous.stepStates.map((v) => [v.stepId, v]))
   const attempts = new Map(previous.attempts.map((v) => [v.id, v]))
   for (const v of next.attempts)
@@ -14,7 +24,9 @@ export function mergeRun(previous: Run | null, next: Run): Run {
   return {
     ...next,
     stepStates: next.stepStates.map((v) =>
-      (steps.get(v.stepId)?.revision ?? 0) > v.revision ? steps.get(v.stepId)! : v,
+      (steps.get(v.stepId)?.revision ?? 0) > v.revision
+        ? steps.get(v.stepId)!
+        : v,
     ),
     attempts: [...attempts.values()],
   }
@@ -33,7 +45,9 @@ export default function RunView({
 }) {
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false)
-  const [comments, setComments] = useState<Record<string, { value: string; revision: number }>>({})
+  const [comments, setComments] = useState<
+    Record<string, { value: string; revision: number }>
+  >({})
   const editable = run.status === 'running' && !readOnly
   const perform = async (action: () => Promise<Run>) => {
     setBusy(true)
@@ -50,11 +64,15 @@ export default function RunView({
   const updateStep = (state: StepState, status = state.status) =>
     perform(async () => {
       const draft = comments[state.stepId]
-      const result = await request<Run>(`/runs/${run.id}/steps/${state.stepId}`, 'PATCH', {
-        status,
-        comment: draft?.value ?? state.comment,
-        revision: draft?.revision ?? state.revision,
-      })
+      const result = await request<Run>(
+        `/runs/${run.id}/steps/${state.stepId}`,
+        'PATCH',
+        {
+          status,
+          comment: draft?.value ?? state.comment,
+          revision: draft?.revision ?? state.revision,
+        },
+      )
       setComments((old) => {
         const next = { ...old }
         delete next[state.stepId]
@@ -85,19 +103,26 @@ export default function RunView({
       setBusy(false)
     }
   }
-  const active = run.attempts.some((a) => a.state === 'queued' || a.state === 'running')
+  const active = run.attempts.some(
+    (a) => a.state === 'queued' || a.state === 'running',
+  )
   const unsaved = Object.keys(comments).length > 0
   return (
     <section className="run-view">
       <div className="page-heading">
         <div>
-          <p className="section-label">{editable ? 'ТЕКУЩИЙ ПРОГОН' : 'СНИМОК ПРОВЕРКИ'}</p>
+          <p className="section-label">
+            {editable ? 'ТЕКУЩИЙ ПРОГОН' : 'СНИМОК ПРОВЕРКИ'}
+          </p>
           <h2>{run.snapshot.name}</h2>
           <p className="muted small">
-            {date(run.startedAt)} · {run.environmentName} · версия {run.snapshot.revision}
+            {date(run.startedAt)} · {run.environmentName} · версия{' '}
+            {run.snapshot.revision}
           </p>
         </div>
-        <span className={`status ${run.status}`}>{statusLabel[run.status]}</span>
+        <span className={`status ${run.status}`}>
+          {statusLabel[run.status]}
+        </span>
       </div>
       <div className="run-reasons">
         {run.retentionReasons.map((reason) => (
@@ -115,9 +140,21 @@ export default function RunView({
             <div className="step-heading">
               <span className="step-number">{index + 1}</span>
               <h3>{step.title || `Шаг ${index + 1}`}</h3>
-              <span className={`status ${state.status}`}>{statusLabel[state.status]}</span>
+              <span className={`status ${state.status}`}>
+                {statusLabel[state.status]}
+              </span>
             </div>
             <p className="step-description">{step.description}</p>
+            {step.expected?.text && (
+              <section className="manual-expectation">
+                <h4>Ожидаемый результат шага</h4>
+                <p>{step.expected.text}</p>
+              </section>
+            )}
+            <ImageGallery
+              caseId={run.testCaseId}
+              images={step.expected?.images}
+            />
             {step.blocks.map((block, b) => {
               const attempts = run.attempts
                   .filter((v) => v.blockId === block.id)
@@ -127,7 +164,9 @@ export default function RunView({
                 <div className="call-block" key={block.id}>
                   <div className="row-heading">
                     <strong>
-                      <span className={`protocol ${block.kind}`}>{protocolLabel[block.kind]}</span>{' '}
+                      <span className={`protocol ${block.kind}`}>
+                        {protocolLabel[block.kind]}
+                      </span>{' '}
                       Вызов {b + 1} · {block.resource}
                     </strong>
                     {editable && (
@@ -140,14 +179,26 @@ export default function RunView({
                       </button>
                     )}
                   </div>
+                  {!latest && (
+                    <>
+                      <RequestSummary block={block} />
+                      <ExpectedPreview block={block} caseId={run.testCaseId} />
+                    </>
+                  )}
                   <Results
                     block={block}
                     attempt={latest}
-                    cancel={editable && latest ? () => void cancelAttempt(latest.id) : undefined}
+                    cancel={
+                      editable && latest
+                        ? () => void cancelAttempt(latest.id)
+                        : undefined
+                    }
                   />
                   {attempts.length > 1 && (
                     <details className="previous-attempts">
-                      <summary>Предыдущие попытки · {attempts.length - 1}</summary>
+                      <summary>
+                        Предыдущие попытки · {attempts.length - 1}
+                      </summary>
                       {attempts.slice(0, -1).map((a) => (
                         <Results key={a.id} block={block} attempt={a} />
                       ))}
@@ -163,13 +214,20 @@ export default function RunView({
                   aria-label={`Статус шага ${index + 1}`}
                   disabled={!editable || busy}
                   value={state.status}
-                  onChange={(e) => void updateStep(state, e.target.value as StepState['status'])}
+                  onChange={(e) =>
+                    void updateStep(
+                      state,
+                      e.target.value as StepState['status'],
+                    )
+                  }
                 >
-                  {['not_run', 'passed', 'failed', 'blocked', 'skipped'].map((s) => (
-                    <option key={s} value={s}>
-                      {statusLabel[s]}
-                    </option>
-                  ))}
+                  {['not_run', 'passed', 'failed', 'blocked', 'skipped'].map(
+                    (s) => (
+                      <option key={s} value={s}>
+                        {statusLabel[s]}
+                      </option>
+                    ),
+                  )}
                 </select>
               </label>
               <label className="field">
@@ -219,33 +277,41 @@ export default function RunView({
           <button
             className="button secondary danger"
             disabled={busy}
-            onClick={() => void perform(() => request<Run>(`/runs/${run.id}/cancel`, 'POST'))}
+            onClick={() =>
+              void perform(() => request<Run>(`/runs/${run.id}/cancel`, 'POST'))
+            }
           >
             Отменить прогон
           </button>
           <button
             className="button"
             disabled={busy || active || unsaved}
-            onClick={() => void perform(() => request<Run>(`/runs/${run.id}/finish`, 'POST'))}
+            onClick={() =>
+              void perform(() => request<Run>(`/runs/${run.id}/finish`, 'POST'))
+            }
           >
             Завершить прогон
           </button>
         </div>
       )}
-      {run.status !== 'running' && run.retentionReasons.length === 0 && !readOnly && (
-        <div className="action-bar">
-          <p className="muted small">
-            Прогон доступен в несохранённых. Его можно сохранить отдельно.
-          </p>
-          <button
-            className="button"
-            disabled={busy}
-            onClick={() => void perform(() => request<Run>(`/runs/${run.id}/save`, 'POST'))}
-          >
-            Сохранить прогон
-          </button>
-        </div>
-      )}
+      {run.status !== 'running' &&
+        run.retentionReasons.length === 0 &&
+        !readOnly && (
+          <div className="action-bar">
+            <p className="muted small">
+              Прогон доступен в несохранённых. Его можно сохранить отдельно.
+            </p>
+            <button
+              className="button"
+              disabled={busy}
+              onClick={() =>
+                void perform(() => request<Run>(`/runs/${run.id}/save`, 'POST'))
+              }
+            >
+              Сохранить прогон
+            </button>
+          </div>
+        )}
       {run.resources.length > 0 && (
         <details className="snapshot-context">
           <summary>Ресурсы прогона · {run.environmentName}</summary>

@@ -26,11 +26,11 @@ type queryer interface {
 }
 type scanner interface{ Scan(...any) error }
 
-const environmentSelect = `SELECT e.id::text,e.name,e.revision,v.variables,v.secret_names,EXISTS(SELECT 1 FROM qag.builtin_demo WHERE environment_id=e.id) FROM qag.environments e JOIN qag.environment_versions v ON v.id=e.current_version_id`
+const environmentSelect = `SELECT e.id::text,e.name,e.revision,v.variables,v.secret_names,EXISTS(SELECT 1 FROM qag.builtin_demo WHERE environment_id=e.id),e.description FROM qag.environments e JOIN qag.environment_versions v ON v.id=e.current_version_id`
 
 func scanEnvironment(row scanner) (Environment, error) {
 	var e Environment
-	err := row.Scan(&e.ID, &e.Name, &e.Revision, &e.Variables, &e.SecretNames, &e.ReadOnly)
+	err := row.Scan(&e.ID, &e.Name, &e.Revision, &e.Variables, &e.SecretNames, &e.ReadOnly, &e.Description)
 	if e.Variables == nil {
 		e.Variables = map[string]string{}
 	}
@@ -67,6 +67,19 @@ func (r *Repository) ListEnvironments(ctx context.Context, limit int, cursor str
 }
 
 func (r *Repository) SaveEnvironment(ctx context.Context, id, value string, revision int64, variables map[string]string, changes SecretChanges) (Environment, error) {
+	return r.saveEnvironment(ctx, id, value, revision, variables, changes, nil)
+}
+func (r *Repository) SaveEnvironmentMetadata(ctx context.Context, id, name, description string, revision int64) (Environment, error) {
+	return r.saveEnvironment(ctx, id, name, revision, nil, SecretChanges{}, &description)
+}
+func (r *Repository) SaveVariables(ctx context.Context, id string, revision int64, variables map[string]string, changes SecretChanges) (Environment, error) {
+	e, err := r.GetEnvironment(ctx, id)
+	if err != nil {
+		return e, err
+	}
+	return r.SaveEnvironment(ctx, id, e.Name, revision, variables, changes)
+}
+func (r *Repository) saveEnvironment(ctx context.Context, id, value string, revision int64, variables map[string]string, changes SecretChanges, description *string) (Environment, error) {
 	name, normalized, err := catalog.Name(value)
 	if err != nil {
 		return Environment{}, err
@@ -98,13 +111,24 @@ func (r *Repository) SaveEnvironment(ctx context.Context, id, value string, revi
 			if currentRevision != revision {
 				return problem.Conflict("Окружение изменилось; обновите форму")
 			}
+			if description != nil {
+				if _, err := tx.Exec(ctx, `UPDATE qag.environments SET name=$2,normalized_name=$3,description=$4,revision=revision+1,updated_at=now() WHERE id=$1`, id, name, normalized, *description); err != nil {
+					return problem.Database(err)
+				}
+				result, err = scanEnvironment(tx.QueryRow(ctx, environmentSelect+` WHERE e.id=$1`, id))
+				return err
+			}
 			var err error
 			oldSecrets, err = r.vault.Open(id+":"+version, sealed)
 			if err != nil {
 				return err
 			}
 		} else {
-			if _, err := tx.Exec(ctx, `INSERT INTO qag.environments(id,name,normalized_name) VALUES($1,$2,$3)`, id, name, normalized); err != nil {
+			desc := ""
+			if description != nil {
+				desc = *description
+			}
+			if _, err := tx.Exec(ctx, `INSERT INTO qag.environments(id,name,normalized_name,description) VALUES($1,$2,$3,$4)`, id, name, normalized, desc); err != nil {
 				return problem.Database(err)
 			}
 		}
@@ -184,6 +208,9 @@ func (r *Repository) SaveResource(ctx context.Context, id, environmentID, name, 
 		return Resource{}, problem.Invalid("name", "Имя ресурса: заглавные латинские буквы, цифры и _, не больше 200 символов")
 	}
 	normalizeConfig(&config)
+	if config.TLS.Mode == "tls" && config.TLS.Certificate != "" {
+		config.TLS.Mode = "mtls"
+	}
 	create := id == ""
 	if create {
 		id = catalog.NewID()
@@ -242,7 +269,31 @@ func (r *Repository) SaveResource(ctx context.Context, id, environmentID, name, 
 		if err != nil {
 			return err
 		}
-		if err = ValidateConfig(kind, config, values); err != nil {
+		sourceValues := map[string]string{}
+		for k, v := range values {
+			sourceValues[k] = v
+		}
+		for _, h := range config.Headers {
+			if h.Source != nil {
+				var envVersion string
+				var envSealed []byte
+				if err := tx.QueryRow(ctx, `SELECT v.id::text,v.encrypted_secrets FROM qag.environments e JOIN qag.environment_versions v ON v.id=e.current_version_id WHERE e.id=$1`, environmentID).Scan(&envVersion, &envSealed); err != nil {
+					return problem.Database(err)
+				}
+				envValues, err := r.vault.Open(environmentID+":"+envVersion, envSealed)
+				if err != nil {
+					return err
+				}
+				for k, v := range envValues {
+					sourceValues[k] = v
+				}
+				for k, v := range values {
+					sourceValues[k] = v
+				}
+				break
+			}
+		}
+		if err = ValidateConfig(kind, config, values, sourceValues); err != nil {
 			return err
 		}
 		version := catalog.NewID()

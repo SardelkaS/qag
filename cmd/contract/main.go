@@ -84,8 +84,8 @@ func request(name string) object {
 
 func main() {
 	for name, value := range map[string]any{
-		"DemoInfo": builtin.Info{},
-		"Folder":   catalog.Folder{}, "TestCase": catalog.TestCase{}, "Step": catalog.Step{}, "Block": catalog.Block{}, "KeyValue": catalog.KeyValue{}, "TypedValue": catalog.TypedValue{}, "Column": catalog.Column{}, "HTTPRequest": catalog.HTTPRequest{}, "GRPCRequest": catalog.GRPCRequest{}, "SQLRequest": catalog.SQLRequest{}, "Expectation": catalog.Expectation{},
+		"DemoInfo": builtin.Info{}, "ImageRef": catalog.ImageRef{}, "StepExpectation": catalog.StepExpectation{}, "ValidationIssue": catalog.ValidationIssue{}, "ExpectedImage": catalog.ExpectedImage{}, "ImageUpload": catalog.ImageUpload{}, "RequestHeader": catalog.RequestHeader{}, "HTTPHeaderSource": catalog.HTTPHeaderSource{}, "HeaderSourceResult": execution.HeaderSourceResult{}, "VariablesWrite": httpapi.VariablesWrite{}, "TestCaseCreate": httpapi.TestCaseCreate{},
+		"Folder": catalog.Folder{}, "TestCase": catalog.TestCase{}, "Step": catalog.Step{}, "Block": catalog.Block{}, "KeyValue": catalog.KeyValue{}, "TypedValue": catalog.TypedValue{}, "Column": catalog.Column{}, "HTTPRequest": catalog.HTTPRequest{}, "GRPCRequest": catalog.GRPCRequest{}, "SQLRequest": catalog.SQLRequest{}, "Expectation": catalog.Expectation{},
 		"Environment": resources.Environment{}, "Resource": resources.Resource{}, "ResourceConfig": resources.Config{}, "TLSConfig": resources.TLSConfig{}, "SecretChanges": resources.SecretChanges{},
 		"Attempt": execution.Attempt{}, "ExecutionResult": execution.Result{}, "ComparisonResult": comparison.Result{}, "Difference": comparison.Difference{}, "Run": runs.Run{}, "StepState": runs.StepState{},
 		"APIError": httpapi.Error{}, "CreateName": httpapi.CreateName{}, "ArchivePatch": httpapi.ArchivePatch{}, "TestCaseWrite": httpapi.TestCaseWrite{}, "EnvironmentWrite": httpapi.EnvironmentWrite{}, "ResourceWrite": httpapi.ResourceWrite{}, "ProtoBundle": httpapi.ProtoBundle{}, "RunStart": httpapi.RunStart{}, "AttemptStart": httpapi.AttemptStart{}, "StepWrite": httpapi.StepWrite{},
@@ -105,7 +105,9 @@ func main() {
 	setEnum("SQLRequest", "mode", "rows", "exec")
 	setEnum("HTTPRequest", "bodyMode", "none", "text", "json")
 	setEnum("Expectation", "bodyMode", "none", "text", "json", "rows", "exec")
-	setEnum("TLSConfig", "mode", "tls", "plaintext")
+	setEnum("TLSConfig", "mode", "tls", "mtls", "plaintext")
+	setEnum("HTTPHeaderSource", "fetchMode", "per_attempt", "per_run")
+	setEnum("HTTPHeaderSource", "bodyMode", "none", "text", "json")
 	setEnum("Run", "status", "running", "passed", "failed", "blocked", "cancelled", "interrupted")
 	setEnum("StepState", "status", "not_run", "passed", "failed", "blocked", "skipped")
 	setEnum("StepWrite", "status", "not_run", "passed", "failed", "blocked", "skipped")
@@ -140,6 +142,9 @@ func main() {
 		if method == "get" {
 			operation["security"] = []any{}
 		}
+		if id == "readExpectedImage" {
+			operation["responses"].(object)["200"] = object{"description": "Изображение-эталон", "content": object{"image/png": object{"schema": object{"type": "string", "format": "binary"}}, "image/jpeg": object{"schema": object{"type": "string", "format": "binary"}}, "image/webp": object{"schema": object{"type": "string", "format": "binary"}}}}
+		}
 		if method == "delete" {
 			operation["responses"].(object)["200"] = object{"description": "Несохранённый прогон удалён", "content": object{"application/json": object{"schema": object{"type": "object", "properties": object{"deleted": object{"type": "boolean"}}, "required": []string{"deleted"}}}}}
 		}
@@ -153,8 +158,11 @@ func main() {
 		{"get", "/session", "getSession", "Получить локальную сессию", "", "Session"},
 		{"get", "/health", "getHealth", "Проверить готовность", "", "Health"},
 		{"get", "/folders", "listFolders", "Список папок", "", "FolderPage"}, {"post", "/folders", "createFolder", "Создать папку", "CreateName", "Folder"}, {"patch", "/folders/{id}", "updateFolder", "Переименовать или архивировать папку", "ArchivePatch", "Folder"},
-		{"get", "/folders/{id}/test-cases", "listTestCases", "Тест-кейсы папки", "", "TestCasePage"}, {"post", "/folders/{id}/test-cases", "createTestCase", "Создать тест-кейс", "CreateName", "TestCase"},
+		{"get", "/folders/{id}/test-cases", "listTestCases", "Тест-кейсы папки", "", "TestCasePage"}, {"post", "/folders/{id}/test-cases", "createTestCase", "Создать тест-кейс", "TestCaseCreate", "TestCase"},
 		{"get", "/test-cases/{id}", "getTestCase", "Прочитать сценарий", "", "TestCase"}, {"put", "/test-cases/{id}", "saveTestCase", "Сохранить версию сценария", "TestCaseWrite", "TestCase"}, {"patch", "/test-cases/{id}", "archiveTestCase", "Изменить имя или архив тест-кейса", "ArchivePatch", "TestCase"},
+		{"post", "/test-cases/{id}/images", "uploadExpectedImage", "Загрузить эталон", "ImageUpload", "ExpectedImage"},
+		{"get", "/test-cases/{id}/images/{imageId}", "readExpectedImage", "Прочитать эталон", "", "ExpectedImage"},
+		{"put", "/environments/{id}/variables", "saveVariables", "Сохранить переменные", "VariablesWrite", "Environment"},
 		{"get", "/environments", "listEnvironments", "Окружения", "", "EnvironmentPage"}, {"post", "/environments", "createEnvironment", "Создать окружение", "EnvironmentWrite", "Environment"}, {"put", "/environments/{id}", "saveEnvironment", "Сохранить окружение", "EnvironmentWrite", "Environment"},
 		{"get", "/environments/{id}/resources", "listResources", "Ресурсы окружения", "", "ResourcePage"}, {"post", "/environments/{id}/resources", "createResource", "Создать ресурс", "ResourceWrite", "Resource"}, {"put", "/resources/{id}", "saveResource", "Сохранить новую версию ресурса", "ResourceWrite", "Resource"}, {"post", "/resources/{id}/proto-bundles", "uploadProtoBundle", "Загрузить proto-bundle", "ProtoBundle", "Resource"},
 		{"post", "/test-cases/{id}/blocks/{blockId}/attempts", "startEditorAttempt", "Проверить блок из редактора", "AttemptStart", "Attempt"}, {"get", "/attempts/{id}", "getAttempt", "Получить состояние попытки", "", "Attempt"}, {"post", "/attempts/{id}/cancel", "cancelAttempt", "Отменить попытку", "", "Attempt"},

@@ -25,7 +25,7 @@ func TestSQLVariablesPreserveTypesAndHeadersRejectInjection(t *testing.T) {
 	}
 	code := 200
 	b = catalog.Block{ID: catalog.NewID(), Resource: "GW", Kind: "http", HTTP: &catalog.HTTPRequest{Method: "GET", Path: "/", BodyMode: "none"}, Expected: catalog.Expectation{StatusCode: &code, BodyMode: "none"}}
-	res.Resource.Config.Headers = []catalog.KeyValue{{Name: "Authorization", Value: "${TOKEN}"}}
+	res.Resource.Config.Headers = []catalog.RequestHeader{{Name: "Authorization", Value: "${TOKEN}"}}
 	if _, _, err = res.Prepare(b); err == nil {
 		t.Fatal("expanded resource header injection accepted")
 	}
