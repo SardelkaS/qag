@@ -266,6 +266,7 @@ test('встроенный пример: просмотр, три протоко
     await page
       .getByRole('button', { name: 'Начать прогон', exact: true })
       .click()
+    await expect(page.locator('.run-view .readonly-notice')).toContainText('Сценарий и его системное окружение нельзя редактировать')
     const calls = page.locator('.run-view .call-block')
     for (let n = 0; n < 5; n++) {
       await calls
@@ -1508,6 +1509,138 @@ test('mTLS в форме ресурса и отдельного источник
   expect(resource.config.tls.certificate ?? '').toBe('')
 })
 
+test('оформление: favicon, предупреждения и закреплённая колонка результата', async ({ page }) => {
+  const demo = await api('/demo'), source = await api(`/test-cases/${demo.testCaseId}`)
+  const system = (await api('/environments')).items.find((e: any) => e.id === demo.environmentId)
+  const ordinary = await api('/environments', 'POST', { name: 'Пользовательское окружение', description: 'Проверка совпадающего отображаемого имени' })
+  // Stored environment names are unique. Simulate a colliding display label
+  // without changing that database rule: only the readOnly flag controls UI.
+  await page.route('**/api/v1/environments', async route => {
+    const response = await route.fetch(), value = await response.json()
+    for (const env of value.items) if (env.id === ordinary.id) env.name = system.name
+    await route.fulfill({ response, json: value })
+  })
+  const folder = await api('/folders', 'POST', { name: 'Проверка оформления' })
+  let doc = await api(`/folders/${folder.id}/test-cases`, 'POST', { name: source.name })
+  const image = await api(`/test-cases/${doc.id}/images`, 'POST', {
+    fileName: 'reference.png', dataBase64: (await readFile(resolve(root, 'web/public/qag-32.png'))).toString('base64'),
+  })
+  doc = await api(`/test-cases/${doc.id}`, 'PUT', {
+    name: source.name, revision: doc.revision,
+    steps: [{
+      id: randomUUID(), title: 'Длинный шаг с вызовами',
+      description: Array.from({ length: 80 }, (_, n) => `Строка ${n + 1}: проверить описание и сохранить ручной результат.`).join('\n'),
+      expected: { text: 'Ручной эталон шага', images: [{ imageId: image.id, caption: 'Иллюстрация' }] },
+      blocks: source.steps.slice(0, 3).map((s: any) => ({ ...s.blocks[0], id: randomUUID() })),
+    }, { id: randomUUID(), title: 'Следующий шаг', description: 'Управление предыдущего шага не должно перекрывать этот шаг.', blocks: [] }],
+  })
+  await page.goto('/')
+  const icon = page.locator('link[rel="icon"][type="image/png"]')
+  await expect(icon).toHaveAttribute('sizes', '32x32')
+  const iconUrl = await icon.getAttribute('href')
+  expect(iconUrl).toMatch(/^\/qag-32\.png\?v=[a-f0-9]{12}$/)
+  for (const link of await page.locator('link[rel="icon"]').all()) {
+    const url = (await link.getAttribute('href'))!, response = await page.request.get(url)
+    expect(response.ok()).toBe(true)
+    expect(response.headers()['content-type']).toMatch(/^image\//)
+    expect(await response.body()).toEqual(await readFile(resolve(root, 'web/public', url.split('?')[0].slice(1))))
+  }
+  expect(await page.evaluate(async (url) => {
+    const image = new Image(); image.src = url!; await image.decode(); return [image.naturalWidth, image.naturalHeight]
+  }, iconUrl)).toEqual([32, 32])
+  expect((await page.request.get('/')).headers()['cache-control']).toBe('no-cache')
+  await page.getByRole('button', { name: 'Открыть встроенный пример', exact: true }).click()
+  const scenarioNotice = page.getByRole('region', { name: 'Ограничения встроенного примера' })
+  await expect(scenarioNotice).toContainText('Сценарий и его системное окружение нельзя редактировать')
+  for (const theme of ['dark', 'light']) {
+    await page.getByLabel('Цветовая тема', { exact: true }).selectOption(theme)
+    await page.evaluate(() => window.scrollTo(0, 0))
+    await page.screenshot({ path: resolve(root, `.local/appearance-editor-${theme}.png`) })
+  }
+  await page.getByRole('button', { name: /Окружения и ресурсы/ }).click()
+  const environmentNotice = page.getByRole('region', { name: 'Ограничения системного окружения' })
+  for (const resource of await page.locator('.resource-item').all()) {
+    await resource.click()
+    await expect(environmentNotice).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Системное подключение · только просмотр', exact: true })).toBeDisabled()
+  }
+  for (const theme of ['dark', 'light']) {
+    await page.getByLabel('Цветовая тема', { exact: true }).selectOption(theme)
+    await page.screenshot({ path: resolve(root, `.local/appearance-resources-${theme}.png`) })
+  }
+  await page.getByLabel('Текущее окружение').selectOption(ordinary.id)
+  await expect(environmentNotice).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Настроить окружение', exact: true })).toBeEnabled()
+  await page.goto('/')
+  await page.getByRole('button', { name: `Папка ${folder.name}`, exact: true }).click()
+  await page.getByRole('button', { name: `Открыть тест-кейс ${doc.name}`, exact: true }).click()
+  await expect(scenarioNotice).toHaveCount(0)
+  await expect(page.getByLabel('Название тест-кейса')).toBeEnabled()
+  await page.getByLabel('Текущее окружение').selectOption(system.id)
+  await page.getByRole('button', { name: 'Начать прогон', exact: true }).click()
+  await expect(page.locator('.run-step')).toHaveCount(2)
+  let run = (await api(`/test-cases/${doc.id}/runs?active=true`)).items[0]
+  const variant = await api(`/runs/${run.id}/blocks/${doc.steps[0].blocks[0].id}/variants`, 'POST', { name: 'Исследование' })
+  await expect(page.getByRole('tab', { name: 'Исследование', exact: true })).toHaveCount(1)
+  const first = page.locator('.run-step').first(), next = page.locator('.run-step').nth(1)
+  await expect(first.locator('.call-block')).toHaveCount(3)
+  const control = first.getByLabel('Статус шага 1', { exact: true })
+  await expect(control.locator('option')).toHaveCount(3)
+  await control.focus()
+  await control.press('ArrowDown')
+  await expect(control).toHaveValue('passed')
+  await expect(control).toBeEnabled()
+  const comment = first.getByLabel('Комментарий к шагу 1', { exact: true })
+  await comment.fill('Черновик после ручной оценки')
+  const writes: string[] = []
+  page.on('request', r => { if (r.method() !== 'GET' && r.url().includes('/api/')) writes.push(r.url()) })
+  for (const theme of ['dark', 'light']) {
+    await page.getByLabel('Цветовая тема', { exact: true }).selectOption(theme)
+    for (const width of [1440, 768, 375]) {
+      await page.setViewportSize({ width, height: 1000 })
+      await comment.focus()
+      await first.evaluate(el => window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY + 700))
+      await expect.poll(async () => first.evaluate(el => {
+        const content = el.querySelector('.run-step-content')!.getBoundingClientRect(), status = el.querySelector('.run-step-status')!.getBoundingClientRect()
+        const panels = [...document.querySelectorAll('.toolbar, .document-header')].filter(p => ['sticky','fixed'].includes(getComputedStyle(p).position))
+        const bottom = Math.max(0, ...panels.map(p => p.getBoundingClientRect().bottom))
+        return status.left >= content.right && status.top >= bottom && status.bottom <= innerHeight && status.right <= innerWidth
+      })).toBe(true)
+      await expect(comment).toBeFocused()
+      await expect(comment).toHaveValue('Черновик после ручной оценки')
+      await expect(control).toHaveValue('passed')
+      await page.screenshot({ path: resolve(root, `.local/appearance-run-${theme}-${width}.png`) })
+    }
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await first.evaluate(el => window.scrollTo(0, el.getBoundingClientRect().bottom + window.scrollY - 250))
+  const end = await first.locator('.run-step-status').boundingBox(), edge = await first.boundingBox(), following = await next.boundingBox()
+  expect(end!.y + end!.height).toBeLessThanOrEqual(edge!.y + edge!.height)
+  expect(end!.y + end!.height).toBeLessThan(following!.y)
+  await first.evaluate(el => window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY + 700))
+  await page.locator('.document-header h1').evaluate(el => { el.textContent = 'Очень длинный заголовок для проверки изменения высоты закреплённой панели '.repeat(3) })
+  await expect.poll(async () => first.locator('.run-step-status').evaluate(el => el.getBoundingClientRect().top >= document.querySelector('.document-header')!.getBoundingClientRect().bottom)).toBe(true)
+  await page.setViewportSize({ width: 720, height: 450 })
+  await first.evaluate(el => window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY + 700))
+  await expect.poll(async () => first.locator('.run-step-status').evaluate(el => el.getBoundingClientRect().top >= 0 && el.getBoundingClientRect().bottom <= innerHeight)).toBe(true)
+  expect(writes).toEqual([])
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await first.getByRole('button', { name: 'Сохранить комментарий', exact: true }).click()
+  await expect(first.getByRole('button', { name: 'Сохранить комментарий', exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Отменить прогон', exact: true }).click()
+  await expect(control).toHaveCount(0)
+  run = await api(`/runs/${run.id}`)
+  expect(run.stepStates[0].status).toBe('passed')
+  expect(run.stepStates[0].comment).toBe('Черновик после ручной оценки')
+  expect(run.variants.some((v: any) => v.id === variant.id)).toBe(true)
+  await page.getByRole('button', { name: 'История', exact: true }).click()
+  await page.getByRole('button', { name: 'Открыть', exact: true }).first().click()
+  const history = page.getByRole('dialog', { name: 'Снимок прогона', exact: true })
+  await expect(history.locator('.run-step-result .step-status-icon.passed')).toHaveCount(1)
+  await expect(history.locator('.step-status-control select')).toHaveCount(0)
+  await page.screenshot({ path: resolve(root, '.local/appearance-history.png') })
+})
+
 test('очередь и вкладки: три протокола, ручные статусы, reload и история', async ({
   page,
 }) => {
@@ -1594,17 +1727,17 @@ test('очередь и вкладки: три протокола, ручные 
   for (const theme of ['light', 'dark']) {
     await page.getByLabel('Цветовая тема', { exact: true }).selectOption(theme)
     await expect(
-      page.locator('.run-view .step-heading .step-status-icon.passed'),
+      page.locator('.run-view .run-step-result .step-status-icon.passed'),
     ).toHaveCount(5)
     const position = await page
-      .locator('.run-view .step-heading')
+      .locator('.run-view .run-step')
       .first()
       .evaluate((el) => {
-        const title = el.querySelector('h3')!.getBoundingClientRect(),
+        const content = el.querySelector('.run-step-content')!.getBoundingClientRect(),
           status = el
             .querySelector('.step-status-control')!
             .getBoundingClientRect()
-        return status.left > title.left
+        return status.left >= content.right
       })
     expect(position).toBe(true)
   }

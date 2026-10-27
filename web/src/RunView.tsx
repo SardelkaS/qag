@@ -13,6 +13,8 @@ import { StepStatus } from './StepStatus'
 import { RunCallTabs } from './RunCallTabs'
 import { ExportDialog } from './ExportDialog'
 import { ImageGallery } from './ImageGallery'
+import { ReadOnlyNotice } from './ReadOnlyNotice'
+import { useRunStickyTop } from './useRunStickyTop'
 
 export function mergeRun(previous: Run | null, next: Run): Run {
   if (!previous || previous.id !== next.id) return next
@@ -44,6 +46,7 @@ export default function RunView({
   onRefresh: () => void
   readOnly?: boolean
 }) {
+  const viewRef = useRunStickyTop()
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -109,7 +112,7 @@ export default function RunView({
     run.attempts.some((a) => a.state === 'queued' || a.state === 'running')
   const unsaved = Object.keys(comments).length > 0
   return (
-    <section className="run-view">
+    <section className="run-view" ref={viewRef}>
       {exporting && (
         <ExportDialog runId={run.id} onClose={() => setExporting(false)} />
       )}
@@ -136,6 +139,7 @@ export default function RunView({
           </span>
         </div>
       </div>
+      {run.snapshot.readOnly && <ReadOnlyNotice />}
       {editable && (
         <div className="run-toolbar">
           <button
@@ -176,79 +180,82 @@ export default function RunView({
         const state = run.stepStates.find((v) => v.stepId === step.id)!
         const comment = comments[step.id]?.value ?? state.comment
         return (
-          <article className="step-card" key={step.id}>
-            <div className="step-heading">
-              <span className="step-number">{index + 1}</span>
-              <h3>{step.title || `Шаг ${index + 1}`}</h3>
-              <StepStatus
-                state={state}
-                index={index + 1}
-                disabled={busy || cancelling}
-                onChange={
-                  editable
-                    ? (status) => void updateStep(state, status)
-                    : undefined
-                }
+          <article className="step-card run-step" key={step.id}>
+            <div className="run-step-content">
+              <div className="step-heading">
+                <span className="step-number">{index + 1}</span>
+                <h3>{step.title || `Шаг ${index + 1}`}</h3>
+              </div>
+              <p className="step-description">{step.description}</p>
+              {step.expected?.text && (
+                <section className="manual-expectation">
+                  <h4>Ожидаемый результат шага</h4>
+                  <p>{step.expected.text}</p>
+                </section>
+              )}
+              <ImageGallery
+                caseId={run.testCaseId}
+                images={step.expected?.images}
               />
-            </div>
-            <p className="step-description">{step.description}</p>
-            {step.expected?.text && (
-              <section className="manual-expectation">
-                <h4>Ожидаемый результат шага</h4>
-                <p>{step.expected.text}</p>
-              </section>
-            )}
-            <ImageGallery
-              caseId={run.testCaseId}
-              images={step.expected?.images}
-            />
-            {step.blocks.map((block, b) => (
-              <RunCallTabs
-                key={block.id}
-                run={run}
-                block={block}
-                index={b + 1}
-                editable={editable}
-                disabled={busy || active || cancelling}
-                refresh={async () => {
-                  update(await request<Run>(`/runs/${run.id}`))
-                  onRefresh()
-                }}
-              />
-            ))}
-            <div className="manual-result">
-              <label className="field">
-                <span>Комментарий к шагу {index + 1}</span>
-                <textarea
-                  aria-label={`Комментарий к шагу ${index + 1}`}
-                  disabled={!editable || busy}
-                  rows={2}
-                  value={comment}
-                  onChange={(e) => {
-                    const value = e.target.value
-                    setComments((old) => {
-                      const next = { ...old }
-                      if (value === state.comment) delete next[step.id]
-                      else
-                        next[step.id] = {
-                          value,
-                          revision: old[step.id]?.revision ?? state.revision,
-                        }
-                      return next
-                    })
+              {step.blocks.map((block, b) => (
+                <RunCallTabs
+                  key={block.id}
+                  run={run}
+                  block={block}
+                  index={b + 1}
+                  editable={editable}
+                  disabled={busy || active || cancelling}
+                  refresh={async () => {
+                    update(await request<Run>(`/runs/${run.id}`))
+                    onRefresh()
                   }}
                 />
-              </label>
-              {comments[step.id] && (
-                <button
-                  className="button secondary"
-                  disabled={busy}
-                  onClick={() => void updateStep(state)}
-                >
-                  Сохранить комментарий
-                </button>
-              )}
+              ))}
+              <div className="manual-result">
+                <label className="field">
+                  <span>Комментарий к шагу {index + 1}</span>
+                  <textarea
+                    aria-label={`Комментарий к шагу ${index + 1}`}
+                    disabled={!editable || busy}
+                    rows={2}
+                    value={comment}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setComments((old) => {
+                        const next = { ...old }
+                        if (value === state.comment) delete next[step.id]
+                        else
+                          next[step.id] = {
+                            value,
+                            revision: old[step.id]?.revision ?? state.revision,
+                          }
+                        return next
+                      })
+                    }}
+                  />
+                </label>
+                {comments[step.id] && (
+                  <button
+                    className="button secondary"
+                    disabled={busy}
+                    onClick={() => void updateStep(state)}
+                  >
+                    Сохранить комментарий
+                  </button>
+                )}
+              </div>
             </div>
+            <aside className="run-step-result" aria-label={`Результат шага ${index + 1}`}>
+              <div className="run-step-status">
+                <span className="section-label">Результат</span>
+                <StepStatus
+                  state={state}
+                  index={index + 1}
+                  disabled={busy || cancelling}
+                  onChange={editable ? (status) => void updateStep(state, status) : undefined}
+                />
+              </div>
+            </aside>
           </article>
         )
       })}

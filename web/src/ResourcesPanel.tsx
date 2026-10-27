@@ -9,6 +9,7 @@ import type {
 import { fieldErrors, message, protocolLabel, request } from './api'
 import { Field, Modal, Notice, Pairs } from './ui'
 import { HeaderEditor, TLSFields } from './HeaderEditor'
+import { ReadOnlyNotice } from './ReadOnlyNotice'
 
 type SecretRow = {
   name: string
@@ -190,6 +191,7 @@ export default function ResourcesPanel({
         </div>
       ) : (
         <>
+          {environment.readOnly && <ReadOnlyNotice environment />}
           <div className="environment-banner">
             <div>
               <strong>{environment.name}</strong>

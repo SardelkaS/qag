@@ -21,6 +21,7 @@ import CaseEditor from './CaseEditor'
 import Sidebar from './Sidebar'
 import ResourcesPanel from './ResourcesPanel'
 import RunView, { mergeRun } from './RunView'
+import { ReadOnlyNotice } from './ReadOnlyNotice'
 import History from './History'
 import { ThemeSwitch } from './ThemeSwitch'
 import { readPreference, writePreference } from './preferences'
@@ -638,6 +639,7 @@ export default function App() {
                   )}
                 </div>
               </div>
+              {tab === 'editor' && document.readOnly && <ReadOnlyNotice />}
               {tab === 'editor' &&
                 !dirty &&
                 (document.validationIssues ?? []).length > 0 && (

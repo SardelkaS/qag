@@ -1,5 +1,5 @@
 :root {--background:#f7f8f5;--surface:#ffffff;--surface-alt:#edf1eb;--selection:#dce7d5;--text:#20372e;--muted:#65765f;--border:#d6dfd0;--border-strong:#8da07e;--accent:#425d35;--on-accent:#ffffff;--danger:#a3443b;--danger-bg:#f9ece9;--warning:#8b6b2f;--warning-bg:#f4efdc;--success:#3a633d;--success-bg:#e7f0e2;--info:#446b85;--info-bg:#e6eff5;--shadow:#20302a14;--backdrop:#20302a66;color-scheme:light}
-:root[data-theme="dark"] {--background:#101814;--surface:#19231e;--surface-alt:#202e25;--selection:#30462f;--text:#e1e8e5;--muted:#adbfb5;--border:#3c4d42;--border-strong:#728e77;--accent:#abc78b;--on-accent:#122016;--danger:#f4aca7;--danger-bg:#38231f;--warning:#e5cb8a;--warning-bg:#332d1b;--success:#a3d298;--success-bg:#203520;--info:#a8c9e7;--info-bg:#1f303e;--shadow:#00000066;--backdrop:#050b08bb;color-scheme:dark}
+:root[data-theme="dark"] {--background:#151619;--surface:#1e2024;--surface-alt:#272a30;--selection:#383d46;--text:#e6e7eb;--muted:#afb3bc;--border:#42464f;--border-strong:#88919f;--accent:#abc78b;--on-accent:#181b20;--danger:#f4aca7;--danger-bg:#38231f;--warning:#e5cb8a;--warning-bg:#332d1b;--success:#a3d298;--success-bg:#203520;--info:#a8c9e7;--info-bg:#1f303e;--shadow:#00000066;--backdrop:#08090cbb;color-scheme:dark}
 :root { font-family: 'Segoe UI', system-ui, sans-serif; color: var(--text); background: var(--background); font-synthesis: none; font-size: 14px; line-height: 1.5; }
 .builtin-example { display:flex; gap:12px; align-items:center; text-align:left; background:var(--surface-alt); border:1px solid var(--border); border-radius:7px; padding:12px; color:var(--text); margin:14px 0 4px; width:100%; }
 .builtin-example strong { display:block; font-size:13px; font-weight:600; }
@@ -234,4 +234,31 @@ fieldset:disabled input,fieldset:disabled textarea,fieldset:disabled select,inpu
 .variant-versions {margin-top:16px}
 .brand-icon {vertical-align:middle;margin-right:9px;flex-shrink:0}
 .export-toggle {display:flex;align-items:center;gap:10px;margin:20px 0;font-size:13px}.export-toggle input {width:auto}.export-partial {padding:12px;border:1px solid var(--border);background:var(--surface-alt);font-size:12px}.copy-fallback {width:100%;min-height:240px}
-@media(max-width:700px){.step-status-control {flex-basis:100%}.run-toolbar .button{flex:1}.batch-progress{flex-basis:100%;order:3}}
+@media(max-width:700px){.run-toolbar .button{flex:1}.batch-progress{flex-basis:100%;order:3}}
+
+.readonly-notice {padding:14px 16px;margin:0 0 20px;border:1px solid var(--warning);border-left-width:4px;border-radius:5px;background:var(--warning-bg);color:var(--text);font-size:13px;line-height:1.6;overflow-wrap:anywhere}
+.readonly-notice strong {display:block;color:var(--text);margin-bottom:4px}
+.readonly-notice p {margin:0}
+.document-header > .readonly-notice {margin-top:18px}
+.run-step {display:grid;grid-template-columns:minmax(0,1fr) clamp(120px,14vw,174px);gap:24px;align-items:stretch}
+.run-step-content {min-width:0;container-type:inline-size}
+.run-step-content .step-heading h3 {overflow-wrap:anywhere;min-width:0}
+.run-step-result {min-width:0;border-left:1px solid var(--border);padding-left:16px}
+.run-step-status {position:sticky;top:var(--run-sticky-top,12px)}
+.run-step-status > .section-label {display:block;text-align:right;margin-bottom:12px}
+.run-step .step-status-control {margin:0;flex-direction:column;align-items:stretch;gap:10px}
+.run-step .step-status-icon {align-self:flex-end}
+.run-step .step-status-control select {width:100%;max-width:none;padding:8px 6px}
+.run-step .step-status-control small {text-align:right;overflow-wrap:anywhere}
+.run-step .call-block > .row-heading {flex-wrap:wrap}
+.run-step .image-grid {grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr))}
+.run-step .image-reference {min-width:0;max-width:240px}
+.run-step .manual-result > .field:first-child {max-width:none}
+@container (max-width:600px) {
+  .comparison-grid, .form-grid, .form-grid.three, .form-grid.http-line {grid-template-columns:1fr}
+  .call-block {padding:12px}
+  .typed-value {grid-template-columns:minmax(0,1fr)}
+}
+@media(max-width:850px){.run-step{gap:12px}.run-step-result{padding-left:10px}}
+@media(max-width:450px){.run-view{padding-inline:10px}.run-step{padding:12px;gap:10px;grid-template-columns:minmax(0,1fr) 112px}.run-step-result{padding-left:8px}}
+@media(max-height:500px){.toolbar,.document-header{position:static}.run-step .step-status-control{gap:5px}.run-step-status > .section-label{margin-bottom:6px}}

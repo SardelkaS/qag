@@ -1,11 +1,14 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"image/png"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -71,5 +74,52 @@ func TestEmbeddedFrontendAndSession(t *testing.T) {
 		if w.Code != 200 {
 			t.Fatalf("%s: %d %s", path, w.Code, w.Body.String())
 		}
+	}
+}
+
+func TestFrontendReloadAndVersionedIcons(t *testing.T) {
+	assets := fstest.MapFS{"index.html": {Data: []byte("<html>qag</html>")}}
+	for _, name := range []string{"qag-32.png", "favicon.ico"} {
+		data, err := os.ReadFile("../../web/public/" + name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assets[name] = &fstest.MapFile{Data: data}
+	}
+	s, err := New(appruntime.Config{Address: "127.0.0.1:8080"}, assets, func(context.Context) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, route := range []string{"/", "/index.html", "/cases/example"} {
+		want := http.StatusOK
+		if route == "/index.html" {
+			want = http.StatusMovedPermanently
+		}
+		w := httptest.NewRecorder()
+		s.Handler().ServeHTTP(w, httptest.NewRequest("GET", "http://127.0.0.1:8080"+route, nil))
+		if w.Code != want || w.Header().Get("Cache-Control") != "no-cache" {
+			t.Fatalf("HTML cannot revalidate: %s %d %v", route, w.Code, w.Header())
+		}
+	}
+	for _, name := range []string{"qag-32.png", "favicon.ico"} {
+		w := httptest.NewRecorder()
+		s.Handler().ServeHTTP(w, httptest.NewRequest("GET", "http://127.0.0.1:8080/"+name+"?v=content-version", nil))
+		if w.Code != 200 || !strings.HasPrefix(w.Header().Get("Content-Type"), "image/") || !bytes.Equal(w.Body.Bytes(), assets[name].Data) {
+			t.Fatalf("Invalid favicon: %s %d %v", name, w.Code, w.Header())
+		}
+		if name == "qag-32.png" {
+			image, err := png.Decode(bytes.NewReader(w.Body.Bytes()))
+			if err != nil || image.Bounds().Dx() != 32 || image.Bounds().Dy() != 32 {
+				t.Fatal("Browser PNG must decode as 32x32", err)
+			}
+		}
+		if !strings.Contains(w.Header().Get("Content-Security-Policy"), "img-src 'self' data:") {
+			t.Fatal("Image CSP changed")
+		}
+	}
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, httptest.NewRequest("GET", "http://127.0.0.1:8080/missing-icon.png", nil))
+	if w.Code != 404 {
+		t.Fatalf("Missing icon returned %d instead of 404", w.Code)
 	}
 }

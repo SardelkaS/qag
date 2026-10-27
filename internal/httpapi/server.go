@@ -81,6 +81,9 @@ func New(config appruntime.Config, assets fs.FS, ping func(context.Context) erro
 		if name == "" {
 			name = "index.html"
 		}
+		if name == "index.html" {
+			w.Header().Set("Cache-Control", "no-cache")
+		}
 		if _, err := fs.Stat(assets, name); err != nil {
 			if path.Ext(name) != "" {
 				http.NotFound(w, r)
