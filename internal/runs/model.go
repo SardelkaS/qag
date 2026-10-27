@@ -8,13 +8,16 @@ import (
 )
 
 type StepState struct {
-	StepID   string `json:"stepId"`
-	Status   string `json:"status"`
-	Comment  string `json:"comment"`
-	Revision int64  `json:"revision"`
+	LegacyStatus string `json:"legacyStatus,omitempty"`
+	StepID       string `json:"stepId"`
+	Status       string `json:"status"`
+	Comment      string `json:"comment"`
+	Revision     int64  `json:"revision"`
 }
 
 type Run struct {
+	Variants         []Variant            `json:"variants"`
+	Batches          []Batch              `json:"batches"`
 	ID               string               `json:"id"`
 	TestCaseID       string               `json:"testCaseId"`
 	EnvironmentID    string               `json:"environmentId"`
@@ -27,4 +30,37 @@ type Run struct {
 	RetentionReasons []string             `json:"retentionReasons"`
 	StartedAt        time.Time            `json:"startedAt"`
 	FinishedAt       *time.Time           `json:"finishedAt,omitempty"`
+}
+
+type VariantVersion struct {
+	ID        string        `json:"id"`
+	Revision  int64         `json:"revision"`
+	Request   catalog.Block `json:"request"`
+	CreatedAt time.Time     `json:"createdAt"`
+}
+type Variant struct {
+	ID               string           `json:"id"`
+	RunID            string           `json:"runId"`
+	BlockID          string           `json:"blockId"`
+	Name             string           `json:"name"`
+	Position         int              `json:"position"`
+	Revision         int64            `json:"revision"`
+	CurrentVersionID string           `json:"currentVersionId"`
+	Versions         []VariantVersion `json:"versions"`
+}
+type BatchItem struct {
+	Position  int    `json:"position"`
+	BlockID   string `json:"blockId"`
+	State     string `json:"state"`
+	AttemptID string `json:"attemptId,omitempty"`
+}
+type Batch struct {
+	ID         string      `json:"id"`
+	RunID      string      `json:"runId"`
+	State      string      `json:"state"`
+	Items      []BatchItem `json:"items"`
+	Completed  int         `json:"completed"`
+	Problems   int         `json:"problems"`
+	StartedAt  time.Time   `json:"startedAt"`
+	FinishedAt *time.Time  `json:"finishedAt,omitempty"`
 }

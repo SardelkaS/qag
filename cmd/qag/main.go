@@ -39,7 +39,7 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	startup, cancel := context.WithTimeout(ctx, 15*time.Second)
-	store, err := storage.Open(startup, config.DatabaseURL)
+	store, err := storage.Open(startup, config.DatabaseURL, config.Namespace)
 	if err != nil {
 		cancel()
 		return err

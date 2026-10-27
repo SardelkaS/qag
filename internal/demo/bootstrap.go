@@ -1,5 +1,7 @@
 package demo
 
+import "qag/internal/dbscope"
+
 import (
 	"bytes"
 	"context"
@@ -27,12 +29,12 @@ func Bootstrap(ctx context.Context, pool *pgxpool.Pool, vault *resources.Vault, 
 		defer cancel()
 		_ = tx.Rollback(c)
 	}()
-	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(124662901)`); err != nil {
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, dbscope.From(pool).Lock(124662901)); err != nil {
 		return builtin.Info{}, problem.Database(err)
 	}
 	var i builtin.Info
 	var folder string
-	err = tx.QueryRow(ctx, `SELECT folder_id::text,test_case_id::text,environment_id::text,http_resource_id::text,grpc_resource_id::text,sql_resource_id::text FROM qag.builtin_demo WHERE key='local-demo'`).Scan(&folder, &i.TestCaseID, &i.EnvironmentID, &i.HTTPResourceID, &i.GRPCResourceID, &i.SQLResourceID)
+	err = tx.QueryRow(ctx, dbscope.Render(tx, `SELECT folder_id::text,test_case_id::text,environment_id::text,http_resource_id::text,grpc_resource_id::text,sql_resource_id::text FROM qag.builtin_demo WHERE key='local-demo'`)).Scan(&folder, &i.TestCaseID, &i.EnvironmentID, &i.HTTPResourceID, &i.GRPCResourceID, &i.SQLResourceID)
 	create := errors.Is(err, pgx.ErrNoRows)
 	if err != nil && !create {
 		return i, problem.Database(err)
@@ -50,10 +52,10 @@ func Bootstrap(ctx context.Context, pool *pgxpool.Pool, vault *resources.Vault, 
 		}
 		_, folderNorm, _ := catalog.Name(folderName)
 		_, envNorm, _ := catalog.Name(envName)
-		if _, err = tx.Exec(ctx, `INSERT INTO qag.folders(id,name,normalized_name) VALUES($1,$2,$3)`, folder, folderName, folderNorm); err != nil {
+		if _, err = tx.Exec(ctx, dbscope.Render(tx, `INSERT INTO qag.folders(id,name,normalized_name) VALUES($1,$2,$3)`), folder, folderName, folderNorm); err != nil {
 			return i, problem.Database(err)
 		}
-		if _, err = tx.Exec(ctx, `INSERT INTO qag.environments(id,name,normalized_name) VALUES($1,$2,$3)`, i.EnvironmentID, envName, envNorm); err != nil {
+		if _, err = tx.Exec(ctx, dbscope.Render(tx, `INSERT INTO qag.environments(id,name,normalized_name) VALUES($1,$2,$3)`), i.EnvironmentID, envName, envNorm); err != nil {
 			return i, problem.Database(err)
 		}
 		envVersion := catalog.NewID()
@@ -61,18 +63,26 @@ func Bootstrap(ctx context.Context, pool *pgxpool.Pool, vault *resources.Vault, 
 		if err != nil {
 			return i, err
 		}
-		if _, err = tx.Exec(ctx, `INSERT INTO qag.environment_versions(id,environment_id,revision,variables,encrypted_secrets,secret_names) VALUES($1,$2,1,'{}',$3,'[]')`, envVersion, i.EnvironmentID, sealed); err != nil {
+		if _, err = tx.Exec(ctx, dbscope.Render(tx, `INSERT INTO qag.environment_versions(id,environment_id,revision,variables,encrypted_secrets,secret_names) VALUES($1,$2,1,'{}',$3,'[]')`), envVersion, i.EnvironmentID, sealed); err != nil {
 			return i, problem.Database(err)
 		}
-		if _, err = tx.Exec(ctx, `UPDATE qag.environments SET current_version_id=$2 WHERE id=$1`, i.EnvironmentID, envVersion); err != nil {
+		if _, err = tx.Exec(ctx, dbscope.Render(tx, `UPDATE qag.environments SET current_version_id=$2 WHERE id=$1`), i.EnvironmentID, envVersion); err != nil {
 			return i, problem.Database(err)
 		}
 		steps := Scenario()
+		for si := range steps {
+			for bi := range steps[si].Blocks {
+				b := &steps[si].Blocks[bi]
+				if b.SQL != nil {
+					b.SQL.Query = dbscope.Render(pool, b.SQL.Query)
+				}
+			}
+		}
 		if err = catalog.ValidateSteps(steps); err != nil {
 			return i, err
 		}
 		_, caseNorm, _ := catalog.Name(CaseName)
-		if _, err = tx.Exec(ctx, `INSERT INTO qag.test_cases(id,folder_id,name,normalized_name,steps) VALUES($1,$2,$3,$4,$5)`, i.TestCaseID, folder, CaseName, caseNorm, steps); err != nil {
+		if _, err = tx.Exec(ctx, dbscope.Render(tx, `INSERT INTO qag.test_cases(id,folder_id,name,normalized_name,steps) VALUES($1,$2,$3,$4,$5)`), i.TestCaseID, folder, CaseName, caseNorm, steps); err != nil {
 			return i, problem.Database(err)
 		}
 	}
@@ -90,7 +100,7 @@ func Bootstrap(ctx context.Context, pool *pgxpool.Pool, vault *resources.Vault, 
 		}
 	}
 	if create {
-		if _, err = tx.Exec(ctx, `INSERT INTO qag.builtin_demo(key,folder_id,test_case_id,environment_id,http_resource_id,grpc_resource_id,sql_resource_id,seed_version) VALUES('local-demo',$1,$2,$3,$4,$5,$6,1)`, folder, i.TestCaseID, i.EnvironmentID, i.HTTPResourceID, i.GRPCResourceID, i.SQLResourceID); err != nil {
+		if _, err = tx.Exec(ctx, dbscope.Render(tx, `INSERT INTO qag.builtin_demo(key,folder_id,test_case_id,environment_id,http_resource_id,grpc_resource_id,sql_resource_id,seed_version) VALUES('local-demo',$1,$2,$3,$4,$5,$6,1)`), folder, i.TestCaseID, i.EnvironmentID, i.HTTPResourceID, i.GRPCResourceID, i.SQLResourceID); err != nil {
 			return i, problem.Database(err)
 		}
 	}
@@ -101,7 +111,7 @@ func unusedName(ctx context.Context, tx pgx.Tx, table, base string) (string, err
 	for tries := 0; tries < 5; tries++ {
 		_, normalized, _ := catalog.Name(name)
 		var exists bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM qag.`+table+` WHERE normalized_name=$1)`, normalized).Scan(&exists); err != nil {
+		if err := tx.QueryRow(ctx, dbscope.Render(tx, `SELECT EXISTS(SELECT 1 FROM qag.`+table+` WHERE normalized_name=$1)`), normalized).Scan(&exists); err != nil {
 			return "", problem.Database(err)
 		}
 		if !exists {
@@ -117,14 +127,14 @@ func seedResource(ctx context.Context, tx pgx.Tx, vault *resources.Vault, env, i
 	}
 	var revision int64
 	if create {
-		if _, err := tx.Exec(ctx, `INSERT INTO qag.resources(id,environment_id,name,kind) VALUES($1,$2,$3,$4)`, id, env, name, kind); err != nil {
+		if _, err := tx.Exec(ctx, dbscope.Render(tx, `INSERT INTO qag.resources(id,environment_id,name,kind) VALUES($1,$2,$3,$4)`), id, env, name, kind); err != nil {
 			return problem.Database(err)
 		}
 	} else {
 		var version string
 		var oldConfig resources.Config
 		var encrypted []byte
-		if err := tx.QueryRow(ctx, `SELECT v.id::text,v.revision,v.config,v.encrypted_secrets FROM qag.resource_versions v JOIN qag.resources r ON r.current_version_id=v.id WHERE r.id=$1 FOR UPDATE OF r`, id).Scan(&version, &revision, &oldConfig, &encrypted); err != nil {
+		if err := tx.QueryRow(ctx, dbscope.Render(tx, `SELECT v.id::text,v.revision,v.config,v.encrypted_secrets FROM qag.resource_versions v JOIN qag.resources r ON r.current_version_id=v.id WHERE r.id=$1 FOR UPDATE OF r`), id).Scan(&version, &revision, &oldConfig, &encrypted); err != nil {
 			return problem.Database(err)
 		}
 		old, err := vault.Open(id+":"+version, encrypted)
@@ -147,9 +157,9 @@ func seedResource(ctx context.Context, tx pgx.Tx, vault *resources.Vault, env, i
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	if _, err = tx.Exec(ctx, `INSERT INTO qag.resource_versions(id,resource_id,revision,config,encrypted_secrets,secret_names) VALUES($1,$2,$3,$4,$5,$6)`, version, id, revision+1, c, encrypted, names); err != nil {
+	if _, err = tx.Exec(ctx, dbscope.Render(tx, `INSERT INTO qag.resource_versions(id,resource_id,revision,config,encrypted_secrets,secret_names) VALUES($1,$2,$3,$4,$5,$6)`), version, id, revision+1, c, encrypted, names); err != nil {
 		return problem.Database(err)
 	}
-	_, err = tx.Exec(ctx, `UPDATE qag.resources SET current_version_id=$2,revision=$3 WHERE id=$1`, id, version, revision+1)
+	_, err = tx.Exec(ctx, dbscope.Render(tx, `UPDATE qag.resources SET current_version_id=$2,revision=$3 WHERE id=$1`), id, version, revision+1)
 	return problem.Database(err)
 }

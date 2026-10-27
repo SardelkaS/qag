@@ -32,7 +32,7 @@ export default function Sidebar(p: Props) {
           p.navigate('cases')
         }}
       >
-        qag<span> / test workspace</span>
+        <img src="/qag-32.png" width="32" height="32" alt="" className="brand-icon" />qag<span> / test workspace</span>
       </a>
       <div className="section-label sidebar-label">РАБОЧЕЕ ПРОСТРАНСТВО</div>
       <button

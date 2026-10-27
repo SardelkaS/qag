@@ -8,6 +8,7 @@ foreach ($qagLine in [IO.File]::ReadAllLines($qagEnvPath)) {
 }
 Push-Location $qagRoot
 try {
+    $env:QAG_TEST_PKI_DIR=Join-Path $qagRoot '.local/pki'
     & go test -p=1 -tags=integration -count=1 ./...
     if ($LASTEXITCODE -ne 0) { throw 'Integration tests failed' }
 } finally { Pop-Location }

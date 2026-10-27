@@ -1,5 +1,7 @@
 package resources
 
+import "qag/internal/dbscope"
+
 import (
 	"context"
 	"sort"
@@ -43,11 +45,11 @@ func (r *Repository) GetEnvironment(ctx context.Context, id string) (Environment
 	if !catalog.ValidID(id) {
 		return Environment{}, problem.Invalid("id", "Некорректный ID окружения")
 	}
-	return scanEnvironment(r.pool.QueryRow(ctx, environmentSelect+` WHERE e.id=$1`, id))
+	return scanEnvironment(r.pool.QueryRow(ctx, dbscope.Render(r.pool, environmentSelect+` WHERE e.id=$1`), id))
 }
 
 func (r *Repository) ListEnvironments(ctx context.Context, limit int, cursor string) (catalog.Page[Environment], error) {
-	rows, err := r.pool.Query(ctx, environmentSelect+` ORDER BY e.name COLLATE qag.russian, e.normalized_name COLLATE "C", e.id`)
+	rows, err := r.pool.Query(ctx, dbscope.Render(r.pool, environmentSelect+` ORDER BY e.name COLLATE qag.russian, e.normalized_name COLLATE "C", e.id`))
 	if err != nil {
 		return catalog.Page[Environment]{}, problem.Database(err)
 	}
@@ -105,17 +107,17 @@ func (r *Repository) saveEnvironment(ctx context.Context, id, value string, revi
 		if !create {
 			var version string
 			var sealed []byte
-			if err := tx.QueryRow(ctx, `SELECT e.revision,v.id::text,v.encrypted_secrets FROM qag.environments e JOIN qag.environment_versions v ON v.id=e.current_version_id WHERE e.id=$1 FOR UPDATE OF e`, id).Scan(&currentRevision, &version, &sealed); err != nil {
+			if err := tx.QueryRow(ctx, dbscope.Render(tx, `SELECT e.revision,v.id::text,v.encrypted_secrets FROM qag.environments e JOIN qag.environment_versions v ON v.id=e.current_version_id WHERE e.id=$1 FOR UPDATE OF e`), id).Scan(&currentRevision, &version, &sealed); err != nil {
 				return problem.Database(err)
 			}
 			if currentRevision != revision {
 				return problem.Conflict("Окружение изменилось; обновите форму")
 			}
 			if description != nil {
-				if _, err := tx.Exec(ctx, `UPDATE qag.environments SET name=$2,normalized_name=$3,description=$4,revision=revision+1,updated_at=now() WHERE id=$1`, id, name, normalized, *description); err != nil {
+				if _, err := tx.Exec(ctx, dbscope.Render(tx, `UPDATE qag.environments SET name=$2,normalized_name=$3,description=$4,revision=revision+1,updated_at=now() WHERE id=$1`), id, name, normalized, *description); err != nil {
 					return problem.Database(err)
 				}
-				result, err = scanEnvironment(tx.QueryRow(ctx, environmentSelect+` WHERE e.id=$1`, id))
+				result, err = scanEnvironment(tx.QueryRow(ctx, dbscope.Render(tx, environmentSelect+` WHERE e.id=$1`), id))
 				return err
 			}
 			var err error
@@ -128,7 +130,7 @@ func (r *Repository) saveEnvironment(ctx context.Context, id, value string, revi
 			if description != nil {
 				desc = *description
 			}
-			if _, err := tx.Exec(ctx, `INSERT INTO qag.environments(id,name,normalized_name,description) VALUES($1,$2,$3,$4)`, id, name, normalized, desc); err != nil {
+			if _, err := tx.Exec(ctx, dbscope.Render(tx, `INSERT INTO qag.environments(id,name,normalized_name,description) VALUES($1,$2,$3,$4)`), id, name, normalized, desc); err != nil {
 				return problem.Database(err)
 			}
 		}
@@ -145,13 +147,13 @@ func (r *Repository) saveEnvironment(ctx context.Context, id, value string, revi
 			return problem.Conflict("Не удалось зашифровать секреты")
 		}
 		next := currentRevision + 1
-		if _, err = tx.Exec(ctx, `INSERT INTO qag.environment_versions(id,environment_id,revision,variables,encrypted_secrets,secret_names) VALUES($1,$2,$3,$4,$5,$6)`, version, id, next, variables, sealed, secretNames(values)); err != nil {
+		if _, err = tx.Exec(ctx, dbscope.Render(tx, `INSERT INTO qag.environment_versions(id,environment_id,revision,variables,encrypted_secrets,secret_names) VALUES($1,$2,$3,$4,$5,$6)`), version, id, next, variables, sealed, secretNames(values)); err != nil {
 			return problem.Database(err)
 		}
-		if _, err = tx.Exec(ctx, `UPDATE qag.environments SET name=$2,normalized_name=$3,revision=$4,current_version_id=$5,updated_at=now() WHERE id=$1`, id, name, normalized, next, version); err != nil {
+		if _, err = tx.Exec(ctx, dbscope.Render(tx, `UPDATE qag.environments SET name=$2,normalized_name=$3,revision=$4,current_version_id=$5,updated_at=now() WHERE id=$1`), id, name, normalized, next, version); err != nil {
 			return problem.Database(err)
 		}
-		result, err = scanEnvironment(tx.QueryRow(ctx, environmentSelect+` WHERE e.id=$1`, id))
+		result, err = scanEnvironment(tx.QueryRow(ctx, dbscope.Render(tx, environmentSelect+` WHERE e.id=$1`), id))
 		return err
 	})
 	return result, err
@@ -172,13 +174,13 @@ func (r *Repository) GetResource(ctx context.Context, id string) (Resource, erro
 	if !catalog.ValidID(id) {
 		return Resource{}, problem.Invalid("id", "Некорректный ID ресурса")
 	}
-	return scanResource(r.pool.QueryRow(ctx, resourceSelect+` WHERE r.id=$1`, id))
+	return scanResource(r.pool.QueryRow(ctx, dbscope.Render(r.pool, resourceSelect+` WHERE r.id=$1`), id))
 }
 func (r *Repository) ListResources(ctx context.Context, environmentID string, limit int, cursor string) (catalog.Page[Resource], error) {
 	if _, err := r.GetEnvironment(ctx, environmentID); err != nil {
 		return catalog.Page[Resource]{}, err
 	}
-	rows, err := r.pool.Query(ctx, resourceSelect+` WHERE r.environment_id=$1`, environmentID)
+	rows, err := r.pool.Query(ctx, dbscope.Render(r.pool, resourceSelect+` WHERE r.environment_id=$1`), environmentID)
 	if err != nil {
 		return catalog.Page[Resource]{}, problem.Database(err)
 	}
@@ -233,7 +235,7 @@ func (r *Repository) SaveResource(ctx context.Context, id, environmentID, name, 
 		if !create {
 			var version, oldKind string
 			var sealed []byte
-			if err := tx.QueryRow(ctx, `SELECT r.environment_id::text,r.kind,v.id::text,v.revision,v.encrypted_secrets FROM qag.resources r JOIN qag.resource_versions v ON v.id=r.current_version_id WHERE r.id=$1 FOR UPDATE OF r`, id).Scan(&environmentID, &oldKind, &version, &currentRevision, &sealed); err != nil {
+			if err := tx.QueryRow(ctx, dbscope.Render(tx, `SELECT r.environment_id::text,r.kind,v.id::text,v.revision,v.encrypted_secrets FROM qag.resources r JOIN qag.resource_versions v ON v.id=r.current_version_id WHERE r.id=$1 FOR UPDATE OF r`), id).Scan(&environmentID, &oldKind, &version, &currentRevision, &sealed); err != nil {
 				return problem.Database(err)
 			}
 			if currentRevision != revision {
@@ -252,7 +254,7 @@ func (r *Repository) SaveResource(ctx context.Context, id, environmentID, name, 
 				return problem.Invalid("environmentId", "Выберите окружение")
 			}
 			var exists bool
-			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM qag.environments WHERE id=$1)`, environmentID).Scan(&exists); err != nil {
+			if err := tx.QueryRow(ctx, dbscope.Render(tx, `SELECT EXISTS(SELECT 1 FROM qag.environments WHERE id=$1)`), environmentID).Scan(&exists); err != nil {
 				return problem.Database(err)
 			}
 			if !exists {
@@ -261,7 +263,7 @@ func (r *Repository) SaveResource(ctx context.Context, id, environmentID, name, 
 			if kind != "http" && kind != "grpc" && kind != "postgresql" {
 				return problem.Invalid("kind", "Выберите поддерживаемый протокол")
 			}
-			if _, err := tx.Exec(ctx, `INSERT INTO qag.resources(id,environment_id,name,kind) VALUES($1,$2,$3,$4)`, id, environmentID, name, kind); err != nil {
+			if _, err := tx.Exec(ctx, dbscope.Render(tx, `INSERT INTO qag.resources(id,environment_id,name,kind) VALUES($1,$2,$3,$4)`), id, environmentID, name, kind); err != nil {
 				return problem.Database(err)
 			}
 		}
@@ -277,7 +279,7 @@ func (r *Repository) SaveResource(ctx context.Context, id, environmentID, name, 
 			if h.Source != nil {
 				var envVersion string
 				var envSealed []byte
-				if err := tx.QueryRow(ctx, `SELECT v.id::text,v.encrypted_secrets FROM qag.environments e JOIN qag.environment_versions v ON v.id=e.current_version_id WHERE e.id=$1`, environmentID).Scan(&envVersion, &envSealed); err != nil {
+				if err := tx.QueryRow(ctx, dbscope.Render(tx, `SELECT v.id::text,v.encrypted_secrets FROM qag.environments e JOIN qag.environment_versions v ON v.id=e.current_version_id WHERE e.id=$1`), environmentID).Scan(&envVersion, &envSealed); err != nil {
 					return problem.Database(err)
 				}
 				envValues, err := r.vault.Open(environmentID+":"+envVersion, envSealed)
@@ -302,13 +304,13 @@ func (r *Repository) SaveResource(ctx context.Context, id, environmentID, name, 
 			return problem.Conflict("Не удалось зашифровать секреты")
 		}
 		next := currentRevision + 1
-		if _, err = tx.Exec(ctx, `INSERT INTO qag.resource_versions(id,resource_id,revision,config,encrypted_secrets,secret_names) VALUES($1,$2,$3,$4,$5,$6)`, version, id, next, config, sealed, secretNames(values)); err != nil {
+		if _, err = tx.Exec(ctx, dbscope.Render(tx, `INSERT INTO qag.resource_versions(id,resource_id,revision,config,encrypted_secrets,secret_names) VALUES($1,$2,$3,$4,$5,$6)`), version, id, next, config, sealed, secretNames(values)); err != nil {
 			return problem.Database(err)
 		}
-		if _, err = tx.Exec(ctx, `UPDATE qag.resources SET name=$2,revision=$3,current_version_id=$4,updated_at=now() WHERE id=$1`, id, name, next, version); err != nil {
+		if _, err = tx.Exec(ctx, dbscope.Render(tx, `UPDATE qag.resources SET name=$2,revision=$3,current_version_id=$4,updated_at=now() WHERE id=$1`), id, name, next, version); err != nil {
 			return problem.Database(err)
 		}
-		result, err = scanResource(tx.QueryRow(ctx, resourceSelect+` WHERE r.id=$1`, id))
+		result, err = scanResource(tx.QueryRow(ctx, dbscope.Render(tx, resourceSelect+` WHERE r.id=$1`), id))
 		return err
 	})
 	return result, err
@@ -336,7 +338,7 @@ func (r *Repository) Freeze(ctx context.Context, environmentID string, needs map
 	}
 	defer rollback(tx)
 	snapshot := Snapshot{EnvironmentID: environmentID, ResourceVersions: map[string]string{}, Resources: []Resource{}}
-	if err = tx.QueryRow(ctx, `SELECT name,current_version_id::text FROM qag.environments WHERE id=$1`, environmentID).Scan(&snapshot.EnvironmentName, &snapshot.EnvironmentVersionID); err != nil {
+	if err = tx.QueryRow(ctx, dbscope.Render(tx, `SELECT name,current_version_id::text FROM qag.environments WHERE id=$1`), environmentID).Scan(&snapshot.EnvironmentName, &snapshot.EnvironmentVersionID); err != nil {
 		return Snapshot{}, problem.Database(err)
 	}
 	names := []string{}
@@ -345,7 +347,7 @@ func (r *Repository) Freeze(ctx context.Context, environmentID string, needs map
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		resource, err := scanResource(tx.QueryRow(ctx, resourceSelect+` WHERE r.environment_id=$1 AND r.name=$2`, environmentID, name))
+		resource, err := scanResource(tx.QueryRow(ctx, dbscope.Render(tx, resourceSelect+` WHERE r.environment_id=$1 AND r.name=$2`), environmentID, name))
 		if err != nil {
 			return Snapshot{}, problem.Invalid("environmentId", "Ресурс "+name+" не найден в выбранном окружении")
 		}
@@ -378,7 +380,7 @@ func (r *Repository) Resolve(ctx context.Context, snapshot Snapshot, name string
 	}
 	var config Config
 	var encrypted []byte
-	if err := r.pool.QueryRow(ctx, `SELECT config,encrypted_secrets FROM qag.resource_versions WHERE id=$1 AND resource_id=$2`, version, resource.ID).Scan(&config, &encrypted); err != nil {
+	if err := r.pool.QueryRow(ctx, dbscope.Render(r.pool, `SELECT config,encrypted_secrets FROM qag.resource_versions WHERE id=$1 AND resource_id=$2`), version, resource.ID).Scan(&config, &encrypted); err != nil {
 		return Resolved{}, problem.Database(err)
 	}
 	secrets, err := r.vault.Open(resource.ID+":"+version, encrypted)
@@ -387,7 +389,7 @@ func (r *Repository) Resolve(ctx context.Context, snapshot Snapshot, name string
 	}
 	var variables map[string]string
 	var envEncrypted []byte
-	if err = r.pool.QueryRow(ctx, `SELECT variables,encrypted_secrets FROM qag.environment_versions WHERE id=$1 AND environment_id=$2`, snapshot.EnvironmentVersionID, snapshot.EnvironmentID).Scan(&variables, &envEncrypted); err != nil {
+	if err = r.pool.QueryRow(ctx, dbscope.Render(r.pool, `SELECT variables,encrypted_secrets FROM qag.environment_versions WHERE id=$1 AND environment_id=$2`), snapshot.EnvironmentVersionID, snapshot.EnvironmentID).Scan(&variables, &envEncrypted); err != nil {
 		return Resolved{}, problem.Database(err)
 	}
 	envSecrets, err := r.vault.Open(snapshot.EnvironmentID+":"+snapshot.EnvironmentVersionID, envEncrypted)

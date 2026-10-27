@@ -40,6 +40,9 @@ func NewRunner() *Runner {
 
 func (r *Runner) grpc(ctx context.Context, scope string, b catalog.Block, res resources.Resolved) (Result, error) {
 	result := Result{Protocol: "grpc"}
+	if err := checkRequestGate(ctx); err != nil {
+		return result, err
+	}
 	tlsConfig, err := resources.TLS(res.Resource.Config, res.Secrets)
 	if err != nil {
 		return result, err

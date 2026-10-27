@@ -11,6 +11,8 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@pdf-lib/fontkit": "1.1.1",
+    "pdf-lib": "1.17.1",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },
@@ -25,6 +27,7 @@
     "@vitejs/plugin-react": "6.1.2",
     "jsdom": "30.1.3",
     "openapi-typescript": "7.13.0",
+    "pdfjs-dist": "6.4.299",
     "typescript": "5.9.3",
     "vite": "8.3.5",
     "vitest": "5.0.5"

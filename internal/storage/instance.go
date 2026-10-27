@@ -1,5 +1,7 @@
 package storage
 
+import "qag/internal/dbscope"
+
 import (
 	"context"
 	"errors"
@@ -30,7 +32,7 @@ func (s *Store) AcquireInstance(ctx context.Context) error {
 		return ErrUnavailable
 	}
 	var acquired bool
-	if err = conn.QueryRow(ctx, `SELECT pg_try_advisory_lock($1)`, instanceLockID).Scan(&acquired); err != nil {
+	if err = conn.QueryRow(ctx, dbscope.Render(conn, `SELECT pg_try_advisory_lock($1)`), s.Namespace.Lock(instanceLockID)).Scan(&acquired); err != nil {
 		conn.Release()
 		return ErrUnavailable
 	}
@@ -82,7 +84,7 @@ func (s *Store) releaseInstance() {
 		defer i.mu.Unlock()
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		_, _ = i.conn.Exec(ctx, `SELECT pg_advisory_unlock($1)`, instanceLockID)
+		_, _ = i.conn.Exec(ctx, dbscope.Render(i.conn, `SELECT pg_advisory_unlock($1)`), s.Namespace.Lock(instanceLockID))
 		i.conn.Release()
 	})
 }

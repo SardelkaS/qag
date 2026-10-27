@@ -2,6 +2,8 @@
 
 package storage_test
 
+import "qag/internal/dbscope"
+
 import (
 	"bytes"
 	"context"
@@ -13,11 +15,12 @@ import (
 	"image/png"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
+	"qag/internal/testfixture"
+
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
+
 	"testing"
 	"time"
 
@@ -34,7 +37,7 @@ func TestBackupRestoreCatalogHistoryAndSecret(t *testing.T) {
 	ctx, done := context.WithTimeout(context.Background(), 45*time.Second)
 	defer done()
 	cfg, err := pgx.ParseConfig(os.Getenv("QAG_TEST_DATABASE_URL"))
-	if err != nil || cfg.Database != "qag_test" {
+	if err != nil || cfg.Database != "qag" {
 		t.Fatal("isolated qag_test required")
 	}
 	docker, err := exec.LookPath("docker")
@@ -44,44 +47,15 @@ func TestBackupRestoreCatalogHistoryAndSecret(t *testing.T) {
 			docker = `C:\Program Files\Docker\Docker\resources\bin\docker.exe`
 		}
 	}
-	admin, err := pgx.ConnectConfig(ctx, cfg)
-	if err != nil {
-		t.Fatal("test database unavailable")
-	}
-	defer admin.Close(context.Background())
-	names := []string{"qag_backup_source_" + strings.ReplaceAll(catalog.NewID(), "-", ""), "qag_backup_restore_" + strings.ReplaceAll(catalog.NewID(), "-", "")}
-	var demoRole string
-	for _, name := range names {
-		if _, err = admin.Exec(ctx, "CREATE DATABASE "+pgx.Identifier{name}.Sanitize()); err != nil {
-			t.Fatal("create backup fixture database")
-		}
-		defer func(name string) {
-			c, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			_, _ = admin.Exec(c, "DROP DATABASE "+pgx.Identifier{name}.Sanitize()+" WITH (FORCE)")
-			if name == names[0] && demoRole != "" {
-				_, _ = admin.Exec(c, "DROP ROLE "+pgx.Identifier{demoRole}.Sanitize())
-			}
-		}(name)
-	}
-	open := func(db string) *storage.Store {
-		u, e := url.Parse(os.Getenv("QAG_TEST_DATABASE_URL"))
-		if e != nil {
-			t.Fatal("test URL required")
-		}
-		u.Path = "/" + db
-		s, e := storage.Open(ctx, u.String())
+	fixture := testfixture.ForTest(t, ctx)
+	open := func() *storage.Store {
+		s, e := storage.Open(ctx, fixture.AppURL)
 		if e != nil {
 			t.Fatal(e)
 		}
-		var actual string
-		if e = s.Pool.QueryRow(ctx, "SELECT current_database()").Scan(&actual); e != nil || actual != db {
-			s.Close()
-			t.Fatal("backup connection is not isolated")
-		}
 		return s
 	}
-	source := open(names[0])
+	source := open()
 	defer source.Close()
 	if err = source.Migrate(ctx); err != nil {
 		t.Fatal(err)
@@ -159,7 +133,34 @@ func TestBackupRestoreCatalogHistoryAndSecret(t *testing.T) {
 	if attempt.State != "completed" || !attempt.Result.Redacted {
 		t.Fatal("backup source execution failed")
 	}
-	if _, err = history.UpdateStep(ctx, run.ID, step, "blocked", "Сохранённый комментарий", 1); err != nil {
+	variant, err := history.SaveVariant(ctx, run.ID, doc.Steps[0].Blocks[0].ID, "", "Backup variant", 0, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	research, err := engine.VariantAttempt(ctx, run.ID, variant.ID, variant.Revision, catalog.NewID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for research.FinishedAt == nil {
+		time.Sleep(10 * time.Millisecond)
+		research, err = engine.GetAttempt(ctx, research.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	batch, err := engine.StartBatch(ctx, run.ID, catalog.NewID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for batch.State == "running" {
+		time.Sleep(10 * time.Millisecond)
+		current, readErr := history.Get(ctx, run.ID)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		batch = current.Batches[0]
+	}
+	if _, err = history.UpdateStep(ctx, run.ID, step, "not_run", "Сохранённый комментарий", 1); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = history.Finish(ctx, run.ID); err != nil {
@@ -171,19 +172,10 @@ func TestBackupRestoreCatalogHistoryAndSecret(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	demoAdminURL, _ := url.Parse(os.Getenv("QAG_TEST_DATABASE_URL"))
-	demoAdminURL.Path = "/" + names[0]
-	demoReaderURL := *demoAdminURL
-	roleName := "qag_demo_backup_" + strings.ReplaceAll(catalog.NewID(), "-", "")
-	demoReaderURL.User = url.UserPassword(roleName, catalog.NewID())
-	demoConfig, demoSecrets, err := demo.DatabaseConfig(demoAdminURL.String(), demoReaderURL.String())
+	demoConfig, demoSecrets, err := demo.DatabaseConfig(fixture.AppURL, fixture.ReaderURL)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = demo.PrepareRole(ctx, source.Pool, demoConfig, demoSecrets); err != nil {
-		t.Fatal(err)
-	}
-	demoRole = roleName
 	reader, err := demo.OpenReader(ctx, source.Pool, demoConfig, demoSecrets)
 	if err != nil {
 		t.Fatal(err)
@@ -213,7 +205,7 @@ func TestBackupRestoreCatalogHistoryAndSecret(t *testing.T) {
 		t.Fatal(err)
 	}
 	var diagnostic bytes.Buffer
-	dump := exec.CommandContext(ctx, docker, "exec", "qag-postgres-test-1", "pg_dump", "-U", cfg.User, "-d", names[0], "--format=custom", "--no-owner", "--no-acl")
+	dump := exec.CommandContext(ctx, docker, "exec", "qag-postgres-1", "pg_dump", "-U", cfg.User, "-d", "qag", "--schema", fixture.Namespace.App, "--schema", fixture.Namespace.Demo, "--format=custom", "--no-owner", "--no-acl")
 	dump.Stdout = out
 	dump.Stderr = &diagnostic
 	err = dump.Run()
@@ -222,22 +214,30 @@ func TestBackupRestoreCatalogHistoryAndSecret(t *testing.T) {
 		t.Fatal("pg_dump failed")
 	}
 	// Check the expanded dump in memory, without printing any of its contents.
-	plainDump, err := exec.CommandContext(ctx, docker, "exec", "qag-postgres-test-1", "pg_dump", "-U", cfg.User, "-d", names[0], "--format=plain", "--no-owner", "--no-acl").Output()
-	if err != nil || bytes.Contains(plainDump, []byte(derived)) || bytes.Contains(plainDump, []byte("backup-test-token")) {
+	plainDump, err := exec.CommandContext(ctx, docker, "exec", "qag-postgres-1", "pg_dump", "-U", cfg.User, "-d", "qag", "--schema", fixture.Namespace.App, "--schema", fixture.Namespace.Demo, "--format=plain", "--no-owner", "--no-acl").Output()
+	if err != nil || bytes.Contains(plainDump, []byte("CREATE SCHEMA qag;")) || bytes.Contains(plainDump, []byte("CREATE SCHEMA qag_demo;")) || bytes.Contains(plainDump, []byte(derived)) || bytes.Contains(plainDump, []byte("backup-test-token")) {
 		t.Fatal("secret leaked into dump")
+	}
+	engine.Close()
+	source.Close()
+	if err = fixture.RenameSource(ctx); err != nil {
+		t.Fatal(err)
 	}
 	in, err := os.Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer in.Close()
-	restore := exec.CommandContext(ctx, docker, "exec", "-i", "qag-postgres-test-1", "pg_restore", "-U", cfg.User, "-d", names[1], "--no-owner", "--no-acl", "--exit-on-error")
+	restore := exec.CommandContext(ctx, docker, "exec", "-i", "qag-postgres-1", "pg_restore", "-U", cfg.User, "-d", "qag", "--no-owner", "--no-acl", "--exit-on-error")
 	restore.Stdin = in
 	restore.Stderr = &diagnostic
 	if err = restore.Run(); err != nil {
 		t.Fatal("pg_restore failed")
 	}
-	restored := open(names[1])
+	if err = fixture.AdoptRestored(ctx); err != nil {
+		t.Fatal(err)
+	}
+	restored := open()
 	defer restored.Close()
 	if err = restored.Migrate(ctx); err != nil {
 		t.Fatal("restored migration checksums differ")
@@ -249,6 +249,9 @@ func TestBackupRestoreCatalogHistoryAndSecret(t *testing.T) {
 	r, err := runs.NewRepository(restored.Pool).Get(ctx, run.ID)
 	if err != nil || r.StepStates[0].Comment != "Сохранённый комментарий" || len(r.RetentionReasons) != 1 {
 		t.Fatal("history not restored")
+	}
+	if len(r.Variants) != 1 || r.Variants[0].ID != variant.ID || len(r.Batches) != 1 || r.Batches[0].ID != batch.ID || r.Batches[0].State != "completed" || len(r.Attempts) != 3 {
+		t.Fatal("variant versions, batch items or attempts not restored")
 	}
 	if len(got.Steps[0].Expected.Images) != 0 || r.Snapshot.Steps[0].Expected.Images[0].Caption != "Исходный эталон" || r.Snapshot.Steps[0].Blocks[0].Expected.Images[0].ImageID != picture.ID {
 		t.Fatal("restored historic gallery changed")
@@ -285,7 +288,7 @@ func TestBackupRestoreCatalogHistoryAndSecret(t *testing.T) {
 	if err != nil || demoResolved.Secrets["PASSWORD"] != demoSecrets["PASSWORD"] {
 		t.Fatal("restored demo secret cannot be decrypted")
 	}
-	demoConfig.Database = names[1]
+	demoConfig.Database = "qag"
 	restoredReader, err := demo.OpenReader(ctx, restored.Pool, demoConfig, demoSecrets)
 	if err != nil {
 		t.Fatal(err)
@@ -300,7 +303,7 @@ func TestBackupRestoreCatalogHistoryAndSecret(t *testing.T) {
 		t.Fatal("demo history not restored")
 	}
 	var amount string
-	if err = restoredReader.QueryRow(ctx, `SELECT amount::text FROM qag_demo.items`).Scan(&amount); err != nil || amount != "9007199254740993.125" {
+	if err = restoredReader.QueryRow(ctx, dbscope.Render(restoredReader, `SELECT amount::text FROM qag_demo.items`)).Scan(&amount); err != nil || amount != "9007199254740993.125" {
 		t.Fatal("demo schema not restored")
 	}
 }

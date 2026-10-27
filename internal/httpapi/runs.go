@@ -8,12 +8,13 @@ import (
 )
 
 func (s *Server) RegisterRuns(engine *service.Engine) {
+	s.registerReports(engine)
 	s.register("POST /api/v1/test-cases/{id}/runs", func(r *http.Request) (any, error) {
 		var body RunStart
 		if err := readJSON(r, &body); err != nil {
 			return nil, err
 		}
-		return engine.StartRun(r.Context(), r.PathValue("id"), body.EnvironmentID, body.Revision, r.Header.Get("Idempotency-Key"))
+		return engine.StartRun(r.Context(), r.PathValue("id"), body.EnvironmentID, body.Revision, r.Header.Get("Idempotency-Key"), body.ExecuteAll)
 	})
 	s.register("GET /api/v1/test-cases/{id}/runs", func(r *http.Request) (any, error) {
 		limit, cursor, err := pageOptions(r)
@@ -39,6 +40,33 @@ func (s *Server) RegisterRuns(engine *service.Engine) {
 		return engine.Runs.List(r.Context(), r.PathValue("id"), retained, limit, cursor, active)
 	})
 	s.register("GET /api/v1/runs/{id}", func(r *http.Request) (any, error) { return engine.GetRun(r.Context(), r.PathValue("id")) })
+	s.register("POST /api/v1/runs/{id}/batches", func(r *http.Request) (any, error) {
+		return engine.StartBatch(r.Context(), r.PathValue("id"), r.Header.Get("Idempotency-Key"))
+	})
+	s.register("POST /api/v1/runs/{id}/blocks/{blockId}/variants", func(r *http.Request) (any, error) {
+		var body VariantWrite
+		if err := readJSON(r, &body); err != nil {
+			return nil, err
+		}
+		return engine.Runs.SaveVariant(r.Context(), r.PathValue("id"), r.PathValue("blockId"), "", body.Name, 0, nil)
+	})
+	s.register("PATCH /api/v1/runs/{id}/variants/{variantId}", func(r *http.Request) (any, error) {
+		var body VariantWrite
+		if err := readJSON(r, &body); err != nil {
+			return nil, err
+		}
+		if body.Request == nil {
+			return nil, problem.Invalid("request", "Нужны параметры варианта")
+		}
+		return engine.Runs.SaveVariant(r.Context(), r.PathValue("id"), "", r.PathValue("variantId"), body.Name, body.Revision, body.Request)
+	})
+	s.register("POST /api/v1/runs/{id}/variants/{variantId}/attempts", func(r *http.Request) (any, error) {
+		var body AttemptStart
+		if err := readJSON(r, &body); err != nil {
+			return nil, err
+		}
+		return engine.VariantAttempt(r.Context(), r.PathValue("id"), r.PathValue("variantId"), body.Revision, r.Header.Get("Idempotency-Key"))
+	})
 	s.register("PATCH /api/v1/runs/{id}/steps/{stepId}", func(r *http.Request) (any, error) {
 		var body StepWrite
 		if err := readJSON(r, &body); err != nil {

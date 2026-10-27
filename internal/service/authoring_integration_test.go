@@ -2,6 +2,8 @@
 
 package service_test
 
+import "qag/internal/dbscope"
+
 import (
 	"bytes"
 	"context"
@@ -13,15 +15,15 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
-	"os"
+
+	"qag/internal/testfixture"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+
 	"qag/internal/catalog"
 	"qag/internal/demo"
 	"qag/internal/execution"
@@ -48,21 +50,8 @@ type authoringFixture struct {
 func authoringApp(t *testing.T) *authoringFixture {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
-	u, err := url.Parse(os.Getenv("QAG_TEST_DATABASE_URL"))
-	if err != nil || strings.Trim(u.Path, "/") != "qag_test" {
-		cancel()
-		t.Fatal("isolated test DB required")
-	}
-	admin, err := pgxpool.New(ctx, u.String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	db := "qag_authoring_" + strings.ReplaceAll(catalog.NewID(), "-", "")
-	if _, err = admin.Exec(ctx, `CREATE DATABASE `+pgx.Identifier{db}.Sanitize()); err != nil {
-		t.Fatal(err)
-	}
-	u.Path = "/" + db
-	store, err := storage.Open(ctx, u.String())
+	dbFixture := testfixture.ForTest(t, ctx)
+	store, err := storage.Open(ctx, dbFixture.AppURL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,8 +66,7 @@ func authoringApp(t *testing.T) *authoringFixture {
 		store.Close()
 		clean, done := context.WithTimeout(context.Background(), 8*time.Second)
 		defer done()
-		_, _ = admin.Exec(clean, `DROP DATABASE `+pgx.Identifier{db}.Sanitize()+` WITH (FORCE)`)
-		admin.Close()
+		_ = clean
 		cancel()
 	})
 	if err = store.Migrate(ctx); err != nil {
@@ -327,7 +315,7 @@ func TestHeaderSourcesRespectDurabilityVersionsAndRunScope(t *testing.T) {
 		t.Fatal("delivery repeated source")
 	}
 	var stored string
-	if err = f.store.Pool.QueryRow(f.ctx, `SELECT result::text||safe_request::text FROM qag.call_attempts WHERE id=$1`, a.ID).Scan(&stored); err != nil {
+	if err = f.store.Pool.QueryRow(f.ctx, dbscope.Render(f.store.Pool, `SELECT result::text||safe_request::text FROM qag.call_attempts WHERE id=$1`), a.ID).Scan(&stored); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(stored, "derived-secret-1") || strings.Contains(stored, "fixture-auth-password") {
@@ -377,7 +365,7 @@ func TestHeaderSourcesRespectDurabilityVersionsAndRunScope(t *testing.T) {
 	}
 	// A lost result write must retry only persistence, including after a source
 	// has already issued a one-time token.
-	_, err = f.store.Pool.Exec(f.ctx, `CREATE FUNCTION qag.reject_authoring_result() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.state NOT IN ('queued','running') THEN RAISE EXCEPTION 'result write refused'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_authoring_result BEFORE UPDATE ON qag.call_attempts FOR EACH ROW EXECUTE FUNCTION qag.reject_authoring_result()`, pgx.QueryExecModeSimpleProtocol)
+	_, err = f.store.Pool.Exec(f.ctx, dbscope.Render(f.store.Pool, `CREATE FUNCTION qag.reject_authoring_result() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.state NOT IN ('queued','running') THEN RAISE EXCEPTION 'result write refused'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_authoring_result BEFORE UPDATE ON qag.call_attempts FOR EACH ROW EXECUTE FUNCTION qag.reject_authoring_result()`), pgx.QueryExecModeSimpleProtocol)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -399,7 +387,7 @@ func TestHeaderSourcesRespectDurabilityVersionsAndRunScope(t *testing.T) {
 	if !pending.PersistencePending || tokens.Load() != 3 || requests.Load() != 4 {
 		t.Fatal("source result was not visibly pending or network repeated")
 	}
-	_, err = f.store.Pool.Exec(f.ctx, `DROP TRIGGER reject_authoring_result ON qag.call_attempts; DROP FUNCTION qag.reject_authoring_result()`, pgx.QueryExecModeSimpleProtocol)
+	_, err = f.store.Pool.Exec(f.ctx, dbscope.Render(f.store.Pool, `DROP TRIGGER reject_authoring_result ON qag.call_attempts; DROP FUNCTION qag.reject_authoring_result()`), pgx.QueryExecModeSimpleProtocol)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -408,7 +396,7 @@ func TestHeaderSourcesRespectDurabilityVersionsAndRunScope(t *testing.T) {
 		t.Fatal("source or main request replayed after persistence recovery")
 	}
 	// Simulate failed durable registration: there must be no token request.
-	_, err = f.store.Pool.Exec(f.ctx, `CREATE FUNCTION qag.reject_authoring_attempt() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'test begin rejected'; END $$; CREATE TRIGGER reject_authoring_attempt BEFORE INSERT ON qag.call_attempts FOR EACH ROW EXECUTE FUNCTION qag.reject_authoring_attempt()`, pgx.QueryExecModeSimpleProtocol)
+	_, err = f.store.Pool.Exec(f.ctx, dbscope.Render(f.store.Pool, `CREATE FUNCTION qag.reject_authoring_attempt() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'test begin rejected'; END $$; CREATE TRIGGER reject_authoring_attempt BEFORE INSERT ON qag.call_attempts FOR EACH ROW EXECUTE FUNCTION qag.reject_authoring_attempt()`), pgx.QueryExecModeSimpleProtocol)
 	if err != nil {
 		t.Fatal(err)
 	}

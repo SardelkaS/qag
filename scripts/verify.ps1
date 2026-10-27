@@ -3,7 +3,8 @@ $qagRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $qagRoot
 try {
     & "$PSScriptRoot/proto.ps1"
-    & "$PSScriptRoot/build.ps1"
+    $qagVerifyBinary = Join-Path $qagRoot '.local/verify/qag.exe'
+    & "$PSScriptRoot/build.ps1" -OutputPath $qagVerifyBinary
     & "$PSScriptRoot/contracts.ps1"
     & go test ./...
     if ($LASTEXITCODE -ne 0) { throw 'Go tests failed' }
@@ -19,7 +20,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Chromium installation failed' }
     } finally { Pop-Location }
     & "$PSScriptRoot/test-integration.ps1"
-    & "$PSScriptRoot/test-e2e.ps1"
+    & "$PSScriptRoot/test-e2e.ps1" -BinaryPath $qagVerifyBinary -SkipBuild
     & openspec.cmd validate --all --strict --no-interactive
     if ($LASTEXITCODE -ne 0) { throw 'OpenSpec validation failed' }
     Write-Host 'Все проверки пройдены.'

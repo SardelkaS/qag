@@ -1,5 +1,7 @@
 package demo
 
+import "qag/internal/dbscope"
+
 import (
 	"context"
 	_ "embed"
@@ -27,7 +29,7 @@ type Service struct {
 
 func (s *Service) Ready(ctx context.Context) error {
 	var ok int
-	return s.Pool.QueryRow(ctx, `SELECT 1 FROM qag_demo.items WHERE id='example-001'`).Scan(&ok)
+	return s.Pool.QueryRow(ctx, dbscope.Render(s.Pool, `SELECT 1 FROM qag_demo.items WHERE id='example-001'`)).Scan(&ok)
 }
 
 type Item struct {
@@ -44,7 +46,7 @@ func (s *Service) read(ctx context.Context, id string) (Item, error) {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	var i Item
-	err := s.Pool.QueryRow(ctx, `SELECT id,name,status,amount::text FROM qag_demo.items WHERE id=$1`, id).Scan(&i.ID, &i.Name, &i.Status, &i.Amount)
+	err := s.Pool.QueryRow(ctx, dbscope.Render(s.Pool, `SELECT id,name,status,amount::text FROM qag_demo.items WHERE id=$1`), id).Scan(&i.ID, &i.Name, &i.Status, &i.Amount)
 	return i, err
 }
 func (s *Service) GetItem(ctx context.Context, r *demopb.GetItemRequest) (*demopb.Item, error) {

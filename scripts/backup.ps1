@@ -12,7 +12,7 @@ $qagDocker = & "$PSScriptRoot/docker-path.ps1"
 New-Item -ItemType Directory -Path $qagBackupDir -Force | Out-Null
 $qagRemote = '/tmp/qag-backup-' + [guid]::NewGuid().ToString('N') + '.dump'
 try {
-    & $qagDocker exec qag-postgres-1 pg_dump -U qag -d qag --format=custom --no-owner --no-acl -f $qagRemote
+    & $qagDocker exec qag-postgres-1 pg_dump -U qag -d qag --schema=qag --schema=qag_demo --format=custom --no-owner --no-acl -f $qagRemote
     if ($LASTEXITCODE -ne 0) { throw 'pg_dump failed' }
     & $qagDocker cp "qag-postgres-1:$qagRemote" $qagDumpPath
     if ($LASTEXITCODE -ne 0) { throw 'Backup copy failed' }

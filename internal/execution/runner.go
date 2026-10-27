@@ -143,6 +143,9 @@ func headers(values map[string][]string) []catalog.KeyValue {
 
 func (r *Runner) http(ctx context.Context, b catalog.Block, res resources.Resolved) (Result, error) {
 	result := Result{Protocol: "http"}
+	if err := checkRequestGate(ctx); err != nil {
+		return result, err
+	}
 	base, err := url.Parse(res.Resource.Config.BaseURL)
 	if err != nil {
 		return result, fmt.Errorf("некорректный HTTP-ресурс")

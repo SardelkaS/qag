@@ -247,6 +247,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runs/{id}/batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Выполнить все исходные вызовы */
+        post: operations["startBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/{id}/blocks/{blockId}/attempts": {
         parameters: {
             query?: never;
@@ -258,6 +275,23 @@ export interface paths {
         put?: never;
         /** Выполнить блок прогона */
         post: operations["startRunAttempt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/runs/{id}/blocks/{blockId}/variants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Создать исследовательский вариант */
+        post: operations["createVariant"];
         delete?: never;
         options?: never;
         head?: never;
@@ -298,6 +332,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runs/{id}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Подготовить согласованный отчёт */
+        get: operations["getRunReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/runs/{id}/report/clipboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Скопировать оформленный отчёт в Windows clipboard */
+        post: operations["copyRunReport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/{id}/save": {
         parameters: {
             query?: never;
@@ -330,6 +398,40 @@ export interface paths {
         head?: never;
         /** Сохранить ручной статус и комментарий */
         patch: operations["updateRunStep"];
+        trace?: never;
+    };
+    "/runs/{id}/variants/{variantId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Сохранить версию варианта */
+        patch: operations["saveVariant"];
+        trace?: never;
+    };
+    "/runs/{id}/variants/{variantId}/attempts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Выполнить сохранённый вариант */
+        post: operations["startVariantAttempt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/session": {
@@ -454,6 +556,9 @@ export interface components {
             name?: string;
         };
         Attempt: {
+            batchId?: string;
+            /** Format: int64 */
+            batchPosition?: number;
             blockId: string;
             /** Format: int64 */
             durationMs: number;
@@ -476,11 +581,36 @@ export interface components {
             /** @enum {string} */
             state: "queued" | "running" | "completed" | "error" | "timed_out" | "cancelled" | "interrupted";
             testCaseId: string;
+            variantId?: string;
+            variantVersionId?: string;
         };
         AttemptStart: {
             environmentId?: string;
             /** Format: int64 */
             revision?: number;
+        };
+        Batch: {
+            /** Format: int64 */
+            completed: number;
+            /** Format: date-time */
+            finishedAt?: string;
+            id: string;
+            items: components["schemas"]["BatchItem"][];
+            /** Format: int64 */
+            problems: number;
+            runId: string;
+            /** Format: date-time */
+            startedAt: string;
+            /** @enum {string} */
+            state: "running" | "completed" | "cancelled" | "interrupted";
+        };
+        BatchItem: {
+            attemptId?: string;
+            blockId: string;
+            /** Format: int64 */
+            position: number;
+            /** @enum {string} */
+            state: "pending" | "running" | "completed" | "cancelled" | "interrupted";
         };
         Block: {
             expected: components["schemas"]["Expectation"];
@@ -493,6 +623,16 @@ export interface components {
             sql?: components["schemas"]["SQLRequest"];
             /** Format: int64 */
             timeoutSeconds: number;
+        };
+        ClipboardResult: {
+            copied: boolean;
+            native: boolean;
+        };
+        ClipboardWrite: {
+            hash: string;
+            includeExpected: boolean;
+            parts: components["schemas"]["PNGPart"][];
+            snapshotId: string;
         };
         Column: {
             name: string;
@@ -657,10 +797,123 @@ export interface components {
             name: string;
             value: string;
         };
+        PNGPart: {
+            dataBase64: string;
+            groupId: string;
+            /** Format: int64 */
+            part: number;
+            /** Format: int64 */
+            total: number;
+        };
         ProtoBundle: {
             files: {
                 [key: string]: string;
             };
+            /** Format: int64 */
+            revision: number;
+        };
+        Report: {
+            batches: components["schemas"]["Batch"][];
+            clipboardNative: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            document: components["schemas"]["ReportNode"][];
+            environmentName: string;
+            /** Format: date-time */
+            finishedAt?: string;
+            hash: string;
+            images: components["schemas"]["ReportImage"][];
+            includeExpected: boolean;
+            partial: boolean;
+            runId: string;
+            snapshotId: string;
+            /** Format: date-time */
+            startedAt: string;
+            status: string;
+            steps: components["schemas"]["ReportStep"][];
+            title: string;
+        };
+        ReportAttempt: {
+            /** Format: int64 */
+            durationMs: number;
+            expected?: components["schemas"]["Expectation"];
+            /** Format: date-time */
+            finishedAt?: string;
+            id: string;
+            /** Format: int64 */
+            number: number;
+            request: components["schemas"]["ReportRequest"];
+            result?: components["schemas"]["ExecutionResult"];
+            /** Format: date-time */
+            startedAt: string;
+            state: string;
+            variantVersionId?: string;
+        };
+        ReportCall: {
+            attempts: components["schemas"]["ReportAttempt"][];
+            expected?: components["schemas"]["Expectation"];
+            id: string;
+            kind: string;
+            request: components["schemas"]["ReportRequest"];
+            resource: string;
+            variants: components["schemas"]["ReportVariant"][];
+        };
+        ReportImage: {
+            data: string;
+            /** Format: int64 */
+            height: number;
+            id: string;
+            mime: string;
+            sha256: string;
+            /** Format: int64 */
+            width: number;
+        };
+        ReportNode: {
+            callId?: string;
+            columns?: components["schemas"]["Column"][];
+            id: string;
+            imageId?: string;
+            /** @enum {string} */
+            kind: "heading" | "text" | "code" | "table" | "image";
+            /** Format: int64 */
+            level?: number;
+            rows?: components["schemas"]["TypedValue"][][];
+            status?: string;
+            text: string;
+        };
+        ReportRequest: {
+            grpc?: components["schemas"]["GRPCRequest"];
+            http?: components["schemas"]["HTTPRequest"];
+            sql?: components["schemas"]["SQLRequest"];
+            /** Format: int64 */
+            timeoutSeconds: number;
+        };
+        ReportStep: {
+            calls: components["schemas"]["ReportCall"][];
+            comment: string;
+            description: string;
+            expected?: components["schemas"]["StepExpectation"];
+            id: string;
+            legacyStatus?: string;
+            /** @enum {string} */
+            status: "not_run" | "passed" | "failed";
+            title: string;
+        };
+        ReportVariant: {
+            attempts: components["schemas"]["ReportAttempt"][];
+            id: string;
+            name: string;
+            /** Format: int64 */
+            position: number;
+            /** Format: int64 */
+            revision: number;
+            versions: components["schemas"]["ReportVariantVersion"][];
+        };
+        ReportVariantVersion: {
+            /** Format: date-time */
+            createdAt: string;
+            id: string;
+            request: components["schemas"]["ReportRequest"];
             /** Format: int64 */
             revision: number;
         };
@@ -711,6 +964,7 @@ export interface components {
         };
         Run: {
             attempts: components["schemas"]["Attempt"][];
+            batches: components["schemas"]["Batch"][];
             environmentId: string;
             environmentName: string;
             /** Format: date-time */
@@ -725,6 +979,7 @@ export interface components {
             status: "running" | "passed" | "failed" | "blocked" | "cancelled" | "interrupted";
             stepStates: components["schemas"]["StepState"][];
             testCaseId: string;
+            variants: components["schemas"]["Variant"][];
         };
         RunPage: {
             items: components["schemas"]["Run"][];
@@ -732,6 +987,7 @@ export interface components {
         };
         RunStart: {
             environmentId: string;
+            executeAll?: boolean;
             /** Format: int64 */
             revision: number;
         };
@@ -763,10 +1019,12 @@ export interface components {
         };
         StepState: {
             comment: string;
+            /** @enum {string} */
+            legacyStatus?: "blocked" | "skipped";
             /** Format: int64 */
             revision: number;
             /** @enum {string} */
-            status: "not_run" | "passed" | "failed" | "blocked" | "skipped";
+            status: "not_run" | "passed" | "failed";
             stepId: string;
         };
         StepWrite: {
@@ -774,7 +1032,7 @@ export interface components {
             /** Format: int64 */
             revision: number;
             /** @enum {string} */
-            status: "not_run" | "passed" | "failed" | "blocked" | "skipped";
+            status: "not_run" | "passed" | "failed";
         };
         TLSConfig: {
             ca?: string;
@@ -828,6 +1086,32 @@ export interface components {
             variables: {
                 [key: string]: string;
             };
+        };
+        Variant: {
+            blockId: string;
+            currentVersionId: string;
+            id: string;
+            name: string;
+            /** Format: int64 */
+            position: number;
+            /** Format: int64 */
+            revision: number;
+            runId: string;
+            versions: components["schemas"]["VariantVersion"][];
+        };
+        VariantVersion: {
+            /** Format: date-time */
+            createdAt: string;
+            id: string;
+            request: components["schemas"]["Block"];
+            /** Format: int64 */
+            revision: number;
+        };
+        VariantWrite: {
+            name: string;
+            request?: components["schemas"]["Block"];
+            /** Format: int64 */
+            revision: number;
         };
     };
     responses: {
@@ -1436,6 +1720,35 @@ export interface operations {
             503: components["responses"]["Unavailable"];
         };
     };
+    startBatch: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Успешный ответ */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Batch"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
     startRunAttempt: {
         parameters: {
             query?: never;
@@ -1457,6 +1770,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Attempt"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    createVariant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                blockId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VariantWrite"];
+            };
+        };
+        responses: {
+            /** @description Успешный ответ */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Variant"];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -1520,6 +1865,66 @@ export interface operations {
             503: components["responses"]["Unavailable"];
         };
     };
+    getRunReport: {
+        parameters: {
+            query?: {
+                includeExpected?: boolean;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Успешный ответ */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Report"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    copyRunReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClipboardWrite"];
+            };
+        };
+        responses: {
+            /** @description Успешный ответ */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClipboardResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
     saveRun: {
         parameters: {
             query?: never;
@@ -1570,6 +1975,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Run"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    saveVariant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                variantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VariantWrite"];
+            };
+        };
+        responses: {
+            /** @description Успешный ответ */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Variant"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    startVariantAttempt: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+                variantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttemptStart"];
+            };
+        };
+        responses: {
+            /** @description Успешный ответ */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Attempt"];
                 };
             };
             400: components["responses"]["BadRequest"];

@@ -15,6 +15,7 @@ import (
 	"qag/internal/comparison"
 	"qag/internal/execution"
 	"qag/internal/httpapi"
+	"qag/internal/reporting"
 	"qag/internal/resources"
 	"qag/internal/runs"
 )
@@ -84,6 +85,9 @@ func request(name string) object {
 
 func main() {
 	for name, value := range map[string]any{
+		"ClipboardWrite": reporting.ClipboardWrite{}, "PNGPart": reporting.PNGPart{}, "ClipboardResult": reporting.ClipboardResult{},
+		"ReportNode": runs.ReportNode{},
+		"Variant":    runs.Variant{}, "VariantVersion": runs.VariantVersion{}, "Batch": runs.Batch{}, "BatchItem": runs.BatchItem{}, "VariantWrite": httpapi.VariantWrite{}, "Report": runs.Report{}, "ReportStep": runs.ReportStep{}, "ReportCall": runs.ReportCall{}, "ReportRequest": runs.ReportRequest{}, "ReportVariant": runs.ReportVariant{}, "ReportVariantVersion": runs.ReportVariantVersion{}, "ReportAttempt": runs.ReportAttempt{}, "ReportImage": runs.ReportImage{},
 		"DemoInfo": builtin.Info{}, "ImageRef": catalog.ImageRef{}, "StepExpectation": catalog.StepExpectation{}, "ValidationIssue": catalog.ValidationIssue{}, "ExpectedImage": catalog.ExpectedImage{}, "ImageUpload": catalog.ImageUpload{}, "RequestHeader": catalog.RequestHeader{}, "HTTPHeaderSource": catalog.HTTPHeaderSource{}, "HeaderSourceResult": execution.HeaderSourceResult{}, "VariablesWrite": httpapi.VariablesWrite{}, "TestCaseCreate": httpapi.TestCaseCreate{},
 		"Folder": catalog.Folder{}, "TestCase": catalog.TestCase{}, "Step": catalog.Step{}, "Block": catalog.Block{}, "KeyValue": catalog.KeyValue{}, "TypedValue": catalog.TypedValue{}, "Column": catalog.Column{}, "HTTPRequest": catalog.HTTPRequest{}, "GRPCRequest": catalog.GRPCRequest{}, "SQLRequest": catalog.SQLRequest{}, "Expectation": catalog.Expectation{},
 		"Environment": resources.Environment{}, "Resource": resources.Resource{}, "ResourceConfig": resources.Config{}, "TLSConfig": resources.TLSConfig{}, "SecretChanges": resources.SecretChanges{},
@@ -109,8 +113,13 @@ func main() {
 	setEnum("HTTPHeaderSource", "fetchMode", "per_attempt", "per_run")
 	setEnum("HTTPHeaderSource", "bodyMode", "none", "text", "json")
 	setEnum("Run", "status", "running", "passed", "failed", "blocked", "cancelled", "interrupted")
-	setEnum("StepState", "status", "not_run", "passed", "failed", "blocked", "skipped")
-	setEnum("StepWrite", "status", "not_run", "passed", "failed", "blocked", "skipped")
+	setEnum("StepState", "status", "not_run", "passed", "failed")
+	setEnum("StepState", "legacyStatus", "blocked", "skipped")
+	setEnum("ReportStep", "status", "not_run", "passed", "failed")
+	setEnum("StepWrite", "status", "not_run", "passed", "failed")
+	setEnum("Batch", "state", "running", "completed", "cancelled", "interrupted")
+	setEnum("BatchItem", "state", "pending", "running", "completed", "cancelled", "interrupted")
+	setEnum("ReportNode", "kind", "heading", "text", "code", "table", "image")
 	setEnum("Attempt", "state", "queued", "running", "completed", "error", "timed_out", "cancelled", "interrupted")
 	setEnum("ComparisonResult", "status", "match", "mismatch", "not_compared")
 	paths := object{}
@@ -126,11 +135,14 @@ func main() {
 		if id == "listFolders" {
 			parameters = append(parameters, object{"name": "archived", "in": "query", "schema": object{"type": "boolean", "default": false}})
 		}
+		if id == "getRunReport" {
+			parameters = append(parameters, object{"name": "includeExpected", "in": "query", "schema": object{"type": "boolean", "default": true}})
+		}
 		if id == "listRuns" {
 			parameters = append(parameters, object{"name": "retained", "in": "query", "schema": object{"type": "boolean"}})
 			parameters = append(parameters, object{"name": "active", "in": "query", "description": "Вернуть живой прогон для восстановления браузерной вкладки", "schema": object{"type": "boolean"}})
 		}
-		if id == "startRun" || id == "startEditorAttempt" || id == "startRunAttempt" {
+		if id == "startRun" || id == "startEditorAttempt" || id == "startRunAttempt" || id == "startBatch" || id == "startVariantAttempt" {
 			parameters = append(parameters, object{"name": "Idempotency-Key", "in": "header", "required": true, "schema": object{"type": "string", "format": "uuid"}})
 		}
 		if len(parameters) > 0 {
@@ -168,6 +180,12 @@ func main() {
 		{"post", "/test-cases/{id}/blocks/{blockId}/attempts", "startEditorAttempt", "Проверить блок из редактора", "AttemptStart", "Attempt"}, {"get", "/attempts/{id}", "getAttempt", "Получить состояние попытки", "", "Attempt"}, {"post", "/attempts/{id}/cancel", "cancelAttempt", "Отменить попытку", "", "Attempt"},
 		{"get", "/test-cases/{id}/runs", "listRuns", "История прогонов", "", "RunPage"}, {"post", "/test-cases/{id}/runs", "startRun", "Начать прогон", "RunStart", "Run"}, {"get", "/runs/{id}", "getRun", "Прочитать снимок прогона", "", "Run"},
 		{"patch", "/runs/{id}/steps/{stepId}", "updateRunStep", "Сохранить ручной статус и комментарий", "StepWrite", "Run"}, {"post", "/runs/{id}/blocks/{blockId}/attempts", "startRunAttempt", "Выполнить блок прогона", "", "Attempt"},
+		{"post", "/runs/{id}/batches", "startBatch", "Выполнить все исходные вызовы", "", "Batch"},
+		{"get", "/runs/{id}/report", "getRunReport", "Подготовить согласованный отчёт", "", "Report"},
+		{"post", "/runs/{id}/report/clipboard", "copyRunReport", "Скопировать оформленный отчёт в Windows clipboard", "ClipboardWrite", "ClipboardResult"},
+		{"post", "/runs/{id}/blocks/{blockId}/variants", "createVariant", "Создать исследовательский вариант", "VariantWrite", "Variant"},
+		{"patch", "/runs/{id}/variants/{variantId}", "saveVariant", "Сохранить версию варианта", "VariantWrite", "Variant"},
+		{"post", "/runs/{id}/variants/{variantId}/attempts", "startVariantAttempt", "Выполнить сохранённый вариант", "AttemptStart", "Attempt"},
 		{"post", "/runs/{id}/finish", "finishRun", "Завершить и оценить прогон", "", "Run"}, {"post", "/runs/{id}/cancel", "cancelRun", "Отменить прогон", "", "Run"}, {"post", "/runs/{id}/save", "saveRun", "Закрепить прогон вручную", "", "Run"}, {"delete", "/runs/{id}", "deleteRun", "Удалить несохранённый прогон", "", "Run"},
 	} {
 		add(route[0], route[1], route[2], route[3], route[4], route[5])

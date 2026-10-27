@@ -2,16 +2,16 @@
 
 package service_test
 
+import "qag/internal/dbscope"
+
 import (
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"qag/internal/catalog"
 	"qag/internal/execution"
 	"qag/internal/problem"
@@ -19,6 +19,7 @@ import (
 	"qag/internal/runs"
 	"qag/internal/service"
 	"qag/internal/storage"
+	"qag/internal/testfixture"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -52,13 +53,10 @@ func contains(items []string, value string) bool {
 }
 
 func TestRunsRetentionIdempotencyAndSnapshots(t *testing.T) {
-	dsn := os.Getenv("QAG_TEST_DATABASE_URL")
-	cfg, err := pgxpool.ParseConfig(dsn)
-	if dsn == "" || err != nil || cfg.ConnConfig.Database != "qag_test" {
-		t.Fatal("isolated qag_test required")
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
+	fixture := testfixture.ForTest(t, ctx)
+	dsn := fixture.AppURL
 	store, err := storage.Open(ctx, dsn)
 	if err != nil {
 		t.Fatal(err)
@@ -90,10 +88,10 @@ func TestRunsRetentionIdempotencyAndSnapshots(t *testing.T) {
 		}
 		defer tx.Rollback(cleanup)
 		for _, sql := range []string{`DELETE FROM qag.call_attempts WHERE test_case_id IN (SELECT id FROM qag.test_cases WHERE folder_id=$1)`, `DELETE FROM qag.runs WHERE test_case_id IN (SELECT id FROM qag.test_cases WHERE folder_id=$1)`, `DELETE FROM qag.test_cases WHERE folder_id=$1`, `DELETE FROM qag.folders WHERE id=$1`} {
-			_, _ = tx.Exec(cleanup, sql, folder.ID)
+			_, _ = tx.Exec(cleanup, dbscope.Render(tx, sql), folder.ID)
 		}
 		for _, sql := range []string{`UPDATE qag.resources SET current_version_id=NULL WHERE environment_id=$1`, `DELETE FROM qag.resource_versions WHERE resource_id IN (SELECT id FROM qag.resources WHERE environment_id=$1)`, `DELETE FROM qag.resources WHERE environment_id=$1`, `UPDATE qag.environments SET current_version_id=NULL WHERE id=$1`, `DELETE FROM qag.environment_versions WHERE environment_id=$1`, `DELETE FROM qag.environments WHERE id=$1`} {
-			_, _ = tx.Exec(cleanup, sql, env.ID)
+			_, _ = tx.Exec(cleanup, dbscope.Render(tx, sql), env.ID)
 		}
 		_ = tx.Commit(cleanup)
 	}()
@@ -135,7 +133,7 @@ func TestRunsRetentionIdempotencyAndSnapshots(t *testing.T) {
 		t.Fatal("echoed token not masked")
 	}
 	var persisted string
-	if err = store.Pool.QueryRow(ctx, `SELECT result::text FROM qag.call_attempts WHERE id=$1`, editor.ID).Scan(&persisted); err != nil || strings.Contains(persisted, "original-token") {
+	if err = store.Pool.QueryRow(ctx, dbscope.Render(store.Pool, `SELECT result::text FROM qag.call_attempts WHERE id=$1`), editor.ID).Scan(&persisted); err != nil || strings.Contains(persisted, "original-token") {
 		t.Fatal("secret persisted in result")
 	}
 	same, err := engine.EditorAttempt(ctx, caseDoc.ID, blockID, env.ID, caseDoc.Revision, key)
@@ -143,7 +141,7 @@ func TestRunsRetentionIdempotencyAndSnapshots(t *testing.T) {
 		t.Fatal("idempotent editor command repeated")
 	}
 	var count int
-	if err = store.Pool.QueryRow(ctx, `SELECT count(*) FROM qag.runs WHERE test_case_id=$1`, caseDoc.ID).Scan(&count); err != nil || count != 0 {
+	if err = store.Pool.QueryRow(ctx, dbscope.Render(store.Pool, `SELECT count(*) FROM qag.runs WHERE test_case_id=$1`), caseDoc.ID).Scan(&count); err != nil || count != 0 {
 		t.Fatal("editor trial created a run")
 	}
 	startKey := catalog.NewID()
@@ -232,14 +230,14 @@ func TestRunsRetentionIdempotencyAndSnapshots(t *testing.T) {
 	installFault := func(operation, condition string) {
 		t.Helper()
 		sql := fmt.Sprintf(`CREATE FUNCTION qag.%[1]s() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN IF %[2]s THEN RAISE EXCEPTION 'fixture write failure'; END IF; RETURN NEW; END$$; CREATE TRIGGER %[1]s BEFORE %[3]s ON qag.call_attempts FOR EACH ROW EXECUTE FUNCTION qag.%[1]s()`, faultName, condition, operation)
-		if _, err := store.Pool.Exec(ctx, sql, pgx.QueryExecModeSimpleProtocol); err != nil {
+		if _, err := store.Pool.Exec(ctx, dbscope.Render(store.Pool, sql), pgx.QueryExecModeSimpleProtocol); err != nil {
 			t.Fatal(err)
 		}
 	}
 	clearFault := func() {
 		cleanup, done := context.WithTimeout(context.Background(), 3*time.Second)
 		defer done()
-		_, _ = store.Pool.Exec(cleanup, fmt.Sprintf(`DROP TRIGGER IF EXISTS %[1]s ON qag.call_attempts;DROP FUNCTION IF EXISTS qag.%[1]s()`, faultName), pgx.QueryExecModeSimpleProtocol)
+		_, _ = store.Pool.Exec(cleanup, dbscope.Render(store.Pool, fmt.Sprintf(`DROP TRIGGER IF EXISTS %[1]s ON qag.call_attempts;DROP FUNCTION IF EXISTS qag.%[1]s()`, faultName)), pgx.QueryExecModeSimpleProtocol)
 	}
 	defer clearFault()
 	installFault("INSERT", "true")

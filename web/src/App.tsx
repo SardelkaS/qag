@@ -413,7 +413,7 @@ export default function App() {
     })
     if (open && !cases[f.id]) void reloadFolder(f.id).catch(fail)
   }
-  const startRun = () =>
+  const startRun = (executeAll = false) =>
     guard(
       () =>
         void mutate(async () => {
@@ -422,6 +422,7 @@ export default function App() {
           const value = await command<Run>(`/test-cases/${c.id}/runs`, {
             environmentId: environment.current,
             revision: c.revision,
+            executeAll,
           })
           sessionStorage.setItem(`qag.run.${c.id}`, value.id)
           if (selection.current === c.id) {
@@ -614,9 +615,24 @@ export default function App() {
                           !environmentId
                         }
                         title={!environmentId ? 'Выберите окружение' : ''}
-                        onClick={startRun}
+                        onClick={() => startRun()}
                       >
                         Начать прогон
+                      </button>
+                      <button
+                        className="button secondary"
+                        disabled={
+                          archived ||
+                          busy ||
+                          !document.steps.length ||
+                          (!dirty &&
+                            (document.validationIssues ?? []).length > 0) ||
+                          !environmentId
+                        }
+                        title={!environmentId ? 'Выберите окружение' : ''}
+                        onClick={() => startRun(true)}
+                      >
+                        Выполнить всё
                       </button>
                     </>
                   )}
@@ -713,9 +729,21 @@ export default function App() {
                       !environmentId ||
                       busy
                     }
-                    onClick={startRun}
+                    onClick={() => startRun()}
                   >
                     Начать прогон
+                  </button>
+                  <button
+                    className="button secondary"
+                    disabled={
+                      archived ||
+                      !document.steps.length ||
+                      !environmentId ||
+                      busy
+                    }
+                    onClick={() => startRun(true)}
+                  >
+                    Выполнить всё
                   </button>
                 </section>
               ))}

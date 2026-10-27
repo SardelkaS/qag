@@ -5,12 +5,14 @@ import (
 	"errors"
 	"net"
 	"net/url"
+	"qag/internal/dbscope"
 	"qag/internal/demo"
 	"strconv"
 	"strings"
 )
 
 type Config struct {
+	Namespace       dbscope.Namespace
 	Address         string
 	DatabaseURL     string
 	SecretKey       []byte
@@ -21,6 +23,11 @@ type Config struct {
 
 func LoadConfig(lookup func(string) string) (Config, error) {
 	c := Config{Address: "127.0.0.1:8080", DatabaseURL: lookup("QAG_DATABASE_URL"), DevOrigin: lookup("QAG_DEV_ORIGIN")}
+	var scopeErr error
+	c.Namespace, scopeErr = dbscope.New(lookup("QAG_SCHEMA"), lookup("QAG_DEMO_SCHEMA"), lookup("QAG_TEST_MODE") == "1")
+	if scopeErr != nil {
+		return Config{}, scopeErr
+	}
 	if address := lookup("QAG_ADDRESS"); address != "" {
 		c.Address = address
 	}
@@ -32,7 +39,7 @@ func LoadConfig(lookup func(string) string) (Config, error) {
 	}
 	u, err := url.Parse(c.DatabaseURL)
 	if err != nil || u.Hostname() == "" || (u.Scheme != "postgres" && u.Scheme != "postgresql") {
-		return Config{}, errors.New("задайте корректный QAG_DATABASE_URL для отдельной PostgreSQL-БД приложения")
+		return Config{}, errors.New("задайте корректный QAG_DATABASE_URL для PostgreSQL приложения")
 	}
 	c.DemoDatabaseURL = lookup("QAG_DEMO_DATABASE_URL")
 	if _, _, err = demo.DatabaseConfig(c.DatabaseURL, c.DemoDatabaseURL); err != nil {

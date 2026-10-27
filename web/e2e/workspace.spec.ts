@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, chromium, type Page } from '@playwright/test'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { readFile, access } from 'node:fs/promises'
 import { createWriteStream } from 'node:fs'
@@ -22,17 +22,24 @@ async function eventually(action: () => Promise<boolean>) {
   throw new Error('Локальный стенд не готов')
 }
 async function startApp() {
-  app = spawn(resolve(root, 'dist/qag.exe'), [], {
-    cwd: root,
-    windowsHide: true,
-    env: {
-      ...process.env,
-      QAG_ADDRESS: '127.0.0.1:18080',
-      QAG_DATABASE_URL: config.databaseUrl,
-      QAG_DEMO_DATABASE_URL: config.demoDatabaseUrl,
-      QAG_DEMO_GRPC_ADDRESS: '127.0.0.1:0',
+  app = spawn(
+    process.env.QAG_E2E_BINARY || resolve(root, '.local/verify/qag.exe'),
+    [],
+    {
+      cwd: root,
+      windowsHide: true,
+      env: {
+        ...process.env,
+        QAG_ADDRESS: '127.0.0.1:18080',
+        QAG_DATABASE_URL: config.databaseUrl,
+        QAG_TEST_MODE: '1',
+        QAG_SCHEMA: config.appSchema,
+        QAG_DEMO_SCHEMA: config.demoSchema,
+        QAG_DEMO_DATABASE_URL: config.demoDatabaseUrl,
+        QAG_DEMO_GRPC_ADDRESS: '127.0.0.1:0',
+      },
     },
-  })
+  )
   app.stdout?.on('data', (v) => {
     logs += String(v)
   })
@@ -301,17 +308,24 @@ test('встроенный пример: просмотр, три протоко
   const occupied = createServer()
   await new Promise<void>((r) => occupied.listen(0, '127.0.0.1', r))
   const occupiedAddress = occupied.address() as { port: number }
-  const rejected = spawn(resolve(root, 'dist/qag.exe'), [], {
-    cwd: root,
-    windowsHide: true,
-    env: {
-      ...process.env,
-      QAG_ADDRESS: '127.0.0.1:18080',
-      QAG_DATABASE_URL: config.databaseUrl,
-      QAG_DEMO_DATABASE_URL: config.demoDatabaseUrl,
-      QAG_DEMO_GRPC_ADDRESS: `127.0.0.1:${occupiedAddress.port}`,
+  const rejected = spawn(
+    process.env.QAG_E2E_BINARY || resolve(root, '.local/verify/qag.exe'),
+    [],
+    {
+      cwd: root,
+      windowsHide: true,
+      env: {
+        ...process.env,
+        QAG_ADDRESS: '127.0.0.1:18080',
+        QAG_DATABASE_URL: config.databaseUrl,
+        QAG_TEST_MODE: '1',
+        QAG_SCHEMA: config.appSchema,
+        QAG_DEMO_SCHEMA: config.demoSchema,
+        QAG_DEMO_DATABASE_URL: config.demoDatabaseUrl,
+        QAG_DEMO_GRPC_ADDRESS: `127.0.0.1:${occupiedAddress.port}`,
+      },
     },
-  })
+  )
   let rejectedLog = ''
   rejected.stderr?.on('data', (v) => (rejectedLog += String(v)))
   const exitCode = await new Promise<number | null>((r) =>
@@ -1492,4 +1506,757 @@ test('mTLS в форме ресурса и отдельного источник
   })
   expect(resource.secretNames).toContain('PRIVATE_KEY')
   expect(resource.config.tls.certificate ?? '').toBe('')
+})
+
+test('очередь и вкладки: три протокола, ручные статусы, reload и история', async ({
+  page,
+}) => {
+  const info = await api('/demo'),
+    doc = await api(`/test-cases/${info.testCaseId}`)
+  await page.goto('/')
+  await page
+    .getByRole('button', { name: 'Открыть встроенный пример', exact: true })
+    .click()
+  await page
+    .locator('.document-header')
+    .getByRole('button', { name: 'Выполнить всё', exact: true })
+    .click()
+  await expect(page.locator('.batch-progress')).toContainText('Выполнено 5/5')
+  await expect(page.locator('.batch-progress')).toContainText('проблем: 0')
+  let run = (await api(`/test-cases/${doc.id}/runs?active=true`)).items[0]
+  expect(run.stepStates.every((s: any) => s.status === 'not_run')).toBe(true)
+  expect(run.attempts).toHaveLength(5)
+  for (let index = 0; index < 3; index++) {
+    const call = page.locator('.run-view .call-block').nth(index)
+    await call.getByRole('button', { name: '+ Вариант', exact: true }).click()
+    await expect(
+      call.getByRole('tab', { name: 'Вариант 1', exact: true }),
+    ).toHaveAttribute('aria-selected', 'true')
+    await expect(call.getByText(/Исследовательский вызов/)).toBeVisible()
+    expect(await call.getByLabel('Ресурс', { exact: true }).count()).toBe(0)
+    expect(
+      await call.getByLabel('Ожидаемый HTTP-статус', { exact: true }).count(),
+    ).toBe(0)
+    if (index === 0)
+      await call
+        .getByLabel('Путь или ссылка на ресурс', { exact: true })
+        .fill('/items/missing-item')
+    if (index === 1)
+      await call
+        .getByLabel('JSON сообщения', { exact: true })
+        .fill('{"id":"missing-item"}')
+    if (index === 2)
+      await call.getByLabel('Параметр $1', { exact: true }).fill('missing-item')
+    await call
+      .getByRole('button', { name: 'Запустить вариант', exact: true })
+      .click()
+    await expect(
+      call
+        .getByText(index === 1 ? 'Не сравнено' : 'Есть различия', {
+          exact: true,
+        })
+        .first(),
+    ).toBeVisible()
+  }
+  await page.reload()
+  await page
+    .getByRole('button', { name: 'Открыть встроенный пример', exact: true })
+    .click()
+  await expect(
+    page
+      .locator('.run-view .call-block')
+      .first()
+      .getByRole('tab', { name: 'Вариант 1', exact: true }),
+  ).toHaveAttribute('aria-selected', 'true')
+  await expect(
+    page
+      .locator('.run-view .call-block')
+      .first()
+      .getByLabel('Путь или ссылка на ресурс', { exact: true }),
+  ).toHaveValue('/items/missing-item')
+  for (let i = 0; i < 5; i++) {
+    const control = page.getByLabel(`Статус шага ${i + 1}`, { exact: true })
+    await expect(control.locator('option')).toHaveCount(3)
+    await control.selectOption('passed')
+    await expect(control).toBeEnabled()
+  }
+  await page
+    .getByRole('button', { name: 'Завершить прогон', exact: true })
+    .click()
+  await expect(page.locator('.run-view .page-heading .status')).toHaveText(
+    'Пройден',
+  )
+  run = await api(`/runs/${run.id}`)
+  expect(run.status).toBe('passed')
+  expect(run.variants).toHaveLength(3)
+  expect(run.attempts.filter((a: any) => a.variantId)).toHaveLength(3)
+  expect(run.attempts.filter((a: any) => !a.variantId)).toHaveLength(5)
+  for (const theme of ['light', 'dark']) {
+    await page.getByLabel('Цветовая тема', { exact: true }).selectOption(theme)
+    await expect(
+      page.locator('.run-view .step-heading .step-status-icon.passed'),
+    ).toHaveCount(5)
+    const position = await page
+      .locator('.run-view .step-heading')
+      .first()
+      .evaluate((el) => {
+        const title = el.querySelector('h3')!.getBoundingClientRect(),
+          status = el
+            .querySelector('.step-status-control')!
+            .getBoundingClientRect()
+        return status.left > title.left
+      })
+    expect(position).toBe(true)
+  }
+  expect((await api(`/test-cases/${doc.id}`)).steps).toEqual(doc.steps)
+  await page
+    .getByRole('button', { name: 'Экспорт результата', exact: true })
+    .click()
+  const exportDialog = page.getByRole('dialog', {
+    name: 'Экспорт результата',
+    exact: true,
+  })
+  const downloadPromise = page.waitForEvent('download')
+  await exportDialog
+    .getByRole('button', { name: 'Скачать PDF', exact: true })
+    .click()
+  const downloaded = await downloadPromise
+  const reader = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  const loading = reader.getDocument({
+    data: new Uint8Array(await readFile((await downloaded.path())!)),
+  })
+  const pdf = await loading.promise
+  let text = ''
+  for (let i = 1; i <= pdf.numPages; i++)
+    text += (await (await pdf.getPage(i)).getTextContent()).items
+      .map((item: any) => item.str || '')
+      .join('')
+  expect(text.replace(/\s/g, '')).toContain('9007199254740993.125')
+  expect(text).toContain('numeric')
+  await loading.destroy()
+})
+
+test('экспорт: PDF, текст, Markdown, изображения, Word и автономная вставка', async ({
+  page,
+  context,
+}) => {
+  test.setTimeout(240_000)
+  const { createServer: httpServer } = await import('node:http')
+  const { writeFile, unlink } = await import('node:fs/promises')
+  const marker = 'КОНЕЦОТЧЕТА98765',
+    expectedMarker = 'EXPECTEDONLY753159'
+  let sources = 0,
+    calls = 0
+  const target = httpServer((req, res) => {
+    if (req.url === '/token') {
+      sources++
+      res.setHeader('Content-Type', 'application/json')
+      res.end('{"token":"export-derived-secret"}')
+      return
+    }
+    calls++
+    res.setHeader('Content-Type', 'application/json')
+    res.end(
+      '{"amount":9007199254740993123.125,"token":' +
+        JSON.stringify(req.headers.authorization || '') +
+        ',"body":"<script>never execute</script>","payload":' +
+        JSON.stringify(
+          Array.from(
+            { length: 220 },
+            (_, i) =>
+              `Длинный ответ ${i + 1}: точные данные для проверки всех частей изображения.`,
+          ),
+        ) +
+        '}',
+    )
+  })
+  await new Promise<void>((r) => target.listen(0, '127.0.0.1', r))
+  const address = target.address() as import('node:net').AddressInfo
+  const targetURL = `http://127.0.0.1:${address.port}`
+  let pasteBrowser: import('@playwright/test').Browser | undefined
+  try {
+    let env = await api('/environments', 'POST', {
+      name: 'Экспорт ' + randomUUID(),
+      description: '',
+    })
+    env = await api(`/environments/${env.id}/variables`, 'PUT', {
+      revision: env.revision,
+      variables: {},
+      secrets: { replace: { TOKEN: 'export-vault-secret' }, clear: [] },
+    })
+    await api(`/environments/${env.id}/resources`, 'POST', {
+      name: 'EXPORT',
+      kind: 'http',
+      config: { baseUrl: targetURL, headers: [], tls: { mode: 'plaintext' } },
+      secrets: { replace: {}, clear: [] },
+    })
+    const folder = await api('/folders', 'POST', {
+      name: 'Отчёты ' + randomUUID(),
+    })
+    let doc = await api(`/folders/${folder.id}/test-cases`, 'POST', {
+      name: 'Русский отчёт экспорта',
+    })
+    const imageData = await page.evaluate(() => {
+      const c = document.createElement('canvas')
+      c.width = 40
+      c.height = 20
+      const x = c.getContext('2d')!
+      x.fillStyle = '#abc78b'
+      x.fillRect(0, 0, 40, 20)
+      return c.toDataURL('image/png').split(',')[1]
+    })
+    const image = await api(`/test-cases/${doc.id}/images`, 'POST', {
+      filename: 'reference.png',
+      dataBase64: imageData,
+    })
+    const blockId = randomUUID(),
+      stepId = randomUUID()
+    doc = await api(`/test-cases/${doc.id}`, 'PUT', {
+      name: doc.name,
+      revision: doc.revision,
+      steps: [
+        {
+          id: stepId,
+          title: 'Первый шаг',
+          description: Array.from(
+            { length: 140 },
+            (_, i) => `Строка ${i + 1}: проверка длинного русского отчёта.`,
+          ).join('\n'),
+          expected: {
+            text: expectedMarker,
+            images: [{ imageId: image.id, caption: expectedMarker }],
+          },
+          blocks: [
+            {
+              id: blockId,
+              kind: 'http',
+              resource: 'EXPORT',
+              timeoutSeconds: 30,
+              http: {
+                method: 'GET',
+                path: '/main',
+                query: [],
+                headers: [
+                  {
+                    id: randomUUID(),
+                    name: 'Authorization',
+                    source: {
+                      method: 'GET',
+                      url: targetURL + '/token',
+                      query: [],
+                      headers: [],
+                      bodyMode: 'none',
+                      body: '',
+                      tls: { mode: 'plaintext' },
+                      jsonPointer: '/token',
+                      prefix: 'Bearer ',
+                      fetchMode: 'per_run',
+                    },
+                  },
+                ],
+                bodyMode: 'none',
+                body: '',
+              },
+              expected: {
+                statusCode: 200,
+                bodyMode: 'none',
+                images: [{ imageId: image.id, caption: expectedMarker }],
+              },
+            },
+          ],
+        },
+        {
+          id: randomUUID(),
+          title: 'Последний шаг',
+          description: marker + ' <img src=x onerror=alert(1)> ```',
+          blocks: [],
+        },
+      ],
+    })
+    let run = await api(
+      `/test-cases/${doc.id}/runs`,
+      'POST',
+      { environmentId: env.id, revision: doc.revision, executeAll: true },
+      randomUUID(),
+    )
+    await eventually(async () => {
+      run = await api(`/runs/${run.id}`)
+      return run.batches[0].state === 'completed'
+    })
+    const v = await api(`/runs/${run.id}/blocks/${blockId}/variants`, 'POST', {
+      name: 'Исследование',
+    })
+    await api(
+      `/runs/${run.id}/variants/${v.id}/attempts`,
+      'POST',
+      { revision: v.revision },
+      randomUUID(),
+    )
+    await eventually(async () => {
+      run = await api(`/runs/${run.id}`)
+      return (
+        run.attempts.length === 2 &&
+        run.attempts.every((a: any) => a.finishedAt)
+      )
+    })
+    expect(sources).toBe(1)
+    expect(calls).toBe(2)
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: {
+          writeText: async (text: string) => {
+            ;(window as any).__copied = text
+          },
+        },
+      })
+    })
+    await page.goto('/')
+    await page
+      .getByRole('button', {
+        name: 'Папка ' + folder.name,
+        exact: true,
+      })
+      .click()
+      .catch(async () => {
+        await page.getByText(folder.name, { exact: true }).first().click()
+      })
+    await page
+      .getByRole('button', {
+        name: 'Открыть тест-кейс ' + doc.name,
+        exact: true,
+      })
+      .click()
+    await page
+      .getByRole('button', { name: 'Экспорт результата', exact: true })
+      .click()
+    const dialog = page.getByRole('dialog', {
+      name: 'Экспорт результата',
+      exact: true,
+    })
+    await expect(dialog.getByText(/Частичный отчёт/)).toBeVisible()
+    const reader = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    for (const include of [true, false]) {
+      await dialog
+        .getByLabel('Включать ожидаемые результаты')
+        .setChecked(include)
+      await dialog.getByLabel('Формат экспорта').selectOption('pdf')
+      const downloadPromise = page.waitForEvent('download')
+      await dialog
+        .getByRole('button', { name: 'Скачать PDF', exact: true })
+        .click()
+      const download = await downloadPromise
+      expect(download.suggestedFilename()).toMatch(/\.pdf$/)
+      const path = await download.path()
+      const loading = reader.getDocument({
+        data: new Uint8Array(await readFile(path!)),
+        useSystemFonts: false,
+      })
+      const pdf = await loading.promise
+      expect(pdf.numPages).toBeGreaterThan(3)
+      let text = '',
+        images = 0
+      for (let index = 1; index <= pdf.numPages; index++) {
+        const p = await pdf.getPage(index)
+        text += (await p.getTextContent()).items
+          .map((i: any) => i.str || '')
+          .join('')
+        const ops = await p.getOperatorList()
+        images += ops.fnArray.filter(
+          (fn: number) => fn === reader.OPS.paintImageXObject,
+        ).length
+      }
+      expect(text).toContain('Русский')
+      expect(text.replace(/\s/g, '')).toContain('9007199254740993123.125')
+      expect(text).toContain(marker)
+      expect(text.includes(expectedMarker)).toBe(include)
+      expect(images > 0).toBe(include)
+      expect(text).not.toContain('export-derived-secret')
+      expect(text).not.toContain('export-vault-secret')
+      await loading.destroy()
+      for (const format of ['text', 'markdown']) {
+        await dialog.getByLabel('Формат экспорта').selectOption(format)
+        await dialog
+          .getByRole('button', { name: 'Скопировать', exact: true })
+          .click()
+        const text = await page.evaluate(
+          () => (window as any).__copied as string,
+        )
+        expect(text).toContain(marker)
+        expect(text).toContain('9007199254740993123.125')
+        expect(text.includes(expectedMarker)).toBe(include)
+        expect(text).toContain('Исследовательский')
+        expect(text).not.toContain('export-derived-secret')
+      }
+    }
+    // Clipboard rejection provides selectable data and never announces success.
+    await page.evaluate(() => {
+      ;(navigator.clipboard as any).writeText = async () => {
+        throw new Error('denied')
+      }
+    })
+    await dialog.getByLabel('Формат экспорта').selectOption('text')
+    await dialog
+      .getByRole('button', { name: 'Скопировать', exact: true })
+      .click()
+    await expect(dialog.getByLabel('Текст для копирования')).toBeVisible()
+    await expect(dialog.getByRole('alert')).toContainText('недоступен')
+    await dialog.getByRole('button', { name: 'Закрыть', exact: true }).click()
+    for (const s of run.stepStates)
+      await api(`/runs/${run.id}/steps/${s.stepId}`, 'PATCH', {
+        status: 'passed',
+        comment: 'Редактируемый русский комментарий',
+        revision: s.revision,
+      })
+    run = await api(`/runs/${run.id}/finish`, 'POST')
+    await page
+      .getByRole('button', { name: 'Экспорт результата', exact: true })
+      .click()
+    // Capture the UI's prepared command; the isolated STA helper publishes it,
+    // tests real browser/Word paste, stops only this test app, and restores clipboard.
+    let payload: any
+    pasteBrowser = await chromium.launch({
+      headless: false,
+      args: ['--window-position=-32000,-32000', '--window-size=300,300'],
+    })
+    const pastePage = await pasteBrowser.newPage()
+    await pastePage.setContent(
+      '<div id="paste-target" contenteditable="true" style="white-space:pre-wrap"></div>',
+    )
+    await page.route('**/report/clipboard', async (route) => {
+      payload = route.request().postDataJSON()
+      await route.fulfill({ json: { copied: true, native: true } })
+    })
+    for (const include of [true, false]) {
+      payload = undefined
+      await dialog
+        .getByLabel('Включать ожидаемые результаты')
+        .setChecked(include)
+      await dialog.getByLabel('Формат экспорта').selectOption('rich')
+      await dialog
+        .getByRole('button', { name: 'Скопировать', exact: true })
+        .click()
+      await expect.poll(() => payload?.parts?.length || 0).toBeGreaterThan(2)
+      expect(
+        payload.parts.some(
+          (part: any) => part.groupId.startsWith('attempt:') && part.total > 1,
+        ),
+      ).toBe(true)
+      const prefix = resolve(root, '.local/word-' + randomUUID()),
+        payloadPath = prefix + '.json',
+        ready = prefix + '.ready',
+        done = prefix + '.done'
+      await writeFile(
+        payloadPath,
+        JSON.stringify({
+          url: base + `/api/v1/runs/${run.id}/report/clipboard`,
+          csrf,
+          body: payload,
+          expectedText: 'Редактируемый русский комментарий',
+        }),
+      )
+      const child = spawn(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-STA',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-File',
+          resolve(root, 'scripts/test-word-paste.ps1'),
+          '-PayloadPath',
+          payloadPath,
+          '-ApplicationPid',
+          String(app.pid),
+          '-BinaryPath',
+          process.env.QAG_E2E_BINARY || resolve(root, '.local/verify/qag.exe'),
+          '-ReadyPath',
+          ready,
+          '-DonePath',
+          done,
+        ],
+        { cwd: root, windowsHide: true },
+      )
+      let output = ''
+      child.stdout.on('data', (v) => {
+        output += String(v)
+      })
+      child.stderr.on('data', (v) => {
+        output += String(v)
+      })
+      const closed = new Promise<number | null>((r) => child.once('close', r))
+      let pasted = false
+      let pasteError: unknown
+      try {
+        await eventually(async () => {
+          await access(ready)
+          return true
+        })
+        await pastePage.evaluate(() => {
+          document.addEventListener(
+            'paste',
+            (e) => {
+              ;(window as any).__pasteMeta = {
+                types: [...(e.clipboardData?.types || [])],
+                htmlLength: e.clipboardData?.getData('text/html').length || 0,
+              }
+            },
+            { once: true },
+          )
+          const el = document.getElementById('paste-target')!
+          el.innerHTML = ''
+          el.focus()
+        })
+        await pastePage.locator('#paste-target').press('Control+V')
+        await expect(pastePage.locator('#paste-target img')).toHaveCount(
+          payload.parts.length,
+        )
+        await expect(pastePage.locator('#paste-target')).toContainText(
+          'Редактируемый русский комментарий',
+        )
+        pasted = await pastePage
+          .locator('#paste-target img')
+          .evaluateAll((images) =>
+            images.every((i) =>
+              (i as HTMLImageElement).src.startsWith('data:image/png;base64,'),
+            ),
+          )
+      } catch (e) {
+        pasteError = e
+        console.log(
+          'Clipboard paste metadata:',
+          await pastePage.evaluate(() => (window as any).__pasteMeta),
+        )
+      } finally {
+        await writeFile(done, 'done')
+        const exit = await closed
+        expect(exit, output).toBe(0)
+        await startApp()
+        await Promise.all(
+          [unlink(payloadPath), unlink(ready), unlink(done)].map((p) =>
+            p.catch(() => {}),
+          ),
+        )
+      }
+      if (pasteError) throw pasteError
+      expect(pasted).toBe(true)
+      await expect(
+        api(`/runs/${run.id}/report/clipboard`, 'POST', payload),
+      ).rejects.toThrow('409')
+      await dialog
+        .getByRole('button', { name: 'Подготовить заново', exact: true })
+        .click()
+    }
+    await api(`/test-cases/${doc.id}`, 'PATCH', { archived: true })
+    await api(`/folders/${folder.id}`, 'PATCH', { archived: true })
+    const archived = await api(`/runs/${run.id}/report?includeExpected=false`)
+    expect(archived.partial).toBe(false)
+    expect(JSON.stringify(archived)).not.toContain(expectedMarker)
+    expect(calls).toBe(2)
+    expect(sources).toBe(1)
+  } finally {
+    await pasteBrowser?.close()
+    await new Promise<void>((r) => target.close(() => r()))
+  }
+})
+
+test('восстановление очереди после источника и SQL не повторяет сеть', async ({
+  page,
+}) => {
+  const folder = await api('/folders', 'POST', {
+    name: 'Очередь восстановления ' + randomUUID(),
+  })
+  for (const protocol of ['source', 'sql']) {
+    const env = await api('/environments', 'POST', {
+      name: 'Recovery ' + protocol + ' ' + randomUUID(),
+      description: '',
+    })
+    await api(
+      `/environments/${env.id}/resources`,
+      'POST',
+      protocol === 'source'
+        ? {
+            name: 'TARGET',
+            kind: 'http',
+            config: {
+              baseUrl: config.http + '/api',
+              headers: [],
+              tls: { mode: 'plaintext' },
+            },
+            secrets: { replace: {}, clear: [] },
+          }
+        : {
+            name: 'TARGET',
+            kind: 'postgresql',
+            config: {
+              address: config.target.address,
+              database: config.target.database,
+              username: config.target.username,
+              headers: [],
+              tls: { mode: 'plaintext' },
+            },
+            secrets: {
+              replace: { PASSWORD: config.target.password },
+              clear: [],
+            },
+          },
+    )
+    let doc = await api(`/folders/${folder.id}/test-cases`, 'POST', {
+      name: 'Recovery ' + protocol,
+    })
+    const seq = `"${config.targetSchema}"."effect_sequence"`
+    const block = (second = false) =>
+      protocol === 'source'
+        ? {
+            id: randomUUID(),
+            kind: 'http',
+            resource: 'TARGET',
+            timeoutSeconds: 120,
+            http: {
+              method: 'POST',
+              path: '/task',
+              query: [],
+              headers: second
+                ? []
+                : [
+                    {
+                      id: randomUUID(),
+                      name: 'Authorization',
+                      source: {
+                        method: 'GET',
+                        url: config.http + '/token?delay=1',
+                        query: [],
+                        headers: [],
+                        bodyMode: 'none',
+                        body: '',
+                        tls: { mode: 'plaintext' },
+                        jsonPointer: '/tokens/0/value',
+                        fetchMode: 'per_run',
+                      },
+                    },
+                  ],
+              bodyMode: 'none',
+              body: '',
+            },
+            expected: { statusCode: 200, bodyMode: 'none' },
+          }
+        : {
+            id: randomUUID(),
+            kind: 'postgresql',
+            resource: 'TARGET',
+            timeoutSeconds: 120,
+            sql: {
+              mode: 'rows',
+              query: second
+                ? `SELECT nextval('${seq}')::text AS effect`
+                : `WITH effect AS MATERIALIZED (SELECT nextval('${seq}') AS n) SELECT n::text AS effect, pg_sleep(60)::text AS pause FROM effect`,
+              parameters: [],
+            },
+            expected: { bodyMode: 'rows', columns: [], rows: [] },
+          }
+    const step = randomUUID()
+    doc = await api(`/test-cases/${doc.id}`, 'PUT', {
+      name: doc.name,
+      revision: doc.revision,
+      steps: [
+        {
+          id: step,
+          description: 'Сохранить ручную оценку',
+          blocks: [block(), block(true)],
+        },
+      ],
+    })
+    const httpBefore = await (await fetch(config.http + '/stats')).json(),
+      sqlBefore = await (await fetch(config.sqlEffectURL)).json()
+    let run = await api(
+      `/test-cases/${doc.id}/runs`,
+      'POST',
+      { environmentId: env.id, revision: doc.revision, executeAll: true },
+      randomUUID(),
+    )
+    await api(`/runs/${run.id}/steps/${step}`, 'PATCH', {
+      status: 'passed',
+      comment: 'До остановки очереди',
+      revision: 1,
+    })
+    await eventually(async () =>
+      protocol === 'source'
+        ? (await (await fetch(config.http + '/stats')).json()).sources ===
+          httpBefore.sources + 1
+        : (await (await fetch(config.sqlEffectURL)).json()).effects ===
+          sqlBefore.effects + 1,
+    )
+    await stopApp()
+    await startApp()
+    run = await api(`/runs/${run.id}`)
+    expect(run.status).toBe('interrupted')
+    expect(run.batches[0].state).toBe('interrupted')
+    expect(
+      run.batches[0].items.every((i: any) => i.state === 'interrupted'),
+    ).toBe(true)
+    expect(run.attempts).toHaveLength(1)
+    expect(run.attempts[0].state).toBe('interrupted')
+    expect(run.stepStates[0].comment).toBe('До остановки очереди')
+    expect(run.retentionReasons).toContain('first_run')
+    await api(`/runs/${run.id}/report?includeExpected=false`)
+    await pause(300)
+    const httpAfter = await (await fetch(config.http + '/stats')).json(),
+      sqlAfter = await (await fetch(config.sqlEffectURL)).json()
+    expect(httpAfter.calls).toBe(httpBefore.calls)
+    expect(httpAfter.sources).toBe(
+      httpBefore.sources + (protocol === 'source' ? 1 : 0),
+    )
+    expect(sqlAfter.effects).toBe(
+      sqlBefore.effects + (protocol === 'sql' ? 1 : 0),
+    )
+    if (protocol === 'source') {
+      const later = await api(
+        `/test-cases/${doc.id}/runs`,
+        'POST',
+        { environmentId: env.id, revision: doc.revision, executeAll: true },
+        randomUUID(),
+      )
+      await api(`/runs/${later.id}/cancel`, 'POST')
+      await api(`/runs/${later.id}`, 'DELETE')
+      await expect(api(`/runs/${later.id}`)).rejects.toThrow('404')
+    }
+  }
+  const env = await api('/environments', 'POST', {
+    name: 'Manual-only ' + randomUUID(),
+    description: '',
+  })
+  let manual = await api(`/folders/${folder.id}/test-cases`, 'POST', {
+    name: 'Ручной без вызовов',
+  })
+  manual = await api(`/test-cases/${manual.id}`, 'PUT', {
+    name: manual.name,
+    revision: manual.revision,
+    steps: [{ id: randomUUID(), description: 'Осмотреть вручную', blocks: [] }],
+  })
+  const run = await api(
+    `/test-cases/${manual.id}/runs`,
+    'POST',
+    { environmentId: env.id, revision: manual.revision, executeAll: true },
+    randomUUID(),
+  )
+  expect(run.batches[0].state).toBe('completed')
+  expect(run.batches[0].items).toHaveLength(0)
+  expect(run.stepStates[0].status).toBe('not_run')
+  await page.goto('/')
+  await page
+    .getByRole('button', { name: 'Папка ' + folder.name, exact: true })
+    .click()
+  await page
+    .getByRole('button', {
+      name: 'Открыть тест-кейс ' + manual.name,
+      exact: true,
+    })
+    .click()
+  await expect(page.locator('.batch-progress')).toContainText('Выполнено 0/0')
+  await page
+    .getByRole('button', { name: 'Отменить прогон', exact: true })
+    .click()
+  await expect(page.locator('.run-view .page-heading .status')).toHaveText(
+    'Отменён',
+  )
 })

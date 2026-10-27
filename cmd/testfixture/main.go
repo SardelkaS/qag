@@ -1,4 +1,4 @@
-// testfixture creates an isolated, disposable database and local protocol targets.
+// testfixture creates isolated disposable schemas and local protocol targets.
 package main
 
 import (
@@ -10,13 +10,11 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
+
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"qag/internal/catalog"
-	"qag/internal/demo"
 	"qag/internal/testfixture"
 )
 
@@ -31,47 +29,21 @@ func run() error {
 	flag.Parse()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	u, err := url.Parse(os.Getenv("QAG_TEST_DATABASE_URL"))
-	if err != nil || strings.Trim(u.Path, "/") != "qag_test" {
-		return fmt.Errorf("test database required")
-	}
-	admin, err := pgx.Connect(ctx, u.String())
+	f, err := testfixture.NewDatabase(ctx, os.Getenv("QAG_TEST_DATABASE_URL"))
 	if err != nil {
 		return err
 	}
-	defer admin.Close(context.Background())
-	db := "qag_e2e_" + strings.ReplaceAll(catalog.NewID(), "-", "")
-	if _, err = admin.Exec(ctx, "CREATE DATABASE "+pgx.Identifier{db}.Sanitize()); err != nil {
-		return err
-	}
-	var demoRole string
-	defer func() {
-		cleanup, done := context.WithTimeout(context.Background(), 10*time.Second)
-		defer done()
-		_, _ = admin.Exec(cleanup, "DROP DATABASE "+pgx.Identifier{db}.Sanitize()+" WITH (FORCE)")
-		if demoRole != "" {
-			_, _ = admin.Exec(cleanup, "DROP ROLE "+pgx.Identifier{demoRole}.Sanitize())
-		}
-	}()
-	appURL := *u
-	appURL.Path = "/" + db
-	demoURL := appURL
-	demoName := "qag_demo_e2e_" + strings.ReplaceAll(catalog.NewID(), "-", "")
-	demoURL.User = url.UserPassword(demoName, catalog.NewID()+catalog.NewID())
-	demoConfig, demoSecrets, err := demo.DatabaseConfig(appURL.String(), demoURL.String())
+	defer func() { clean, done := testfixture.CleanupContext(); defer done(); _ = f.Close(clean) }()
+	targetPool, err := pgxpool.New(ctx, f.TargetURL)
 	if err != nil {
 		return err
 	}
-	provision, err := pgxpool.New(ctx, u.String())
-	if err != nil {
+	defer targetPool.Close()
+	sequence := pgx.Identifier{f.TargetSchema, "effect_sequence"}.Sanitize()
+	if _, err = targetPool.Exec(ctx, `CREATE SEQUENCE `+sequence); err != nil {
 		return err
 	}
-	err = demo.PrepareRole(ctx, provision, demoConfig, demoSecrets)
-	provision.Close()
-	if err != nil {
-		return err
-	}
-	demoRole = demoName
+	targetURL, _ := url.Parse(f.TargetURL)
 	cert, err := testfixture.NewCertificates()
 	if err != nil {
 		return err
@@ -92,12 +64,28 @@ func run() error {
 	}
 	stop := make(chan struct{})
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /sql-effect", func(w http.ResponseWriter, r *http.Request) {
+		var called bool
+		var value int64
+		if err := targetPool.QueryRow(r.Context(), `SELECT last_value,is_called FROM `+sequence).Scan(&value, &called); err != nil {
+			http.Error(w, "fixture target unavailable", 503)
+			return
+		}
+		if !called {
+			value = 0
+		}
+		_ = json.NewEncoder(w).Encode(map[string]int64{"effects": value})
+	})
 	mux.HandleFunc("POST /shutdown", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204); close(stop) })
 	server := &http.Server{Handler: mux, ReadHeaderTimeout: 3 * time.Second}
 	go server.Serve(l)
 	defer server.Close()
-	config := map[string]any{"databaseUrl": appURL.String(), "http": plain.HTTP.URL, "grpc": plain.GRPC, "mtlsHttp": secure.HTTP.URL, "mtlsGrpc": secure.GRPC, "ca": cert.CA, "certificate": cert.Client, "privateKey": cert.Key, "shutdown": "http://" + l.Addr().String() + "/shutdown", "target": map[string]string{"address": u.Host, "database": "qag_test", "username": u.User.Username(), "password": func() string { p, _ := u.User.Password(); return p }()}}
-	config["demoDatabaseUrl"] = demoURL.String()
+	config := map[string]any{"databaseUrl": f.AppURL, "http": plain.HTTP.URL, "grpc": plain.GRPC, "mtlsHttp": secure.HTTP.URL, "mtlsGrpc": secure.GRPC, "ca": cert.CA, "certificate": cert.Client, "privateKey": cert.Key, "shutdown": "http://" + l.Addr().String() + "/shutdown", "target": map[string]string{"address": targetURL.Host, "database": "qag", "username": targetURL.User.Username(), "password": func() string { p, _ := targetURL.User.Password(); return p }()}}
+	config["demoDatabaseUrl"] = f.ReaderURL
+	config["appSchema"] = f.Namespace.App
+	config["demoSchema"] = f.Namespace.Demo
+	config["targetSchema"] = f.TargetSchema
+	config["sqlEffectURL"] = "http://" + l.Addr().String() + "/sql-effect"
 	data, err := json.Marshal(config)
 	if err != nil {
 		return err

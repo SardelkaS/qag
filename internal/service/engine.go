@@ -31,13 +31,15 @@ type Engine struct {
 	stop      context.CancelFunc
 	mu        sync.Mutex
 	jobs      map[string]job
+	batches   map[string]bool
+	fences    sync.Map
 	slots     chan struct{}
 	wg        sync.WaitGroup
 }
 
 func New(ctx context.Context, c *catalog.Repository, res *resources.Repository, r *runs.Repository) *Engine {
 	root, stop := context.WithCancel(ctx)
-	return &Engine{Catalog: c, Resources: res, Runs: r, Runner: execution.NewRunner(), ctx: root, stop: stop, jobs: map[string]job{}, slots: make(chan struct{}, 4)}
+	return &Engine{Catalog: c, Resources: res, Runs: r, Runner: execution.NewRunner(), ctx: root, stop: stop, jobs: map[string]job{}, batches: map[string]bool{}, slots: make(chan struct{}, 4)}
 }
 func (e *Engine) Close() { e.stop(); e.wg.Wait(); e.Runner.ClearHeaderScopes() }
 func requestHash(values ...any) string {
@@ -74,12 +76,19 @@ func needs(c catalog.TestCase) (map[string]string, error) {
 	return result, nil
 }
 
-func (e *Engine) StartRun(ctx context.Context, caseID, environmentID string, revision int64, key string) (runs.Run, error) {
+func (e *Engine) StartRun(ctx context.Context, caseID, environmentID string, revision int64, key string, executeAll ...bool) (runs.Run, error) {
 	if err := commandKey(key); err != nil {
 		return runs.Run{}, err
 	}
 	hash := requestHash("run", caseID, environmentID, revision)
+	all := len(executeAll) > 0 && executeAll[0]
+	if all {
+		hash = requestHash("run", caseID, environmentID, revision, true)
+	}
 	if previous, found, err := e.Runs.LookupRun(ctx, key, hash); err != nil || found {
+		if err == nil {
+			e.ensureBatches(previous)
+		}
 		return previous, err
 	}
 	if err := e.Catalog.CheckEnvironment(ctx, caseID, environmentID); err != nil {
@@ -123,7 +132,11 @@ func (e *Engine) StartRun(ctx context.Context, caseID, environmentID string, rev
 			}
 		}
 	}
-	return e.Runs.Start(ctx, c, snapshot, key, hash)
+	run, err := e.Runs.Start(ctx, c, snapshot, key, hash, all)
+	if err == nil {
+		e.ensureBatches(run)
+	}
+	return run, err
 }
 func (e *Engine) EditorAttempt(ctx context.Context, caseID, blockID, environmentID string, revision int64, key string) (execution.Attempt, error) {
 	if err := commandKey(key); err != nil {
@@ -187,7 +200,7 @@ func (e *Engine) RunAttempt(ctx context.Context, runID, blockID, key string) (ex
 	}
 	return e.begin(ctx, run.TestCaseID, run.ID, run.Snapshot.Revision, b, snapshot, key, hash)
 }
-func (e *Engine) begin(ctx context.Context, caseID, runID string, revision int64, block catalog.Block, snapshot resources.Snapshot, key, hash string) (execution.Attempt, error) {
+func (e *Engine) begin(ctx context.Context, caseID, runID string, revision int64, block catalog.Block, snapshot resources.Snapshot, key, hash string, options ...runs.AttemptOptions) (execution.Attempt, error) {
 	res, err := e.Resources.Resolve(ctx, snapshot, block.Resource)
 	if err != nil {
 		return execution.Attempt{}, err
@@ -207,7 +220,7 @@ func (e *Engine) begin(ctx context.Context, caseID, runID string, revision int64
 	e.mu.Lock()
 	e.jobs[candidateID] = job{cancel: cancel, runID: runID}
 	e.mu.Unlock()
-	attempt, created, err := e.Runs.BeginAttempt(ctx, candidateID, caseID, runID, revision, block, snapshot, safe, key, hash)
+	attempt, created, err := e.Runs.BeginAttempt(ctx, candidateID, caseID, runID, revision, block, snapshot, safe, key, hash, options...)
 	if err != nil || !created {
 		cancel()
 		e.mu.Lock()
@@ -224,11 +237,23 @@ func (e *Engine) execute(ctx context.Context, cancel context.CancelFunc, attempt
 	defer e.wg.Done()
 	defer cancel()
 	defer func() { e.mu.Lock(); delete(e.jobs, attempt.ID); e.mu.Unlock(); <-e.slots }()
-	claimCtx, claimCancel := context.WithTimeout(ctx, 10*time.Second)
-	claimed, err := e.Runs.ClaimAttempt(claimCtx, attempt.ID)
-	claimCancel()
-	if err != nil || !claimed {
-		return
+	var err error
+	for {
+		claimCtx, claimCancel := context.WithTimeout(ctx, 10*time.Second)
+		var claimed bool
+		claimed, err = e.Runs.ClaimAttempt(claimCtx, attempt.ID)
+		claimCancel()
+		if err == nil {
+			if !claimed {
+				return
+			}
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(200 * time.Millisecond):
+		}
 	}
 	scope := attempt.RunID
 	if scope == "" {
@@ -236,6 +261,15 @@ func (e *Engine) execute(ctx context.Context, cancel context.CancelFunc, attempt
 		defer e.Runner.ForgetScope(scope)
 	}
 	started := time.Now()
+	ctx = execution.WithRequestGate(ctx, func(ctx context.Context) error {
+		fence := e.fence(attempt.RunID)
+		fence.Lock()
+		defer fence.Unlock()
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		return e.Runs.CheckAttemptRunnable(ctx, attempt.ID)
+	})
 	state, result := e.Runner.Execute(ctx, scope, block, res)
 	for retry := 0; ; retry++ {
 		persistCtx, persistCancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -260,14 +294,32 @@ func (e *Engine) execute(ctx context.Context, cancel context.CancelFunc, attempt
 	}
 }
 func (e *Engine) CancelAttempt(ctx context.Context, id string) (execution.Attempt, error) {
+	attempt, err := e.Runs.GetAttempt(ctx, id)
+	if err != nil {
+		return execution.Attempt{}, err
+	}
+	fence := e.fence(attempt.RunID)
+	fence.Lock()
+	defer fence.Unlock()
+	result, err := e.Runs.CancelAttempt(ctx, id)
+	if err != nil {
+		return result, err
+	}
 	e.mu.Lock()
 	if j, ok := e.jobs[id]; ok {
 		j.cancel()
 	}
 	e.mu.Unlock()
-	return e.Runs.CancelAttempt(ctx, id)
+	return result, nil
 }
 func (e *Engine) CancelRun(ctx context.Context, id string) (runs.Run, error) {
+	fence := e.fence(id)
+	fence.Lock()
+	run, err := e.Runs.Cancel(ctx, id)
+	if err != nil {
+		fence.Unlock()
+		return run, err
+	}
 	e.mu.Lock()
 	for _, j := range e.jobs {
 		if j.runID == id {
@@ -275,7 +327,7 @@ func (e *Engine) CancelRun(ctx context.Context, id string) (runs.Run, error) {
 		}
 	}
 	e.mu.Unlock()
-	run, err := e.Runs.Cancel(ctx, id)
+	fence.Unlock()
 	if err == nil {
 		e.Runner.ForgetScope(id)
 	}
@@ -309,6 +361,7 @@ func (e *Engine) GetRun(ctx context.Context, id string) (runs.Run, error) {
 	if err != nil {
 		return run, err
 	}
+	e.ensureBatches(run)
 	for i, attempt := range run.Attempts {
 		if attempt.State == "queued" || attempt.State == "running" {
 			current, err := e.GetAttempt(ctx, attempt.ID)

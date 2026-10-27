@@ -1,5 +1,7 @@
 package catalog
 
+import "qag/internal/dbscope"
+
 import (
 	"context"
 	"encoding/base64"
@@ -57,7 +59,7 @@ func Paginate[T any](items []T, limit int, cursor string, id func(T) string) (Pa
 
 func (r *Repository) ListFolders(ctx context.Context, archived bool, limit int, cursor string) (Page[Folder], error) {
 	items := []Folder{}
-	rows, err := r.pool.Query(ctx, `SELECT id::text,name,archived_at IS NOT NULL,created_at,updated_at FROM qag.folders WHERE (archived_at IS NOT NULL)=$1 AND NOT EXISTS(SELECT 1 FROM qag.builtin_demo WHERE folder_id=qag.folders.id) ORDER BY name COLLATE qag.russian, normalized_name COLLATE "C", id`, archived)
+	rows, err := r.pool.Query(ctx, dbscope.Render(r.pool, `SELECT id::text,name,archived_at IS NOT NULL,created_at,updated_at FROM qag.folders WHERE (archived_at IS NOT NULL)=$1 AND NOT EXISTS(SELECT 1 FROM qag.builtin_demo WHERE folder_id=qag.folders.id) ORDER BY name COLLATE qag.russian, normalized_name COLLATE "C", id`), archived)
 	if err != nil {
 		return Page[Folder]{}, problem.Database(err)
 	}
@@ -81,7 +83,7 @@ func (r *Repository) CreateFolder(ctx context.Context, value string) (Folder, er
 		return Folder{}, err
 	}
 	var f Folder
-	err = r.pool.QueryRow(ctx, `INSERT INTO qag.folders(name,normalized_name) VALUES($1,$2) RETURNING id::text,name,false,created_at,updated_at`, name, normalized).Scan(&f.ID, &f.Name, &f.Archived, &f.CreatedAt, &f.UpdatedAt)
+	err = r.pool.QueryRow(ctx, dbscope.Render(r.pool, `INSERT INTO qag.folders(name,normalized_name) VALUES($1,$2) RETURNING id::text,name,false,created_at,updated_at`), name, normalized).Scan(&f.ID, &f.Name, &f.Archived, &f.CreatedAt, &f.UpdatedAt)
 	return f, problem.Database(err)
 }
 
@@ -97,7 +99,7 @@ func (r *Repository) PatchFolder(ctx context.Context, id string, newName *string
 		if err := builtin.Protect(ctx, tx, id); err != nil {
 			return err
 		}
-		if err := tx.QueryRow(ctx, `SELECT id::text,name,archived_at IS NOT NULL,created_at,updated_at FROM qag.folders WHERE id=$1 FOR UPDATE`, id).Scan(&f.ID, &f.Name, &f.Archived, &f.CreatedAt, &f.UpdatedAt); err != nil {
+		if err := tx.QueryRow(ctx, dbscope.Render(tx, `SELECT id::text,name,archived_at IS NOT NULL,created_at,updated_at FROM qag.folders WHERE id=$1 FOR UPDATE`), id).Scan(&f.ID, &f.Name, &f.Archived, &f.CreatedAt, &f.UpdatedAt); err != nil {
 			return problem.Database(err)
 		}
 		if f.Archived && newName != nil && (archived == nil || *archived) {
@@ -117,7 +119,7 @@ func (r *Repository) PatchFolder(ctx context.Context, id string, newName *string
 		if name == f.Name && wantedArchive == f.Archived {
 			return nil
 		}
-		return problem.Database(tx.QueryRow(ctx, `UPDATE qag.folders SET name=$2,normalized_name=$3,archived_at=CASE WHEN $4 THEN coalesce(archived_at,now()) ELSE NULL END,updated_at=now() WHERE id=$1 RETURNING id::text,name,archived_at IS NOT NULL,created_at,updated_at`, id, name, normalized, wantedArchive).Scan(&f.ID, &f.Name, &f.Archived, &f.CreatedAt, &f.UpdatedAt))
+		return problem.Database(tx.QueryRow(ctx, dbscope.Render(tx, `UPDATE qag.folders SET name=$2,normalized_name=$3,archived_at=CASE WHEN $4 THEN coalesce(archived_at,now()) ELSE NULL END,updated_at=now() WHERE id=$1 RETURNING id::text,name,archived_at IS NOT NULL,created_at,updated_at`), id, name, normalized, wantedArchive).Scan(&f.ID, &f.Name, &f.Archived, &f.CreatedAt, &f.UpdatedAt))
 	})
 	return f, err
 }
@@ -146,7 +148,7 @@ func getCase(ctx context.Context, db queryer, id string, lock bool) (TestCase, e
 	if lock {
 		sql += ` FOR UPDATE OF f,c`
 	}
-	return scanCase(db.QueryRow(ctx, sql, id))
+	return scanCase(db.QueryRow(ctx, dbscope.Render(db, sql), id))
 }
 func (r *Repository) GetCase(ctx context.Context, id string) (TestCase, error) {
 	return getCase(ctx, r.pool, id, false)
@@ -169,13 +171,13 @@ func (r *Repository) ListCases(ctx context.Context, folderID string, limit int, 
 		return Page[TestCase]{}, problem.Invalid("id", "Некорректный идентификатор папки")
 	}
 	var exists bool
-	if err := r.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM qag.folders WHERE id=$1)`, folderID).Scan(&exists); err != nil {
+	if err := r.pool.QueryRow(ctx, dbscope.Render(r.pool, `SELECT EXISTS(SELECT 1 FROM qag.folders WHERE id=$1)`), folderID).Scan(&exists); err != nil {
 		return Page[TestCase]{}, problem.Database(err)
 	}
 	if !exists {
 		return Page[TestCase]{}, problem.NotFound()
 	}
-	rows, err := r.pool.Query(ctx, caseSelect+` WHERE c.folder_id=$1 ORDER BY (c.archived_at IS NOT NULL), c.name COLLATE qag.russian, c.normalized_name COLLATE "C", c.id`, folderID)
+	rows, err := r.pool.Query(ctx, dbscope.Render(r.pool, caseSelect+` WHERE c.folder_id=$1 ORDER BY (c.archived_at IS NOT NULL), c.name COLLATE qag.russian, c.normalized_name COLLATE "C", c.id`), folderID)
 	if err != nil {
 		return Page[TestCase]{}, problem.Database(err)
 	}
@@ -206,7 +208,7 @@ func (r *Repository) CreateCase(ctx context.Context, folderID, value string) (Te
 		if err := builtin.Protect(ctx, tx, folderID); err != nil {
 			return err
 		}
-		if err := tx.QueryRow(ctx, `SELECT archived_at IS NOT NULL FROM qag.folders WHERE id=$1 FOR UPDATE`, folderID).Scan(&archived); err != nil {
+		if err := tx.QueryRow(ctx, dbscope.Render(tx, `SELECT archived_at IS NOT NULL FROM qag.folders WHERE id=$1 FOR UPDATE`), folderID).Scan(&archived); err != nil {
 			return problem.Database(err)
 		}
 		if archived {
@@ -217,7 +219,7 @@ func (r *Repository) CreateCase(ctx context.Context, folderID, value string) (Te
 			return err
 		}
 		var id string
-		if err := tx.QueryRow(ctx, `INSERT INTO qag.test_cases(folder_id,name,normalized_name) VALUES($1,$2,$3) RETURNING id::text`, folderID, name, normalized).Scan(&id); err != nil {
+		if err := tx.QueryRow(ctx, dbscope.Render(tx, `INSERT INTO qag.test_cases(folder_id,name,normalized_name) VALUES($1,$2,$3) RETURNING id::text`), folderID, name, normalized).Scan(&id); err != nil {
 			return problem.Database(err)
 		}
 		var err error
@@ -258,7 +260,7 @@ func (r *Repository) SaveCase(ctx context.Context, id, value string, revision in
 		if err = validateImageOwners(ctx, tx, id, steps); err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `UPDATE qag.test_cases SET name=$2,normalized_name=$3,steps=$4,revision=revision+1,updated_at=now() WHERE id=$1`, id, name, normalized, steps)
+		_, err = tx.Exec(ctx, dbscope.Render(tx, `UPDATE qag.test_cases SET name=$2,normalized_name=$3,steps=$4,revision=revision+1,updated_at=now() WHERE id=$1`), id, name, normalized, steps)
 		if err != nil {
 			return problem.Database(err)
 		}
@@ -302,7 +304,7 @@ func (r *Repository) PatchCase(ctx context.Context, id string, newName *string, 
 		if name == c.Name && wantedArchive == c.Archived {
 			return nil
 		}
-		_, err = tx.Exec(ctx, `UPDATE qag.test_cases SET name=$2,normalized_name=$3,archived_at=CASE WHEN $4 THEN coalesce(archived_at,now()) ELSE NULL END,revision=revision+1,updated_at=now() WHERE id=$1`, id, name, normalized, wantedArchive)
+		_, err = tx.Exec(ctx, dbscope.Render(tx, `UPDATE qag.test_cases SET name=$2,normalized_name=$3,archived_at=CASE WHEN $4 THEN coalesce(archived_at,now()) ELSE NULL END,revision=revision+1,updated_at=now() WHERE id=$1`), id, name, normalized, wantedArchive)
 		if err != nil {
 			return problem.Database(err)
 		}
@@ -339,7 +341,7 @@ func caseName(ctx context.Context, tx pgx.Tx, folder, id, value string) (string,
 		}
 		_, norm, _ := Name(name)
 		var used bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM qag.test_cases WHERE folder_id=$1 AND normalized_name=$2 AND id::text<>$3)`, folder, norm, id).Scan(&used); err != nil {
+		if err := tx.QueryRow(ctx, dbscope.Render(tx, `SELECT EXISTS(SELECT 1 FROM qag.test_cases WHERE folder_id=$1 AND normalized_name=$2 AND id::text<>$3)`), folder, norm, id).Scan(&used); err != nil {
 			return "", "", problem.Database(err)
 		}
 		if !used {

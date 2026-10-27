@@ -2,12 +2,13 @@
 
 package storage_test
 
+import "qag/internal/dbscope"
+
 import (
 	"bytes"
 	"context"
-	"net/url"
-	"os"
-	"strings"
+	"qag/internal/testfixture"
+
 	"testing"
 	"time"
 
@@ -23,27 +24,8 @@ import (
 func TestUpgradePopulatedFourMigrationDatabase(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	cfg, err := pgx.ParseConfig(os.Getenv("QAG_TEST_DATABASE_URL"))
-	if err != nil || cfg.Database != "qag_test" {
-		t.Fatal("isolated qag_test required")
-	}
-	admin, err := pgx.ConnectConfig(ctx, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer admin.Close(context.Background())
-	db := "qag_upgrade_" + strings.ReplaceAll(catalog.NewID(), "-", "")
-	if _, err = admin.Exec(ctx, "CREATE DATABASE "+pgx.Identifier{db}.Sanitize()); err != nil {
-		t.Fatal(err)
-	}
-	defer func() {
-		c, done := context.WithTimeout(context.Background(), 5*time.Second)
-		defer done()
-		_, _ = admin.Exec(c, "DROP DATABASE "+pgx.Identifier{db}.Sanitize()+" WITH (FORCE)")
-	}()
-	u, _ := url.Parse(os.Getenv("QAG_TEST_DATABASE_URL"))
-	u.Path = "/" + db
-	store, err := storage.Open(ctx, u.String())
+	fixture := testfixture.ForTest(t, ctx)
+	store, err := storage.Open(ctx, fixture.AppURL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +52,7 @@ func TestUpgradePopulatedFourMigrationDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Preserve an old TLS mode as stored JSON, without rewriting it through the new editor.
-	if _, err = store.Pool.Exec(ctx, `UPDATE qag.resource_versions SET config=jsonb_set(config,'{tls}', '{"mode":"tls","certificate":"legacy-certificate"}') WHERE id=$1`, resource.VersionID); err != nil {
+	if _, err = store.Pool.Exec(ctx, dbscope.Render(store.Pool, `UPDATE qag.resource_versions SET config=jsonb_set(config,'{tls}', '{"mode":"tls","certificate":"legacy-certificate"}') WHERE id=$1`), resource.VersionID); err != nil {
 		t.Fatal(err)
 	}
 	doc, err := c.CreateCase(ctx, folder.ID, "Старый кейс")
@@ -91,20 +73,20 @@ func TestUpgradePopulatedFourMigrationDatabase(t *testing.T) {
 	if _, err = engine.FinishRun(ctx, run.ID); err != nil {
 		t.Fatal(err)
 	}
-	sql := resources.Config{Address: "127.0.0.1:1", Database: db, Username: "unused", TLS: resources.TLSConfig{Mode: "plaintext"}}
+	sql := resources.Config{Address: "127.0.0.1:1", Database: "qag", Username: "unused", TLS: resources.TLSConfig{Mode: "plaintext"}}
 	info, err := demo.Bootstrap(ctx, store.Pool, vault, "http://127.0.0.1:1", "127.0.0.1:2", sql, map[string]string{"PASSWORD": "demo-secret"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	// No new-feature rows were created. Removing only the two additive migrations
 	// reconstructs the exact four-migration schema that a previous release used.
-	if _, err = store.Pool.Exec(ctx, `DROP TABLE qag.expected_images; ALTER TABLE qag.environments DROP COLUMN description; DELETE FROM qag.schema_migrations WHERE name LIKE 'migrations/005_%' OR name LIKE 'migrations/006_%'`, pgx.QueryExecModeSimpleProtocol); err != nil {
+	if _, err = store.Pool.Exec(ctx, dbscope.Render(store.Pool, `DROP TABLE qag.expected_images; ALTER TABLE qag.environments DROP COLUMN description; DELETE FROM qag.schema_migrations WHERE name LIKE 'migrations/005_%' OR name LIKE 'migrations/006_%'`), pgx.QueryExecModeSimpleProtocol); err != nil {
 		t.Fatal(err)
 	}
 	snapshot := func() string {
 		t.Helper()
 		var data string
-		err := store.Pool.QueryRow(ctx, `SELECT jsonb_build_object(
+		err := store.Pool.QueryRow(ctx, dbscope.Render(store.Pool, `SELECT jsonb_build_object(
  'cases',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM qag.test_cases t),
  'envs',(SELECT jsonb_agg(to_jsonb(t)-'description' ORDER BY id) FROM qag.environments t),
  'envVersions',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM qag.environment_versions t),
@@ -114,7 +96,7 @@ func TestUpgradePopulatedFourMigrationDatabase(t *testing.T) {
  'steps',(SELECT jsonb_agg(to_jsonb(t) ORDER BY step_id) FROM qag.run_steps t),
  'demo',(SELECT jsonb_agg(to_jsonb(t)) FROM qag.builtin_demo t),
  'oldMigrations',(SELECT jsonb_agg(to_jsonb(t) ORDER BY name) FROM qag.schema_migrations t WHERE name < 'migrations/005')
- )::text`).Scan(&data)
+ )::text`)).Scan(&data)
 		if err != nil {
 			t.Fatal(err)
 		}

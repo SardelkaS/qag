@@ -1,5 +1,7 @@
 package storage
 
+import "qag/internal/dbscope"
+
 import (
 	"context"
 	"crypto/sha256"
@@ -9,6 +11,7 @@ import (
 	"fmt"
 	"io/fs"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -32,18 +35,25 @@ func (s *Store) Migrate(ctx context.Context) error {
 		defer cancel()
 		_ = tx.Rollback(rollback)
 	}()
-	if _, err = tx.Exec(ctx, "SET LOCAL lock_timeout = '5s'"); err != nil {
+	if _, err = tx.Exec(ctx, dbscope.Render(tx, "SET LOCAL lock_timeout = '5s'")); err != nil {
 		return ErrMigration
 	}
-	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", int64(0x7161676d696772)); err != nil {
+	if _, err = tx.Exec(ctx, dbscope.Render(tx, "SELECT pg_advisory_xact_lock($1)"), s.Namespace.Lock(int64(0x7161676d696772))); err != nil {
 		return ErrMigration
 	}
-	if _, err = tx.Exec(ctx, `CREATE SCHEMA IF NOT EXISTS qag;
-CREATE TABLE IF NOT EXISTS qag.schema_migrations (
+	if s.Namespace != dbscope.Default {
+		var own bool
+		if err = tx.QueryRow(ctx, `SELECT count(*)=2 AND bool_and(nspowner=(SELECT oid FROM pg_roles WHERE rolname=current_user)) FROM pg_namespace WHERE nspname IN ($1,$2)`, s.Namespace.App, s.Namespace.Demo).Scan(&own); err != nil || !own {
+			return ErrMigration
+		}
+	} else if _, err = tx.Exec(ctx, `CREATE SCHEMA IF NOT EXISTS qag`); err != nil {
+		return ErrMigration
+	}
+	if _, err = tx.Exec(ctx, dbscope.Render(tx, `CREATE TABLE IF NOT EXISTS qag.schema_migrations (
     name text PRIMARY KEY,
     checksum text NOT NULL,
     applied_at timestamptz NOT NULL DEFAULT now()
-)`, pgx.QueryExecModeSimpleProtocol); err != nil {
+)`), pgx.QueryExecModeSimpleProtocol); err != nil {
 		return ErrMigration
 	}
 	files, err := fs.Glob(migrations, "migrations/*.sql")
@@ -62,7 +72,7 @@ CREATE TABLE IF NOT EXISTS qag.schema_migrations (
 		checksums[name] = hex.EncodeToString(sum[:])
 		contents[name] = string(data)
 	}
-	rows, err := tx.Query(ctx, "SELECT name, checksum FROM qag.schema_migrations")
+	rows, err := tx.Query(ctx, dbscope.Render(tx, "SELECT name, checksum FROM qag.schema_migrations"))
 	if err != nil {
 		return ErrMigration
 	}
@@ -87,10 +97,14 @@ CREATE TABLE IF NOT EXISTS qag.schema_migrations (
 		if applied[name] {
 			continue
 		}
-		if _, err = tx.Exec(ctx, contents[name], pgx.QueryExecModeSimpleProtocol); err != nil {
+		statement := dbscope.Render(tx, contents[name])
+		if s.Namespace != dbscope.Default {
+			statement = strings.ReplaceAll(statement, "CREATE SCHEMA "+pgx.Identifier{s.Namespace.Demo}.Sanitize()+";", "")
+		}
+		if _, err = tx.Exec(ctx, statement, pgx.QueryExecModeSimpleProtocol); err != nil {
 			return fmt.Errorf("%w (%s)", ErrMigration, name)
 		}
-		if _, err = tx.Exec(ctx, "INSERT INTO qag.schema_migrations(name,checksum) VALUES($1,$2)", name, checksums[name]); err != nil {
+		if _, err = tx.Exec(ctx, dbscope.Render(tx, "INSERT INTO qag.schema_migrations(name,checksum) VALUES($1,$2)"), name, checksums[name]); err != nil {
 			return ErrMigration
 		}
 	}

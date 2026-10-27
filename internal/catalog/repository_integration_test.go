@@ -2,16 +2,17 @@
 
 package catalog_test
 
+import "qag/internal/dbscope"
+
 import (
 	"context"
 	"errors"
-	"os"
+	"qag/internal/testfixture"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"qag/internal/catalog"
 	"qag/internal/problem"
 	"qag/internal/storage"
@@ -20,11 +21,8 @@ import (
 func TestCatalogPersistenceRevisionAndArchive(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	dsn := os.Getenv("QAG_TEST_DATABASE_URL")
-	cfg, err := pgxpool.ParseConfig(dsn)
-	if dsn == "" || err != nil || cfg.ConnConfig.Database != "qag_test" {
-		t.Fatal("isolated qag_test required")
-	}
+	fixture := testfixture.ForTest(t, ctx)
+	dsn := fixture.AppURL
 	store, err := storage.Open(ctx, dsn)
 	if err != nil {
 		t.Fatal(err)
@@ -41,8 +39,8 @@ func TestCatalogPersistenceRevisionAndArchive(t *testing.T) {
 	defer func() {
 		cleanup, done := context.WithTimeout(context.Background(), 3*time.Second)
 		defer done()
-		_, _ = store.Pool.Exec(cleanup, "DELETE FROM qag.test_cases WHERE folder_id=$1", folder.ID)
-		_, _ = store.Pool.Exec(cleanup, "DELETE FROM qag.folders WHERE id=$1", folder.ID)
+		_, _ = store.Pool.Exec(cleanup, dbscope.Render(store.Pool, "DELETE FROM qag.test_cases WHERE folder_id=$1"), folder.ID)
+		_, _ = store.Pool.Exec(cleanup, dbscope.Render(store.Pool, "DELETE FROM qag.folders WHERE id=$1"), folder.ID)
 	}()
 	if _, err = repo.CreateFolder(ctx, strings.ToUpper(folder.Name)); err == nil {
 		t.Fatal("case-insensitive duplicate accepted")

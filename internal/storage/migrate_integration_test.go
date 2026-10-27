@@ -2,25 +2,23 @@
 
 package storage
 
+import "qag/internal/dbscope"
+
 import (
 	"context"
 	"errors"
-	"os"
+	"qag/internal/testfixture"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func TestMigrateFreshDatabaseAndRepeat(t *testing.T) {
-	dsn := os.Getenv("QAG_TEST_DATABASE_URL")
-	config, err := pgxpool.ParseConfig(dsn)
-	if dsn == "" || err != nil || config.ConnConfig.Database != "qag_test" {
-		t.Fatal("set QAG_TEST_DATABASE_URL to the isolated qag_test database")
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	fixture := testfixture.ForTest(t, ctx)
+	dsn := fixture.AppURL
 	store, err := Open(ctx, dsn)
 	if err != nil {
 		t.Fatal(err)
@@ -33,12 +31,12 @@ func TestMigrateFreshDatabaseAndRepeat(t *testing.T) {
 		t.Fatalf("repeat migration: %v", err)
 	}
 	var count int
-	if err = store.Pool.QueryRow(ctx, "SELECT count(*) FROM qag.schema_migrations").Scan(&count); err != nil || count != 6 {
+	if err = store.Pool.QueryRow(ctx, dbscope.Render(store.Pool, "SELECT count(*) FROM qag.schema_migrations")).Scan(&count); err != nil || count != 8 {
 		t.Fatalf("migration count %d: %v", count, err)
 	}
 	for _, name := range []string{"expected_images", "folders", "test_cases", "environments", "environment_versions", "resources", "resource_versions", "runs", "run_resource_versions", "run_steps", "call_attempts"} {
 		var exists bool
-		if err = store.Pool.QueryRow(ctx, "SELECT to_regclass($1) IS NOT NULL", "qag."+name).Scan(&exists); err != nil || !exists {
+		if err = store.Pool.QueryRow(ctx, dbscope.Render(store.Pool, "SELECT to_regclass($1) IS NOT NULL"), store.Namespace.App+"."+name).Scan(&exists); err != nil || !exists {
 			t.Fatalf("missing table %s: %v", name, err)
 		}
 	}
@@ -48,10 +46,10 @@ func TestMigrateFreshDatabaseAndRepeat(t *testing.T) {
 	}
 	defer tx.Rollback(context.Background())
 	var id string
-	if err = tx.QueryRow(ctx, "INSERT INTO qag.folders(name,normalized_name) VALUES('Миграция','migration-integration') RETURNING id").Scan(&id); err != nil {
+	if err = tx.QueryRow(ctx, dbscope.Render(tx, "INSERT INTO qag.folders(name,normalized_name) VALUES('Миграция','migration-integration') RETURNING id")).Scan(&id); err != nil {
 		t.Fatal(err)
 	}
-	_, err = tx.Exec(ctx, "INSERT INTO qag.folders(name,normalized_name) VALUES('Дубликат','migration-integration')")
+	_, err = tx.Exec(ctx, dbscope.Render(tx, "INSERT INTO qag.folders(name,normalized_name) VALUES('Дубликат','migration-integration')"))
 	var pgError *pgconn.PgError
 	if !errors.As(err, &pgError) || pgError.Code != "23505" {
 		t.Fatalf("duplicate normalized name not rejected: %v", err)
@@ -59,13 +57,10 @@ func TestMigrateFreshDatabaseAndRepeat(t *testing.T) {
 }
 
 func TestExclusiveInstanceLock(t *testing.T) {
-	dsn := os.Getenv("QAG_TEST_DATABASE_URL")
-	config, err := pgxpool.ParseConfig(dsn)
-	if dsn == "" || err != nil || config.ConnConfig.Database != "qag_test" {
-		t.Fatal("isolated qag_test required")
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	fixture := testfixture.ForTest(t, ctx)
+	dsn := fixture.AppURL
 	first, err := Open(ctx, dsn)
 	if err != nil {
 		t.Fatal(err)

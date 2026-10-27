@@ -21,6 +21,9 @@ import (
 
 func (r *Runner) sql(ctx context.Context, b catalog.Block, res resources.Resolved) (Result, error) {
 	result := Result{Protocol: "postgresql", Columns: []catalog.Column{}, Rows: [][]catalog.TypedValue{}}
+	if err := checkRequestGate(ctx); err != nil {
+		return result, err
+	}
 	c := res.Resource.Config
 	uri := url.URL{Scheme: "postgresql", Host: c.Address, Path: "/" + c.Database, User: url.UserPassword(c.Username, res.Secrets["PASSWORD"]), RawQuery: "sslmode=disable"}
 	config, err := pgx.ParseConfig(uri.String())

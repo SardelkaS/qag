@@ -43,8 +43,14 @@ type ProtoBundle struct {
 	Revision int64             `json:"revision"`
 }
 type RunStart struct {
+	ExecuteAll    bool   `json:"executeAll,omitempty"`
 	EnvironmentID string `json:"environmentId"`
 	Revision      int64  `json:"revision"`
+}
+type VariantWrite struct {
+	Name     string         `json:"name"`
+	Revision int64          `json:"revision"`
+	Request  *catalog.Block `json:"request,omitempty"`
 }
 type AttemptStart struct {
 	EnvironmentID string `json:"environmentId,omitempty"`

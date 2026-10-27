@@ -1,5 +1,7 @@
 package catalog
 
+import "qag/internal/dbscope"
+
 import (
 	"bytes"
 	"context"
@@ -90,7 +92,7 @@ func (r *Repository) UploadImage(ctx context.Context, id string, upload ImageUpl
 		if c.Archived || c.ParentArchived {
 			return problem.Archived()
 		}
-		return problem.Database(tx.QueryRow(ctx, `INSERT INTO qag.expected_images(test_case_id,filename,content_type,size_bytes,width,height,sha256,data) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id::text`, id, info.Filename, info.ContentType, info.SizeBytes, info.Width, info.Height, info.SHA256, data).Scan(&info.ID))
+		return problem.Database(tx.QueryRow(ctx, dbscope.Render(tx, `INSERT INTO qag.expected_images(test_case_id,filename,content_type,size_bytes,width,height,sha256,data) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id::text`), id, info.Filename, info.ContentType, info.SizeBytes, info.Width, info.Height, info.SHA256, data).Scan(&info.ID))
 	})
 	return info, err
 }
@@ -100,7 +102,7 @@ func (r *Repository) ReadImage(ctx context.Context, id, imageID string) (Expecte
 	if !ValidID(id) || !ValidID(imageID) {
 		return info, nil, problem.NotFound()
 	}
-	err := r.pool.QueryRow(ctx, `SELECT id::text,filename,content_type,size_bytes,width,height,sha256,data FROM qag.expected_images WHERE id=$1 AND test_case_id=$2`, imageID, id).Scan(&info.ID, &info.Filename, &info.ContentType, &info.SizeBytes, &info.Width, &info.Height, &info.SHA256, &data)
+	err := r.pool.QueryRow(ctx, dbscope.Render(r.pool, `SELECT id::text,filename,content_type,size_bytes,width,height,sha256,data FROM qag.expected_images WHERE id=$1 AND test_case_id=$2`), imageID, id).Scan(&info.ID, &info.Filename, &info.ContentType, &info.SizeBytes, &info.Width, &info.Height, &info.SHA256, &data)
 	return info, data, problem.Database(err)
 }
 func validateImageOwners(ctx context.Context, db queryer, id string, steps []Step) error {
@@ -120,7 +122,7 @@ func validateImageOwners(ctx context.Context, db queryer, id string, steps []Ste
 		}
 		seen[ref.ImageID] = true
 		var exists bool
-		if err := db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM qag.expected_images WHERE id=$1 AND test_case_id=$2)`, ref.ImageID, id).Scan(&exists); err != nil {
+		if err := db.QueryRow(ctx, dbscope.Render(db, `SELECT EXISTS(SELECT 1 FROM qag.expected_images WHERE id=$1 AND test_case_id=$2)`), ref.ImageID, id).Scan(&exists); err != nil {
 			return problem.Database(err)
 		}
 		if !exists {

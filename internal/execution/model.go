@@ -28,6 +28,10 @@ type Result struct {
 }
 
 type Attempt struct {
+	VariantID          string             `json:"variantId,omitempty"`
+	VariantVersionID   string             `json:"variantVersionId,omitempty"`
+	BatchID            string             `json:"batchId,omitempty"`
+	BatchPosition      int                `json:"batchPosition,omitempty"`
 	ID                 string             `json:"id"`
 	RunID              string             `json:"runId,omitempty"`
 	TestCaseID         string             `json:"testCaseId"`

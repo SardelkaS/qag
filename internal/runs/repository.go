@@ -1,5 +1,7 @@
 package runs
 
+import "qag/internal/dbscope"
+
 import (
 	"context"
 	"errors"
@@ -46,7 +48,7 @@ func validID(id string) error {
 
 func (r *Repository) LookupRun(ctx context.Context, key, hash string) (Run, bool, error) {
 	var id, stored string
-	err := r.pool.QueryRow(ctx, `SELECT id::text,request_hash FROM qag.runs WHERE idempotency_key=$1`, key).Scan(&id, &stored)
+	err := r.pool.QueryRow(ctx, dbscope.Render(r.pool, `SELECT id::text,request_hash FROM qag.runs WHERE idempotency_key=$1`), key).Scan(&id, &stored)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Run{}, false, nil
 	}
@@ -60,14 +62,14 @@ func (r *Repository) LookupRun(ctx context.Context, key, hash string) (Run, bool
 	return run, true, err
 }
 
-func (r *Repository) Start(ctx context.Context, snapshot catalog.TestCase, environment resources.Snapshot, key, hash string) (Run, error) {
+func (r *Repository) Start(ctx context.Context, snapshot catalog.TestCase, environment resources.Snapshot, key, hash string, executeAll ...bool) (Run, error) {
 	var id string
 	err := r.transaction(ctx, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, key); err != nil {
+		if _, err := tx.Exec(ctx, dbscope.Render(tx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`), key); err != nil {
 			return problem.Database(err)
 		}
 		var stored string
-		err := tx.QueryRow(ctx, `SELECT id::text,request_hash FROM qag.runs WHERE idempotency_key=$1`, key).Scan(&id, &stored)
+		err := tx.QueryRow(ctx, dbscope.Render(tx, `SELECT id::text,request_hash FROM qag.runs WHERE idempotency_key=$1`), key).Scan(&id, &stored)
 		if err == nil {
 			if stored != hash {
 				return problem.Conflict("Ключ команды использован иначе")
@@ -79,7 +81,7 @@ func (r *Repository) Start(ctx context.Context, snapshot catalog.TestCase, envir
 		}
 		var revision int64
 		var archived, parentArchived bool
-		if err = tx.QueryRow(ctx, `SELECT c.revision,c.archived_at IS NOT NULL,f.archived_at IS NOT NULL FROM qag.test_cases c JOIN qag.folders f ON f.id=c.folder_id WHERE c.id=$1 FOR UPDATE OF f,c`, snapshot.ID).Scan(&revision, &archived, &parentArchived); err != nil {
+		if err = tx.QueryRow(ctx, dbscope.Render(tx, `SELECT c.revision,c.archived_at IS NOT NULL,f.archived_at IS NOT NULL FROM qag.test_cases c JOIN qag.folders f ON f.id=c.folder_id WHERE c.id=$1 FOR UPDATE OF f,c`), snapshot.ID).Scan(&revision, &archived, &parentArchived); err != nil {
 			return problem.Database(err)
 		}
 		if archived || parentArchived {
@@ -88,7 +90,7 @@ func (r *Repository) Start(ctx context.Context, snapshot catalog.TestCase, envir
 		if revision != snapshot.Revision {
 			return problem.Conflict("Сценарий изменился перед началом прогона")
 		}
-		err = tx.QueryRow(ctx, `SELECT id::text FROM qag.runs WHERE test_case_id=$1 AND status='running'`, snapshot.ID).Scan(&id)
+		err = tx.QueryRow(ctx, dbscope.Render(tx, `SELECT id::text FROM qag.runs WHERE test_case_id=$1 AND status='running'`), snapshot.ID).Scan(&id)
 		if err == nil {
 			return nil
 		}
@@ -96,18 +98,22 @@ func (r *Repository) Start(ctx context.Context, snapshot catalog.TestCase, envir
 			return problem.Database(err)
 		}
 		id = catalog.NewID()
-		if _, err = tx.Exec(ctx, `INSERT INTO qag.runs(id,test_case_id,environment_version_id,snapshot,context,idempotency_key,request_hash) VALUES($1,$2,$3,$4,$5,$6,$7)`, id, snapshot.ID, environment.EnvironmentVersionID, snapshot, environment, key, hash); err != nil {
+		if _, err = tx.Exec(ctx, dbscope.Render(tx, `INSERT INTO qag.runs(id,test_case_id,environment_version_id,snapshot,context,idempotency_key,request_hash) VALUES($1,$2,$3,$4,$5,$6,$7)`), id, snapshot.ID, environment.EnvironmentVersionID, snapshot, environment, key, hash); err != nil {
 			return problem.Database(err)
 		}
 		for _, step := range snapshot.Steps {
-			if _, err = tx.Exec(ctx, `INSERT INTO qag.run_steps(run_id,step_id) VALUES($1,$2)`, id, step.ID); err != nil {
+			if _, err = tx.Exec(ctx, dbscope.Render(tx, `INSERT INTO qag.run_steps(run_id,step_id) VALUES($1,$2)`), id, step.ID); err != nil {
 				return problem.Database(err)
 			}
 		}
 		for name, version := range environment.ResourceVersions {
-			if _, err = tx.Exec(ctx, `INSERT INTO qag.run_resource_versions(run_id,resource_name,resource_version_id) VALUES($1,$2,$3)`, id, name, version); err != nil {
+			if _, err = tx.Exec(ctx, dbscope.Render(tx, `INSERT INTO qag.run_resource_versions(run_id,resource_name,resource_version_id) VALUES($1,$2,$3)`), id, name, version); err != nil {
 				return problem.Database(err)
 			}
+		}
+		if len(executeAll) > 0 && executeAll[0] {
+			_, err = insertBatch(ctx, tx, id, key, hash, snapshot)
+			return err
 		}
 		return nil
 	})
@@ -126,7 +132,7 @@ func (r *Repository) Context(ctx context.Context, id string) (resources.Snapshot
 		return resources.Snapshot{}, err
 	}
 	var snapshot resources.Snapshot
-	err := r.pool.QueryRow(ctx, `SELECT context FROM qag.runs WHERE id=$1`, id).Scan(&snapshot)
+	err := r.pool.QueryRow(ctx, dbscope.Render(r.pool, `SELECT context FROM qag.runs WHERE id=$1`), id).Scan(&snapshot)
 	return snapshot, problem.Database(err)
 }
 
@@ -140,7 +146,7 @@ func getRun(ctx context.Context, d db, id string, lock bool) (Run, resources.Sna
 	if lock {
 		sql += ` FOR UPDATE`
 	}
-	err := d.QueryRow(ctx, sql, id).Scan(&run.ID, &run.TestCaseID, &run.Status, &run.Snapshot, &environment, &run.RetentionReasons, &run.StartedAt, &run.FinishedAt)
+	err := d.QueryRow(ctx, dbscope.Render(d, sql), id).Scan(&run.ID, &run.TestCaseID, &run.Status, &run.Snapshot, &environment, &run.RetentionReasons, &run.StartedAt, &run.FinishedAt)
 	if err != nil {
 		return run, environment, problem.Database(err)
 	}
@@ -153,7 +159,7 @@ func getRun(ctx context.Context, d db, id string, lock bool) (Run, resources.Sna
 	if run.RetentionReasons == nil {
 		run.RetentionReasons = []string{}
 	}
-	rows, err := d.Query(ctx, `SELECT step_id::text,status,comment,revision FROM qag.run_steps WHERE run_id=$1`, id)
+	rows, err := d.Query(ctx, dbscope.Render(d, `SELECT step_id::text,status,comment,revision FROM qag.run_steps WHERE run_id=$1`), id)
 	if err != nil {
 		return run, environment, problem.Database(err)
 	}
@@ -165,6 +171,11 @@ func getRun(ctx context.Context, d db, id string, lock bool) (Run, resources.Sna
 			return run, environment, problem.Database(err)
 		}
 		states[state.StepID] = state
+		if state.Status == "blocked" || state.Status == "skipped" {
+			state.LegacyStatus = state.Status
+			state.Status = "not_run"
+			states[state.StepID] = state
+		}
 	}
 	rows.Close()
 	if rows.Err() != nil {
@@ -175,6 +186,12 @@ func getRun(ctx context.Context, d db, id string, lock bool) (Run, resources.Sna
 		run.StepStates = append(run.StepStates, states[step.ID])
 	}
 	run.Attempts, err = loadAttempts(ctx, d, id)
+	if err == nil {
+		run.Variants, err = loadVariants(ctx, d, id)
+	}
+	if err == nil {
+		run.Batches, err = loadBatches(ctx, d, id)
+	}
 	return run, environment, err
 }
 
@@ -183,14 +200,14 @@ func (r *Repository) List(ctx context.Context, caseID string, retained *bool, li
 		return catalog.Page[Run]{}, err
 	}
 	var exists bool
-	if err := r.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM qag.test_cases WHERE id=$1)`, caseID).Scan(&exists); err != nil {
+	if err := r.pool.QueryRow(ctx, dbscope.Render(r.pool, `SELECT EXISTS(SELECT 1 FROM qag.test_cases WHERE id=$1)`), caseID).Scan(&exists); err != nil {
 		return catalog.Page[Run]{}, problem.Database(err)
 	}
 	if !exists {
 		return catalog.Page[Run]{}, problem.NotFound()
 	}
 	running := len(active) > 0 && active[0]
-	rows, err := r.pool.Query(ctx, `SELECT id::text FROM qag.runs WHERE test_case_id=$1 AND ((status='running')=$3) AND ($2::boolean IS NULL OR (cardinality(retention_reasons)>0)=$2) ORDER BY coalesce(finished_at,started_at) DESC,id DESC`, caseID, retained, running)
+	rows, err := r.pool.Query(ctx, dbscope.Render(r.pool, `SELECT id::text FROM qag.runs WHERE test_case_id=$1 AND ((status='running')=$3) AND ($2::boolean IS NULL OR (cardinality(retention_reasons)>0)=$2) ORDER BY coalesce(finished_at,started_at) DESC,id DESC`), caseID, retained, running)
 	if err != nil {
 		return catalog.Page[Run]{}, problem.Database(err)
 	}
@@ -223,7 +240,7 @@ func (r *Repository) List(ctx context.Context, caseID string, retained *bool, li
 }
 
 func (r *Repository) UpdateStep(ctx context.Context, id, stepID, status, comment string, revision int64) (Run, error) {
-	allowed := map[string]bool{"not_run": true, "passed": true, "failed": true, "blocked": true, "skipped": true}
+	allowed := map[string]bool{"not_run": true, "passed": true, "failed": true}
 	if !allowed[status] {
 		return Run{}, problem.Invalid("status", "Выберите ручной статус шага")
 	}
@@ -239,13 +256,13 @@ func (r *Repository) UpdateStep(ctx context.Context, id, stepID, status, comment
 			return problem.Conflict("Завершённый прогон доступен только для просмотра")
 		}
 		var previous int64
-		if err = tx.QueryRow(ctx, `SELECT revision FROM qag.run_steps WHERE run_id=$1 AND step_id=$2`, id, stepID).Scan(&previous); err != nil {
+		if err = tx.QueryRow(ctx, dbscope.Render(tx, `SELECT revision FROM qag.run_steps WHERE run_id=$1 AND step_id=$2`), id, stepID).Scan(&previous); err != nil {
 			return problem.Database(err)
 		}
 		if previous != revision {
 			return problem.Conflict("Шаг изменён в другой вкладке; обновите прогон")
 		}
-		_, err = tx.Exec(ctx, `UPDATE qag.run_steps SET status=$3,comment=$4,revision=revision+1 WHERE run_id=$1 AND step_id=$2`, id, stepID, status, comment)
+		_, err = tx.Exec(ctx, dbscope.Render(tx, `UPDATE qag.run_steps SET status=$3,comment=$4,revision=revision+1 WHERE run_id=$1 AND step_id=$2`), id, stepID, status, comment)
 		return problem.Database(err)
 	})
 	if err != nil {
@@ -266,10 +283,10 @@ func (r *Repository) finish(ctx context.Context, id, forced string) (Run, error)
 	}
 	err := r.transaction(ctx, func(tx pgx.Tx) error {
 		var caseID string
-		if err := tx.QueryRow(ctx, `SELECT test_case_id::text FROM qag.runs WHERE id=$1`, id).Scan(&caseID); err != nil {
+		if err := tx.QueryRow(ctx, dbscope.Render(tx, `SELECT test_case_id::text FROM qag.runs WHERE id=$1`), id).Scan(&caseID); err != nil {
 			return problem.Database(err)
 		}
-		if _, err := tx.Exec(ctx, `SELECT id FROM qag.test_cases WHERE id=$1 FOR UPDATE`, caseID); err != nil {
+		if _, err := tx.Exec(ctx, dbscope.Render(tx, `SELECT id FROM qag.test_cases WHERE id=$1 FOR UPDATE`), caseID); err != nil {
 			return problem.Database(err)
 		}
 		run, _, err := getRun(ctx, tx, id, true)
@@ -280,10 +297,18 @@ func (r *Repository) finish(ctx context.Context, id, forced string) (Run, error)
 			return nil
 		}
 		if forced != "" {
+			if err = cancelBatches(ctx, tx, id, forced); err != nil {
+				return err
+			}
 			if err = cancelAttempts(ctx, tx, id, forced); err != nil {
 				return err
 			}
 		} else {
+			for _, batch := range run.Batches {
+				if batch.State == "running" {
+					return problem.Conflict("Дождитесь очереди или отмените прогон")
+				}
+			}
 			for _, attempt := range run.Attempts {
 				if attempt.State == "running" || attempt.State == "queued" {
 					return problem.Conflict("Дождитесь вызова или отмените прогон")
@@ -296,7 +321,7 @@ func (r *Repository) finish(ctx context.Context, id, forced string) (Run, error)
 		}
 		reasons := []string{}
 		var first, success bool
-		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM qag.runs WHERE test_case_id=$1 AND 'first_run'=ANY(retention_reasons)),EXISTS(SELECT 1 FROM qag.runs WHERE test_case_id=$1 AND 'first_success'=ANY(retention_reasons))`, caseID).Scan(&first, &success); err != nil {
+		if err = tx.QueryRow(ctx, dbscope.Render(tx, `SELECT EXISTS(SELECT 1 FROM qag.runs WHERE test_case_id=$1 AND 'first_run'=ANY(retention_reasons)),EXISTS(SELECT 1 FROM qag.runs WHERE test_case_id=$1 AND 'first_success'=ANY(retention_reasons))`), caseID).Scan(&first, &success); err != nil {
 			return problem.Database(err)
 		}
 		if !first {
@@ -305,7 +330,7 @@ func (r *Repository) finish(ctx context.Context, id, forced string) (Run, error)
 		if status == "passed" && !success {
 			reasons = append(reasons, "first_success")
 		}
-		_, err = tx.Exec(ctx, `UPDATE qag.runs SET status=$2,retention_reasons=$3,finished_at=clock_timestamp() WHERE id=$1`, id, status, reasons)
+		_, err = tx.Exec(ctx, dbscope.Render(tx, `UPDATE qag.runs SET status=$2,retention_reasons=$3,finished_at=clock_timestamp() WHERE id=$1`), id, status, reasons)
 		return problem.Database(err)
 	})
 	if err != nil {
@@ -315,6 +340,16 @@ func (r *Repository) finish(ctx context.Context, id, forced string) (Run, error)
 }
 
 func Evaluate(run Run) string {
+	for _, batch := range run.Batches {
+		if batch.State == "running" {
+			return "blocked"
+		}
+	}
+	for _, attempt := range run.Attempts {
+		if attempt.State == "queued" || attempt.State == "running" {
+			return "blocked"
+		}
+	}
 	failed, blocked := false, false
 	for _, step := range run.StepStates {
 		if step.Status == "failed" {
@@ -328,7 +363,7 @@ func Evaluate(run Run) string {
 			var latest int
 			state, comparison := "", ""
 			for _, attempt := range run.Attempts {
-				if attempt.BlockID == block.ID && attempt.Number >= latest {
+				if attempt.VariantID == "" && attempt.BlockID == block.ID && attempt.Number >= latest {
 					latest = attempt.Number
 					state = attempt.State
 					comparison = ""
@@ -362,7 +397,7 @@ func (r *Repository) Save(ctx context.Context, id string) (Run, error) {
 		if run.Status == "running" {
 			return problem.Conflict("Сначала завершите прогон")
 		}
-		_, err = tx.Exec(ctx, `UPDATE qag.runs SET retention_reasons=CASE WHEN 'manual'=ANY(retention_reasons) THEN retention_reasons ELSE array_append(retention_reasons,'manual') END WHERE id=$1`, id)
+		_, err = tx.Exec(ctx, dbscope.Render(tx, `UPDATE qag.runs SET retention_reasons=CASE WHEN 'manual'=ANY(retention_reasons) THEN retention_reasons ELSE array_append(retention_reasons,'manual') END WHERE id=$1`), id)
 		return problem.Database(err)
 	})
 	if err != nil {
@@ -379,13 +414,13 @@ func (r *Repository) Delete(ctx context.Context, id string) error {
 		if run.Status == "running" || len(run.RetentionReasons) > 0 {
 			return problem.Conflict("Сохранённый или текущий прогон удалять нельзя")
 		}
-		_, err = tx.Exec(ctx, `DELETE FROM qag.runs WHERE id=$1`, id)
+		_, err = tx.Exec(ctx, dbscope.Render(tx, `DELETE FROM qag.runs WHERE id=$1`), id)
 		return problem.Database(err)
 	})
 }
 
 func (r *Repository) Recover(ctx context.Context) error {
-	rows, err := r.pool.Query(ctx, `SELECT id::text FROM qag.runs WHERE status='running' ORDER BY started_at,id`)
+	rows, err := r.pool.Query(ctx, dbscope.Render(r.pool, `SELECT id::text FROM qag.runs WHERE status='running' ORDER BY started_at,id`))
 	if err != nil {
 		return problem.Database(err)
 	}
@@ -407,6 +442,6 @@ func (r *Repository) Recover(ctx context.Context) error {
 			return err
 		}
 	}
-	_, err = r.pool.Exec(ctx, `UPDATE qag.call_attempts SET state='interrupted',finished_at=clock_timestamp(),result=$1 WHERE run_id IS NULL AND state IN ('queued','running')`, interruptedResult("interrupted"))
+	_, err = r.pool.Exec(ctx, dbscope.Render(r.pool, `UPDATE qag.call_attempts SET state='interrupted',finished_at=clock_timestamp(),result=$1 WHERE run_id IS NULL AND state IN ('queued','running')`), interruptedResult("interrupted"))
 	return problem.Database(err)
 }

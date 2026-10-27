@@ -1,16 +1,17 @@
 import { useState } from 'react'
-import type { Block, Run, StepState } from './api'
+import type { Run, StepState } from './api'
 import {
   command,
   date,
   message,
-  protocolLabel,
   reasonLabel,
   request,
   statusLabel,
 } from './api'
 import { Notice } from './ui'
-import { Results, RequestSummary, ExpectedPreview } from './Results'
+import { StepStatus } from './StepStatus'
+import { RunCallTabs } from './RunCallTabs'
+import { ExportDialog } from './ExportDialog'
 import { ImageGallery } from './ImageGallery'
 
 export function mergeRun(previous: Run | null, next: Run): Run {
@@ -45,6 +46,7 @@ export default function RunView({
 }) {
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [comments, setComments] = useState<
     Record<string, { value: string; revision: number }>
   >({})
@@ -80,35 +82,37 @@ export default function RunView({
       })
       return result
     })
-  const launch = async (block: Block) => {
-    setBusy(true)
+  const [cancelling, setCancelling] = useState(false)
+  const cancelRun = async () => {
+    setCancelling(true)
     setError('')
     try {
-      await command(`/runs/${run.id}/blocks/${block.id}/attempts`)
-      update(await request<Run>(`/runs/${run.id}`))
+      for (const [stepId, draft] of Object.entries(comments))
+        await request<Run>(`/runs/${run.id}/steps/${stepId}`, 'PATCH', {
+          status: run.stepStates.find((s) => s.stepId === stepId)!.status,
+          comment: draft.value,
+          revision: draft.revision,
+        })
+      setComments({})
+      update(await request<Run>(`/runs/${run.id}/cancel`, 'POST'))
+      onRefresh()
     } catch (e) {
       setError(message(e))
     } finally {
-      setBusy(false)
+      setCancelling(false)
     }
   }
-  const cancelAttempt = async (id: string) => {
-    setBusy(true)
-    try {
-      await request(`/attempts/${id}/cancel`, 'POST')
-      update(await request<Run>(`/runs/${run.id}`))
-    } catch (e) {
-      setError(message(e))
-    } finally {
-      setBusy(false)
-    }
-  }
-  const active = run.attempts.some(
-    (a) => a.state === 'queued' || a.state === 'running',
-  )
+  const activeBatch = (run.batches || []).find((b) => b.state === 'running')
+  const latestBatch = (run.batches || []).at(-1)
+  const active =
+    !!activeBatch ||
+    run.attempts.some((a) => a.state === 'queued' || a.state === 'running')
   const unsaved = Object.keys(comments).length > 0
   return (
     <section className="run-view">
+      {exporting && (
+        <ExportDialog runId={run.id} onClose={() => setExporting(false)} />
+      )}
       <div className="page-heading">
         <div>
           <p className="section-label">
@@ -120,10 +124,46 @@ export default function RunView({
             {run.snapshot.revision}
           </p>
         </div>
-        <span className={`status ${run.status}`}>
-          {statusLabel[run.status]}
-        </span>
+        <div className="inline">
+          <button
+            className="button secondary"
+            onClick={() => setExporting(true)}
+          >
+            Экспорт результата
+          </button>
+          <span className={`status ${run.status}`}>
+            {statusLabel[run.status]}
+          </span>
+        </div>
       </div>
+      {editable && (
+        <div className="run-toolbar">
+          <button
+            className="button"
+            disabled={busy || active || cancelling}
+            onClick={() =>
+              void perform(async () => {
+                await command(`/runs/${run.id}/batches`)
+                return request<Run>(`/runs/${run.id}`)
+              })
+            }
+          >
+            Выполнить всё
+          </button>
+          <span role="status" className="batch-progress">
+            {latestBatch
+              ? `Выполнено ${latestBatch.completed}/${latestBatch.items.length} · проблем: ${latestBatch.problems}${latestBatch.state === 'running' ? ' · выполняется' : latestBatch.state === 'completed' ? ' · очередь завершена' : latestBatch.state === 'cancelled' ? ' · отменена' : ' · прервана'}`
+              : 'Статусы шагов выставляются вручную'}
+          </span>
+          <button
+            className="button secondary danger"
+            disabled={cancelling}
+            onClick={() => void cancelRun()}
+          >
+            {cancelling ? 'Отмена…' : 'Отменить прогон'}
+          </button>
+        </div>
+      )}
       <div className="run-reasons">
         {run.retentionReasons.map((reason) => (
           <span className="badge" key={reason}>
@@ -140,9 +180,16 @@ export default function RunView({
             <div className="step-heading">
               <span className="step-number">{index + 1}</span>
               <h3>{step.title || `Шаг ${index + 1}`}</h3>
-              <span className={`status ${state.status}`}>
-                {statusLabel[state.status]}
-              </span>
+              <StepStatus
+                state={state}
+                index={index + 1}
+                disabled={busy || cancelling}
+                onChange={
+                  editable
+                    ? (status) => void updateStep(state, status)
+                    : undefined
+                }
+              />
             </div>
             <p className="step-description">{step.description}</p>
             {step.expected?.text && (
@@ -155,81 +202,21 @@ export default function RunView({
               caseId={run.testCaseId}
               images={step.expected?.images}
             />
-            {step.blocks.map((block, b) => {
-              const attempts = run.attempts
-                  .filter((v) => v.blockId === block.id)
-                  .sort((a, z) => a.number - z.number),
-                latest = attempts.at(-1)
-              return (
-                <div className="call-block" key={block.id}>
-                  <div className="row-heading">
-                    <strong>
-                      <span className={`protocol ${block.kind}`}>
-                        {protocolLabel[block.kind]}
-                      </span>{' '}
-                      Вызов {b + 1} · {block.resource}
-                    </strong>
-                    {editable && (
-                      <button
-                        className="button small-button"
-                        disabled={busy || active}
-                        onClick={() => void launch(block)}
-                      >
-                        Запустить вызов
-                      </button>
-                    )}
-                  </div>
-                  {!latest && (
-                    <>
-                      <RequestSummary block={block} />
-                      <ExpectedPreview block={block} caseId={run.testCaseId} />
-                    </>
-                  )}
-                  <Results
-                    block={block}
-                    attempt={latest}
-                    cancel={
-                      editable && latest
-                        ? () => void cancelAttempt(latest.id)
-                        : undefined
-                    }
-                  />
-                  {attempts.length > 1 && (
-                    <details className="previous-attempts">
-                      <summary>
-                        Предыдущие попытки · {attempts.length - 1}
-                      </summary>
-                      {attempts.slice(0, -1).map((a) => (
-                        <Results key={a.id} block={block} attempt={a} />
-                      ))}
-                    </details>
-                  )}
-                </div>
-              )
-            })}
+            {step.blocks.map((block, b) => (
+              <RunCallTabs
+                key={block.id}
+                run={run}
+                block={block}
+                index={b + 1}
+                editable={editable}
+                disabled={busy || active || cancelling}
+                refresh={async () => {
+                  update(await request<Run>(`/runs/${run.id}`))
+                  onRefresh()
+                }}
+              />
+            ))}
             <div className="manual-result">
-              <label className="field">
-                <span>Статус шага {index + 1}</span>
-                <select
-                  aria-label={`Статус шага ${index + 1}`}
-                  disabled={!editable || busy}
-                  value={state.status}
-                  onChange={(e) =>
-                    void updateStep(
-                      state,
-                      e.target.value as StepState['status'],
-                    )
-                  }
-                >
-                  {['not_run', 'passed', 'failed', 'blocked', 'skipped'].map(
-                    (s) => (
-                      <option key={s} value={s}>
-                        {statusLabel[s]}
-                      </option>
-                    ),
-                  )}
-                </select>
-              </label>
               <label className="field">
                 <span>Комментарий к шагу {index + 1}</span>
                 <textarea
@@ -274,15 +261,6 @@ export default function RunView({
                 ? 'Дождитесь ответа или отмените прогон.'
                 : 'Успешные вызовы не заменяют ручную оценку шагов.'}
           </span>
-          <button
-            className="button secondary danger"
-            disabled={busy}
-            onClick={() =>
-              void perform(() => request<Run>(`/runs/${run.id}/cancel`, 'POST'))
-            }
-          >
-            Отменить прогон
-          </button>
           <button
             className="button"
             disabled={busy || active || unsaved}

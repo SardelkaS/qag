@@ -84,284 +84,14 @@ export function BlockEditor({
                 ))}
             </select>
           </Field>
-          <Field label="Тайм-аут, сек." error={error('timeoutSeconds')}>
-            <input
-              type="number"
-              min="1"
-              max="300"
-              value={b.timeoutSeconds || ''}
-              onChange={(e) =>
-                onChange({ ...b, timeoutSeconds: Number(e.target.value) })
-              }
-            />
-          </Field>
         </div>
-        <h4 className="request-heading">Запрос</h4>
-        {b.http && (
-          <>
-            <div className="form-grid http-line">
-              <Field label="Метод" error={error('http.method')}>
-                <select
-                  value={b.http.method}
-                  onChange={(e) =>
-                    onChange({
-                      ...b,
-                      http: { ...b.http!, method: e.target.value },
-                    })
-                  }
-                >
-                  {[
-                    'GET',
-                    'POST',
-                    'PUT',
-                    'PATCH',
-                    'DELETE',
-                    'HEAD',
-                    'OPTIONS',
-                  ].map((v) => (
-                    <option key={v}>{v}</option>
-                  ))}
-                </select>
-              </Field>
-              <Field
-                label="Путь или ссылка на ресурс"
-                error={error('http.path')}
-                hint="Например /task или AI_GW_SERVISE/task. Переменные: ${TASK_ID}."
-              >
-                <input
-                  className="mono"
-                  value={b.http.path}
-                  onChange={(e) => {
-                    const match = /^([A-Z][A-Z0-9_]*)\/(.*)$/.exec(
-                      e.target.value,
-                    )
-                    onChange({
-                      ...b,
-                      resource: match?.[1] ?? b.resource,
-                      http: {
-                        ...b.http!,
-                        path: match ? `/${match[2]}` : e.target.value,
-                      },
-                    })
-                  }}
-                />
-              </Field>
-            </div>
-            <Pairs
-              label="Query-параметры"
-              value={b.http.query}
-              onChange={(v) =>
-                onChange({ ...b, http: { ...b.http!, query: v } })
-              }
-            />
-            <div className={error('http.headers') ? 'invalid' : ''}>
-              <HeaderEditor
-                secrets={secrets}
-                label="Заголовки запроса"
-                value={b.http.headers}
-                onChange={(v) =>
-                  onChange({ ...b, http: { ...b.http!, headers: v } })
-                }
-              />
-              {error('http.headers') && (
-                <small className="field-error">{error('http.headers')}</small>
-              )}
-            </div>
-            <Field label="Формат тела" error={error('http.bodyMode')}>
-              <select
-                value={b.http.bodyMode}
-                onChange={(e) =>
-                  onChange({
-                    ...b,
-                    http: {
-                      ...b.http!,
-                      bodyMode: e.target.value as 'none' | 'text' | 'json',
-                    },
-                  })
-                }
-              >
-                <option value="none">Без тела</option>
-                <option value="json">JSON</option>
-                <option value="text">Текст</option>
-              </select>
-            </Field>
-            {b.http.bodyMode !== 'none' && (
-              <Field label="Тело запроса" error={error('http.body')}>
-                <textarea
-                  className="mono"
-                  rows={5}
-                  value={b.http.body}
-                  onChange={(e) =>
-                    onChange({
-                      ...b,
-                      http: { ...b.http!, body: e.target.value },
-                    })
-                  }
-                />
-              </Field>
-            )}
-          </>
-        )}
-        {b.grpc && (
-          <>
-            <div className="form-grid">
-              <Field label="Сервис gRPC" error={error('grpc.method')}>
-                <input
-                  className="mono"
-                  placeholder="package.Service"
-                  value={b.grpc.service}
-                  onChange={(e) =>
-                    onChange({
-                      ...b,
-                      grpc: { ...b.grpc!, service: e.target.value },
-                    })
-                  }
-                />
-              </Field>
-              <Field label="Метод gRPC">
-                <input
-                  className="mono"
-                  placeholder="Method"
-                  value={b.grpc.method}
-                  onChange={(e) =>
-                    onChange({
-                      ...b,
-                      grpc: { ...b.grpc!, method: e.target.value },
-                    })
-                  }
-                />
-              </Field>
-            </div>
-            <Field label="JSON сообщения" error={error('grpc.body')}>
-              <textarea
-                className="mono"
-                rows={5}
-                value={b.grpc.body}
-                onChange={(e) =>
-                  onChange({ ...b, grpc: { ...b.grpc!, body: e.target.value } })
-                }
-              />
-            </Field>
-            <HeaderEditor
-              secrets={secrets}
-              label="Метаданные gRPC"
-              value={b.grpc.metadata}
-              onChange={(v) =>
-                onChange({ ...b, grpc: { ...b.grpc!, metadata: v } })
-              }
-            />
-          </>
-        )}
-        {b.sql && (
-          <>
-            <Field
-              label="SQL-запрос"
-              error={error('sql.query')}
-              hint="Значения передаются как $1, $2… Для стабильного порядка строк используйте ORDER BY."
-            >
-              <textarea
-                className="mono"
-                rows={5}
-                placeholder="SELECT * FROM tasks WHERE id = $1"
-                value={b.sql.query}
-                onChange={(e) =>
-                  onChange({ ...b, sql: { ...b.sql!, query: e.target.value } })
-                }
-              />
-            </Field>
-            <fieldset className="pair-editor">
-              <legend>SQL-параметры</legend>
-              {b.sql.parameters.map((v, i) => (
-                <div className="parameter-row" key={i}>
-                  <code>${i + 1}</code>
-                  {error(`sql.parameters.${i}`) && (
-                    <small className="field-error" role="alert">
-                      {error(`sql.parameters.${i}`)}
-                    </small>
-                  )}
-                  <ValueInput
-                    value={v}
-                    label={`Параметр $${i + 1}`}
-                    onChange={(value) =>
-                      onChange({
-                        ...b,
-                        sql: {
-                          ...b.sql!,
-                          parameters: b.sql!.parameters.map((p, n) =>
-                            n === i ? value : p,
-                          ),
-                        },
-                      })
-                    }
-                  />
-                  <button
-                    type="button"
-                    className="icon-button"
-                    aria-label={`Удалить параметр ${i + 1}`}
-                    onClick={() =>
-                      onChange({
-                        ...b,
-                        sql: {
-                          ...b.sql!,
-                          parameters: b.sql!.parameters.filter(
-                            (_, n) => n !== i,
-                          ),
-                        },
-                      })
-                    }
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-              <button
-                type="button"
-                className="text-button"
-                onClick={() =>
-                  onChange({
-                    ...b,
-                    sql: {
-                      ...b.sql!,
-                      parameters: [
-                        ...b.sql!.parameters,
-                        { type: 'string', value: '' },
-                      ],
-                    },
-                  })
-                }
-              >
-                + Параметр
-              </button>
-            </fieldset>
-            <Field label="Результат SQL" error={error('sql.mode')}>
-              <select
-                value={b.sql.mode}
-                onChange={(e) =>
-                  onChange({
-                    ...b,
-                    sql: { ...b.sql!, mode: e.target.value as 'rows' | 'exec' },
-                    expected:
-                      e.target.value === 'rows'
-                        ? {
-                            bodyMode: 'rows',
-                            columns: [],
-                            rows: [],
-                            images: b.expected.images,
-                          }
-                        : {
-                            bodyMode: 'exec',
-                            rowsAffected: '1',
-                            images: b.expected.images,
-                          },
-                  })
-                }
-              >
-                <option value="rows">Строки</option>
-                <option value="exec">Команда — число затронутых строк</option>
-              </select>
-            </Field>
-          </>
-        )}
+        <RequestFields
+          block={b}
+          onChange={onChange}
+          fields={fields}
+          prefix={prefix}
+          secrets={secrets}
+        />
         <div className="expectation-editor">
           <h4>Ожидаемый результат</h4>
           {b.kind === 'http' && (
@@ -606,5 +336,297 @@ function ExpectedRows({
         + Ожидаемая строка
       </button>
     </div>
+  )
+}
+
+export function RequestFields({
+  block: b,
+  onChange,
+  fields = {},
+  prefix = '',
+  secrets,
+}: {
+  block: Block
+  onChange: (b: Block) => void
+  fields?: Record<string, string>
+  prefix?: string
+  secrets?: string[]
+}) {
+  const error = (key: string) => fields[prefix ? prefix + '.' + key : key] || ''
+  return (
+    <>
+      {' '}
+      <Field label="Тайм-аут, сек." error={error('timeoutSeconds')}>
+        <input
+          type="number"
+          min="1"
+          max="300"
+          value={b.timeoutSeconds || ''}
+          onChange={(e) =>
+            onChange({ ...b, timeoutSeconds: Number(e.target.value) })
+          }
+        />
+      </Field>
+      <h4 className="request-heading">Запрос</h4>
+      {b.http && (
+        <>
+          <div className="form-grid http-line">
+            <Field label="Метод" error={error('http.method')}>
+              <select
+                value={b.http.method}
+                onChange={(e) =>
+                  onChange({
+                    ...b,
+                    http: { ...b.http!, method: e.target.value },
+                  })
+                }
+              >
+                {[
+                  'GET',
+                  'POST',
+                  'PUT',
+                  'PATCH',
+                  'DELETE',
+                  'HEAD',
+                  'OPTIONS',
+                ].map((v) => (
+                  <option key={v}>{v}</option>
+                ))}
+              </select>
+            </Field>
+            <Field
+              label="Путь или ссылка на ресурс"
+              error={error('http.path')}
+              hint="Например /task или AI_GW_SERVISE/task. Переменные: ${TASK_ID}."
+            >
+              <input
+                className="mono"
+                value={b.http.path}
+                onChange={(e) => {
+                  const match = /^([A-Z][A-Z0-9_]*)\/(.*)$/.exec(e.target.value)
+                  onChange({
+                    ...b,
+                    resource: match?.[1] ?? b.resource,
+                    http: {
+                      ...b.http!,
+                      path: match ? `/${match[2]}` : e.target.value,
+                    },
+                  })
+                }}
+              />
+            </Field>
+          </div>
+          <Pairs
+            label="Query-параметры"
+            value={b.http.query}
+            onChange={(v) => onChange({ ...b, http: { ...b.http!, query: v } })}
+          />
+          <div className={error('http.headers') ? 'invalid' : ''}>
+            <HeaderEditor
+              secrets={secrets}
+              label="Заголовки запроса"
+              value={b.http.headers}
+              onChange={(v) =>
+                onChange({ ...b, http: { ...b.http!, headers: v } })
+              }
+            />
+            {error('http.headers') && (
+              <small className="field-error">{error('http.headers')}</small>
+            )}
+          </div>
+          <Field label="Формат тела" error={error('http.bodyMode')}>
+            <select
+              value={b.http.bodyMode}
+              onChange={(e) =>
+                onChange({
+                  ...b,
+                  http: {
+                    ...b.http!,
+                    bodyMode: e.target.value as 'none' | 'text' | 'json',
+                  },
+                })
+              }
+            >
+              <option value="none">Без тела</option>
+              <option value="json">JSON</option>
+              <option value="text">Текст</option>
+            </select>
+          </Field>
+          {b.http.bodyMode !== 'none' && (
+            <Field label="Тело запроса" error={error('http.body')}>
+              <textarea
+                className="mono"
+                rows={5}
+                value={b.http.body}
+                onChange={(e) =>
+                  onChange({
+                    ...b,
+                    http: { ...b.http!, body: e.target.value },
+                  })
+                }
+              />
+            </Field>
+          )}
+        </>
+      )}
+      {b.grpc && (
+        <>
+          <div className="form-grid">
+            <Field label="Сервис gRPC" error={error('grpc.method')}>
+              <input
+                className="mono"
+                placeholder="package.Service"
+                value={b.grpc.service}
+                onChange={(e) =>
+                  onChange({
+                    ...b,
+                    grpc: { ...b.grpc!, service: e.target.value },
+                  })
+                }
+              />
+            </Field>
+            <Field label="Метод gRPC">
+              <input
+                className="mono"
+                placeholder="Method"
+                value={b.grpc.method}
+                onChange={(e) =>
+                  onChange({
+                    ...b,
+                    grpc: { ...b.grpc!, method: e.target.value },
+                  })
+                }
+              />
+            </Field>
+          </div>
+          <Field label="JSON сообщения" error={error('grpc.body')}>
+            <textarea
+              className="mono"
+              rows={5}
+              value={b.grpc.body}
+              onChange={(e) =>
+                onChange({ ...b, grpc: { ...b.grpc!, body: e.target.value } })
+              }
+            />
+          </Field>
+          <HeaderEditor
+            secrets={secrets}
+            label="Метаданные gRPC"
+            value={b.grpc.metadata}
+            onChange={(v) =>
+              onChange({ ...b, grpc: { ...b.grpc!, metadata: v } })
+            }
+          />
+        </>
+      )}
+      {b.sql && (
+        <>
+          <Field
+            label="SQL-запрос"
+            error={error('sql.query')}
+            hint="Значения передаются как $1, $2… Для стабильного порядка строк используйте ORDER BY."
+          >
+            <textarea
+              className="mono"
+              rows={5}
+              placeholder="SELECT * FROM tasks WHERE id = $1"
+              value={b.sql.query}
+              onChange={(e) =>
+                onChange({ ...b, sql: { ...b.sql!, query: e.target.value } })
+              }
+            />
+          </Field>
+          <fieldset className="pair-editor">
+            <legend>SQL-параметры</legend>
+            {b.sql.parameters.map((v, i) => (
+              <div className="parameter-row" key={i}>
+                <code>${i + 1}</code>
+                {error(`sql.parameters.${i}`) && (
+                  <small className="field-error" role="alert">
+                    {error(`sql.parameters.${i}`)}
+                  </small>
+                )}
+                <ValueInput
+                  value={v}
+                  label={`Параметр $${i + 1}`}
+                  onChange={(value) =>
+                    onChange({
+                      ...b,
+                      sql: {
+                        ...b.sql!,
+                        parameters: b.sql!.parameters.map((p, n) =>
+                          n === i ? value : p,
+                        ),
+                      },
+                    })
+                  }
+                />
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label={`Удалить параметр ${i + 1}`}
+                  onClick={() =>
+                    onChange({
+                      ...b,
+                      sql: {
+                        ...b.sql!,
+                        parameters: b.sql!.parameters.filter((_, n) => n !== i),
+                      },
+                    })
+                  }
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="text-button"
+              onClick={() =>
+                onChange({
+                  ...b,
+                  sql: {
+                    ...b.sql!,
+                    parameters: [
+                      ...b.sql!.parameters,
+                      { type: 'string', value: '' },
+                    ],
+                  },
+                })
+              }
+            >
+              + Параметр
+            </button>
+          </fieldset>
+          <Field label="Результат SQL" error={error('sql.mode')}>
+            <select
+              value={b.sql.mode}
+              onChange={(e) =>
+                onChange({
+                  ...b,
+                  sql: { ...b.sql!, mode: e.target.value as 'rows' | 'exec' },
+                  expected:
+                    e.target.value === 'rows'
+                      ? {
+                          bodyMode: 'rows',
+                          columns: [],
+                          rows: [],
+                          images: b.expected.images,
+                        }
+                      : {
+                          bodyMode: 'exec',
+                          rowsAffected: '1',
+                          images: b.expected.images,
+                        },
+                })
+              }
+            >
+              <option value="rows">Строки</option>
+              <option value="exec">Команда — число затронутых строк</option>
+            </select>
+          </Field>
+        </>
+      )}
+    </>
   )
 }

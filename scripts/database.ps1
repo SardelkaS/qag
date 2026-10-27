@@ -14,13 +14,15 @@ Push-Location $qagRoot
 try {
     & $qagDockerPath info --format '{{.ServerVersion}}'
     if ($LASTEXITCODE -ne 0) { throw 'Docker Engine не запущен' }
-    & $qagDockerPath compose --env-file $qagEnvPath --profile test config --quiet
+    New-Item -ItemType Directory -Path (Join-Path $qagRoot '.tools') -Force | Out-Null
+    $qagTestContext = Join-Path $qagRoot '.tools/qag-test-context.exe'
+    & go build -o $qagTestContext ./cmd/test-setup
+    if ($LASTEXITCODE -ne 0) { throw 'Не удалось собрать подготовку тестового контекста' }
+    & $qagTestContext -pki-only
+    if ($LASTEXITCODE -ne 0) { throw 'Не удалось подготовить локальную PKI' }
+    & $qagDockerPath compose --env-file $qagEnvPath config --quiet
     if ($LASTEXITCODE -ne 0) { throw 'Некорректная конфигурация Compose' }
-    if ($IncludeTests) {
-        & $qagDockerPath compose --env-file $qagEnvPath --profile test up -d --wait postgres postgres-test
-    } else {
-        & $qagDockerPath compose --env-file $qagEnvPath up -d --wait postgres
-    }
+    & $qagDockerPath compose --env-file $qagEnvPath up -d --wait postgres
     if ($LASTEXITCODE -ne 0) { throw 'Не удалось запустить PostgreSQL через Compose' }
     & "$PSScriptRoot/init-local.ps1"
     foreach ($qagLine in [IO.File]::ReadAllLines($qagEnvPath)) {
@@ -28,6 +30,8 @@ try {
         if($qagParts.Length -eq 2 -and $qagParts[0] -in @('QAG_DATABASE_URL','QAG_DEMO_DATABASE_URL')) { Set-Item -LiteralPath "Env:$($qagParts[0])" -Value $qagParts[1] }
     }
     New-Item -ItemType Directory -Path (Join-Path $qagRoot '.tools') -Force | Out-Null
+    & $qagTestContext
+    if ($LASTEXITCODE -ne 0) { throw 'Не удалось подготовить тестовую mTLS-группу' }
     $qagProvision = Join-Path $qagRoot '.tools/qag-demo-provision.exe'
     & go build -o $qagProvision ./cmd/demo-setup
     if ($LASTEXITCODE -ne 0) { throw 'Не удалось собрать подготовку demo-роли' }
