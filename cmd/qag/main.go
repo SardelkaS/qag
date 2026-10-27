@@ -32,7 +32,10 @@ func main() {
 }
 
 func run() error {
-	config, err := appruntime.LoadConfig(os.Getenv)
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		return healthcheck()
+	}
+	config, err := appruntime.LoadConfigEnv(os.LookupEnv)
 	if err != nil {
 		return err
 	}
@@ -81,7 +84,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("не удалось настроить хранилище секретов")
 	}
-	if _, err = demo.Bootstrap(demoStartup, store.Pool, vault, "http://"+listener.Addr().String(), grpcListener.Addr().String(), demoConfig, demoSecrets); err != nil {
+	if _, err = demo.Bootstrap(demoStartup, store.Pool, vault, "http://"+appruntime.ClientAddress(listener.Addr().String()), grpcListener.Addr().String(), demoConfig, demoSecrets); err != nil {
 		return err
 	}
 	if err = runRepo.Recover(demoStartup); err != nil {
@@ -149,4 +152,21 @@ func run() error {
 		}
 		return fmt.Errorf("локальный сервер остановлен")
 	}
+}
+
+func healthcheck() error {
+	address := os.Getenv("QAG_ADDRESS")
+	if address == "" {
+		address = "127.0.0.1:8080"
+	}
+	client := &http.Client{Timeout: 3 * time.Second, Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	response, err := client.Get("http://" + appruntime.ClientAddress(address) + "/api/v1/health")
+	if err != nil {
+		return fmt.Errorf("приложение не готово")
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("приложение не готово")
+	}
+	return nil
 }

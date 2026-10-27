@@ -1,20 +1,36 @@
 name: qag
 
+x-tools: &tools
+  image: qag-tools:local
+  build:
+    context: .
+    target: tools
+
 services:
+  init:
+    <<: *tools
+    command: ["-operation", "init"]
+    volumes:
+      - runtime-config:/state/config
+      - private-pki:/state/pki
+      - postgres-config:/state/postgres
+      - postgres-data:/state/data:ro
+    restart: "no"
+
   postgres:
     image: postgres:18.6-alpine3.24
+    depends_on:
+      init:
+        condition: service_completed_successfully
     environment:
       POSTGRES_DB: qag
       POSTGRES_USER: qag
-      POSTGRES_PASSWORD: ${QAG_POSTGRES_PASSWORD:?Run scripts/init-local.ps1 first}
+      POSTGRES_PASSWORD_FILE: /tmp/qag-pki/password
     ports:
       - "127.0.0.1:15432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql
-      - ./.local/pki/ca.crt:/tmp/qag-pki/ca.crt:ro
-      - ./.local/pki/server.crt:/tmp/qag-pki/server.crt:ro
-      - ./.local/pki/server.key:/tmp/qag-pki/server.key:ro
-      - ./.local/pki/pg_hba.conf:/tmp/qag-pki/pg_hba.conf:ro
+      - postgres-config:/tmp/qag-pki:ro
     entrypoint: ["/bin/sh", "-c"]
     command:
       - >-
@@ -34,6 +50,68 @@ services:
       timeout: 3s
       retries: 30
     restart: unless-stopped
+    stop_grace_period: 30s
+
+  db-setup:
+    <<: *tools
+    command: ["-operation", "provision"]
+    environment:
+      QAG_CONFIG_FILE: /state/config/installation.json
+    volumes:
+      - runtime-config:/state/config:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  qag:
+    image: qag:local
+    build:
+      context: .
+      target: runtime
+    environment:
+      QAG_CONFIG_FILE: /state/config/installation.json
+      QAG_NETWORK_MODE: container
+      QAG_ADDRESS: 0.0.0.0:8080
+      QAG_PUBLIC_ORIGIN: http://127.0.0.1:${QAG_HTTP_PORT:-8080}
+    volumes:
+      - runtime-config:/state/config:ro
+    ports:
+      - "127.0.0.1:${QAG_HTTP_PORT:-8080}:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db-setup:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    stop_grace_period: 30s
+
+  import-local:
+    <<: *tools
+    profiles: [tools]
+    command: ["-operation", "import-local"]
+    volumes:
+      - runtime-config:/state/config
+      - private-pki:/state/pki
+      - postgres-config:/state/postgres
+      - type: bind
+        source: ./.local
+        target: /source
+        read_only: true
+        bind:
+          create_host_path: false
+
+  export-config:
+    <<: *tools
+    profiles: [tools]
+    command: ["-operation", "export"]
+    volumes:
+      - runtime-config:/state/config:ro
+      - private-pki:/state/pki:ro
+      - postgres-config:/state/postgres:ro
 
 volumes:
   postgres-data:
+  runtime-config:
+  private-pki:
+  postgres-config:

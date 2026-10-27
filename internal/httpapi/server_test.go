@@ -26,6 +26,42 @@ func testServer(t *testing.T, ping func(context.Context) error) *Server {
 	return s
 }
 
+func TestContainerPublishedPortKeepsBrowserGuards(t *testing.T) {
+	s, err := New(appruntime.Config{Address: "0.0.0.0:8080", PublicOrigin: "http://127.0.0.1:18088"}, fstest.MapFS{}, func(context.Context) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	effects := 0
+	s.mux.HandleFunc("POST /api/v1/effect", func(w http.ResponseWriter, r *http.Request) { effects++; w.WriteHeader(204) })
+	for _, tc := range []struct {
+		host, origin, token, fetch string
+		want                       int
+	}{
+		{"127.0.0.1:8080", "http://127.0.0.1:8080", s.token, "", 204},
+		{"localhost:18088", "http://localhost:18088", s.token, "same-origin", 204},
+		{"[::1]:18088", "http://[::1]:18088", s.token, "", 204},
+		{"evil.invalid:18088", "http://localhost:18088", s.token, "", 403},
+		{"localhost:18088", "http://evil.invalid:18088", s.token, "", 403},
+		{"localhost:18088", "http://localhost:18088", "bad", "", 403},
+		{"localhost:18088", "http://localhost:18088", s.token, "cross-site", 403},
+		{"localhost:18089", "http://localhost:18089", s.token, "", 403},
+	} {
+		before := effects
+		r := httptest.NewRequest("POST", "http://"+tc.host+"/api/v1/effect", strings.NewReader("{}"))
+		r.Header.Set("Origin", tc.origin)
+		r.Header.Set("X-QAG-CSRF", tc.token)
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Sec-Fetch-Site", tc.fetch)
+		r.Header.Set("X-Forwarded-Host", "localhost:18088")
+		r.Header.Set("X-Forwarded-Proto", "http")
+		w := httptest.NewRecorder()
+		s.Handler().ServeHTTP(w, r)
+		if w.Code != tc.want || (tc.want == 403 && effects != before) {
+			t.Fatalf("%s %s: %d effects %d", tc.host, tc.origin, w.Code, effects)
+		}
+	}
+}
+
 func TestCommandRejectsUntrustedBrowserAndInvalidSession(t *testing.T) {
 	s := testServer(t, func(context.Context) error { return nil })
 	for _, tc := range []struct {

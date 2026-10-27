@@ -1,22 +1,22 @@
-﻿param([string]$Directory)
+param([string]$Directory)
 $ErrorActionPreference = 'Stop'
 $qagRoot = Split-Path -Parent $PSScriptRoot
 if (-not $Directory) { $Directory = Join-Path $qagRoot ('.local/backups/' + (Get-Date -Format 'yyyyMMdd-HHmmss')) }
 $qagBackupDir = [IO.Path]::GetFullPath($Directory)
-$qagDumpPath = Join-Path $qagBackupDir 'qag.dump'
-$qagKeyPath = Join-Path $qagBackupDir 'qag-secret-key.txt'
-if ((Test-Path -LiteralPath $qagDumpPath) -or (Test-Path -LiteralPath $qagKeyPath)) { throw 'Резервная копия уже существует; выберите другую папку' }
-$qagKeyLine = [IO.File]::ReadAllLines((Join-Path $qagRoot '.local/dev.env')) | Where-Object { $_.StartsWith('QAG_SECRET_KEY=') } | Select-Object -First 1
-if (-not $qagKeyLine) { throw 'Локальный ключ не найден' }
+if (Test-Path -LiteralPath $qagBackupDir) { throw 'Backup destination exists; choose a new directory.' }
 $qagDocker = & "$PSScriptRoot/docker-path.ps1"
-New-Item -ItemType Directory -Path $qagBackupDir -Force | Out-Null
+# Init/import reconciles the actual Docker source, never replaces its key.
+& $qagDocker volume inspect qag_runtime-config --format '{{.Name}}' *> $null
+if ($LASTEXITCODE -ne 0) { & "$PSScriptRoot/init-local.ps1" }
+& "$PSScriptRoot/export-config.ps1" -Directory $qagBackupDir
+$qagDumpPath = Join-Path $qagBackupDir 'qag.dump'
 $qagRemote = '/tmp/qag-backup-' + [guid]::NewGuid().ToString('N') + '.dump'
 try {
     & $qagDocker exec qag-postgres-1 pg_dump -U qag -d qag --schema=qag --schema=qag_demo --format=custom --no-owner --no-acl -f $qagRemote
-    if ($LASTEXITCODE -ne 0) { throw 'pg_dump failed' }
+    if ($LASTEXITCODE -ne 0) { throw 'pg_dump failed.' }
     & $qagDocker cp "qag-postgres-1:$qagRemote" $qagDumpPath
-    if ($LASTEXITCODE -ne 0) { throw 'Backup copy failed' }
-    [IO.File]::WriteAllText($qagKeyPath, $qagKeyLine.Substring('QAG_SECRET_KEY='.Length), (New-Object Text.UTF8Encoding($false)))
+    if ($LASTEXITCODE -ne 0) { throw 'Backup copy failed.' }
+    $qagConfig = [IO.File]::ReadAllText((Join-Path $qagBackupDir 'installation.json')) | ConvertFrom-Json
+    [IO.File]::WriteAllText((Join-Path $qagBackupDir 'qag-secret-key.txt'), $qagConfig.values.QAG_SECRET_KEY, [Text.UTF8Encoding]::new($false))
 } finally { & $qagDocker exec qag-postgres-1 rm -f -- $qagRemote | Out-Null }
-Write-Host "Дамп: $qagDumpPath"
-Write-Host "Ключ: $qagKeyPath — перенесите его в отдельное защищённое хранилище."
+Write-Host "Backup saved: $qagBackupDir (dump + original configuration/PKI)."

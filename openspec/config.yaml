@@ -3,7 +3,15 @@ schema: spec-driven
 context: |
   Проект qag реализован на Go/React/TypeScript: каталог и архив, редактор,
   ресурсы, HTTP/gRPC/PostgreSQL-вызовы, сравнение и история прогонов.
-  Бинарник включает UI; PostgreSQL запускается через Docker Compose.
+  Бинарник включает UI; приложение и единственный PostgreSQL запускаются через Docker Compose.
+  Изменение containerize-app-deployment завершено: 25/25 задач, хранится в
+  openspec/changes/archive/2026-10-27-containerize-app-deployment;
+  три delta-раздела синхронизированы. Есть Dockerfile, Makefile и контейнерные
+  init/import/export/restore/provision. Приватная конфигурация и PKI сохраняются
+  в именованных томах; прежний qag_postgres-data, ключ и реквизиты сохранены.
+  Web UI опубликован на 127.0.0.1:8080, порт настраивается QAG_HTTP_PORT.
+  Контейнерный runtime работает с UID 10001; Host/Origin/CSRF сохранены.
+  Linux использует browser HTML clipboard, native Windows-режим оставлен для разработки.
   Изменение refine-run-layout-and-appearance завершено: 16/16 задач, хранится в
   openspec/changes/archive/2026-10-27-refine-run-layout-and-appearance;
   пять delta-разделов синхронизированы. Тёмные поверхности нейтральные; favicon версионируется

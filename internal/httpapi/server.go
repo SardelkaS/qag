@@ -48,6 +48,31 @@ func New(config appruntime.Config, assets fs.FS, ping func(context.Context) erro
 		s.hosts[authority] = true
 		s.origins["http://"+authority] = true
 	}
+	if config.PublicOrigin != "" {
+		public, err := url.Parse(config.PublicOrigin)
+		if err != nil {
+			return nil, fmt.Errorf("некорректный public origin")
+		}
+		s.hosts[public.Host] = true
+		s.origins[config.PublicOrigin] = true
+		publicPort := public.Port()
+		if publicPort == "" {
+			publicPort = "80"
+		}
+		for _, host := range []string{"127.0.0.1", "localhost", "::1"} {
+			authority := net.JoinHostPort(host, publicPort)
+			s.hosts[authority] = true
+			s.origins["http://"+authority] = true
+			if publicPort == "80" {
+				authority = host
+				if host == "::1" {
+					authority = "[::1]"
+				}
+				s.hosts[authority] = true
+				s.origins["http://"+authority] = true
+			}
+		}
+	}
 	if config.DevOrigin != "" {
 		origin, err := url.Parse(config.DevOrigin)
 		if err != nil {
