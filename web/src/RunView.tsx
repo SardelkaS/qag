@@ -46,12 +46,12 @@ export default function RunView({
   onRefresh: () => void
   readOnly?: boolean
 }) {
-  const viewRef = useRunStickyTop()
+  const viewRef = useRunStickyTop(run.status === 'running' && !readOnly)
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [comments, setComments] = useState<
-    Record<string, { value: string; revision: number }>
+    Record<string, { value: string; revision: number; baseComment: string }>
   >({})
   const editable = run.status === 'running' && !readOnly
   const perform = async (action: () => Promise<Run>) => {
@@ -86,6 +86,27 @@ export default function RunView({
       return result
     })
   const [cancelling, setCancelling] = useState(false)
+  const passAll = () => perform(async () => {
+    try {
+      const result = await request<Run>(`/runs/${run.id}/steps/pass-all`, 'POST', {
+        steps: run.stepStates.map(({ stepId, revision }) => ({ stepId, revision })),
+      })
+      setComments((old) => {
+        const next = { ...old }
+        for (const state of result.stepStates) {
+          const draft = next[state.stepId]
+          if (draft && draft.baseComment === state.comment)
+            next[state.stepId] = { ...draft, revision: state.revision }
+        }
+        return next
+      })
+      return result
+    } catch (e) {
+      // A lost response may follow a commit: read before another explicit click.
+      try { update(await request<Run>(`/runs/${run.id}`)) } catch { /* retain view and drafts */ }
+      throw e
+    }
+  })
   const cancelRun = async () => {
     setCancelling(true)
     setError('')
@@ -142,6 +163,9 @@ export default function RunView({
       {run.snapshot.readOnly && <ReadOnlyNotice />}
       {editable && (
         <div className="run-toolbar">
+          <button className="button secondary" disabled={busy || cancelling} onClick={() => void passAll()}>
+            Пометить все пройденным
+          </button>
           <button
             className="button"
             disabled={busy || active || cancelling}
@@ -154,6 +178,13 @@ export default function RunView({
           >
             Выполнить всё
           </button>
+          <button
+            className="button"
+            disabled={busy || active || unsaved || cancelling}
+            onClick={() => void perform(() => request<Run>(`/runs/${run.id}/finish`, 'POST'))}
+          >
+            Завершить прогон
+          </button>
           <span role="status" className="batch-progress">
             {latestBatch
               ? `Выполнено ${latestBatch.completed}/${latestBatch.items.length} · проблем: ${latestBatch.problems}${latestBatch.state === 'running' ? ' · выполняется' : latestBatch.state === 'completed' ? ' · очередь завершена' : latestBatch.state === 'cancelled' ? ' · отменена' : ' · прервана'}`
@@ -161,11 +192,14 @@ export default function RunView({
           </span>
           <button
             className="button secondary danger"
-            disabled={cancelling}
+            disabled={busy || cancelling}
             onClick={() => void cancelRun()}
           >
             {cancelling ? 'Отмена…' : 'Отменить прогон'}
           </button>
+          <span className="muted small run-hint">
+            {unsaved ? 'Сохраните комментарии перед завершением.' : active ? 'Дождитесь ответа или отмените прогон.' : 'Успешные вызовы не заменяют ручную оценку шагов.'}
+          </span>
         </div>
       )}
       <div className="run-reasons">
@@ -216,7 +250,7 @@ export default function RunView({
                   <span>Комментарий к шагу {index + 1}</span>
                   <textarea
                     aria-label={`Комментарий к шагу ${index + 1}`}
-                    disabled={!editable || busy}
+                    disabled={!editable || busy || cancelling}
                     rows={2}
                     value={comment}
                     onChange={(e) => {
@@ -228,6 +262,7 @@ export default function RunView({
                           next[step.id] = {
                             value,
                             revision: old[step.id]?.revision ?? state.revision,
+                            baseComment: old[step.id]?.baseComment ?? state.comment,
                           }
                         return next
                       })
@@ -259,26 +294,6 @@ export default function RunView({
           </article>
         )
       })}
-      {editable && (
-        <div className="action-bar">
-          <span className="muted small">
-            {unsaved
-              ? 'Сохраните комментарии перед завершением.'
-              : active
-                ? 'Дождитесь ответа или отмените прогон.'
-                : 'Успешные вызовы не заменяют ручную оценку шагов.'}
-          </span>
-          <button
-            className="button"
-            disabled={busy || active || unsaved}
-            onClick={() =>
-              void perform(() => request<Run>(`/runs/${run.id}/finish`, 'POST'))
-            }
-          >
-            Завершить прогон
-          </button>
-        </div>
-      )}
       {run.status !== 'running' &&
         run.retentionReasons.length === 0 &&
         !readOnly && (

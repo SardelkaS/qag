@@ -73,6 +73,15 @@ func checkExpansion(value string, err error) error {
 }
 
 func (res Resolved) Prepare(original catalog.Block) (catalog.Block, Resolved, error) {
+	return res.prepare(original, false)
+}
+
+func (res Resolved) PrepareRequest(original catalog.Block) (catalog.Block, Resolved, error) {
+	original.Expected = catalog.Expectation{}
+	return res.prepare(original, true)
+}
+
+func (res Resolved) prepare(original catalog.Block, research bool) (catalog.Block, Resolved, error) {
 	data, _ := json.Marshal(original)
 	var b catalog.Block
 	_ = json.Unmarshal(data, &b)
@@ -137,6 +146,12 @@ func (res Resolved) Prepare(original catalog.Block) (catalog.Block, Resolved, er
 				return fail(problem.Invalid("sql.parameters", err.Error()))
 			}
 		}
+	}
+	if research {
+		if err = catalog.ValidateRequest(&b, "block"); err != nil {
+			return fail(err)
+		}
+		return b, res, nil
 	}
 	if b.Expected.BodyMode == "json" {
 		b.Expected.Body, err = res.expandJSON(b.Expected.Body)

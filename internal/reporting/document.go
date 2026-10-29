@@ -151,7 +151,9 @@ func BuildDocument(report runs.Report) []runs.ReportNode {
 		add("heading", fmt.Sprintf("%s · попытка %d · %s", label, a.Number, a.State), 3, "")
 		add("text", fmt.Sprintf("%s · %d мс · версия запроса %s", a.StartedAt.Format("2006-01-02 15:04:05 MST"), a.DurationMS, a.VariantVersionID), 0, "")
 		request(a.Request, resource)
-		expected(a.Expected)
+		if a.VariantVersionID == "" {
+			expected(a.Expected)
+		}
 		if a.Result == nil {
 			add("text", "Подтверждённого результата нет", 0, "")
 			return
@@ -180,10 +182,14 @@ func BuildDocument(report runs.Report) []runs.ReportNode {
 		if r.Redacted {
 			add("text", "Секретные значения скрыты", 0, "")
 		}
-		add("text", "Сравнение: "+r.Comparison.Status, 0, "")
-		code(r.Comparison.Reason)
-		for _, d := range r.Comparison.Differences {
-			code(d.Path + "\nОжидалось: " + d.Expected + "\nПолучено: " + d.Actual)
+		if a.VariantVersionID == "" {
+			add("text", "Сравнение: "+r.Comparison.Status, 0, "")
+			code(r.Comparison.Reason)
+			for _, d := range r.Comparison.Differences {
+				code(d.Path + "\nОжидалось: " + d.Expected + "\nПолучено: " + d.Actual)
+			}
+		} else {
+			add("text", "Исследовательский вызов — без сравнения", 0, "")
 		}
 		for _, trace := range r.HeaderSources {
 			raw, _ := json.Marshal(trace)
@@ -229,7 +235,6 @@ func BuildDocument(report runs.Report) []runs.ReportNode {
 					group = "version:" + version.ID
 					add("heading", fmt.Sprintf("%s · Исследовательский · версия %d", v.Name, version.Revision), 3, "")
 					request(version.Request, c.Resource)
-					expected(c.Expected)
 				}
 				for _, a := range v.Attempts {
 					attempt(a, v.Name+" · Исследовательский", c.Resource)

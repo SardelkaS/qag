@@ -42,6 +42,7 @@ func loadVariants(ctx context.Context, d db, runID string) ([]Variant, error) {
 				versions.Close()
 				return nil, problem.Database(e)
 			}
+			v.Request.Expected = nil
 			result[i].Versions = append(result[i].Versions, v)
 		}
 		e = versions.Err()
@@ -62,7 +63,7 @@ func ParentBlock(run Run, id string) (catalog.Block, error) {
 	}
 	return catalog.Block{}, problem.NotFound()
 }
-func (r *Repository) SaveVariant(ctx context.Context, runID, blockID, id, name string, revision int64, request *catalog.Block) (Variant, error) {
+func (r *Repository) SaveVariant(ctx context.Context, runID, blockID, id, name string, revision int64, request *catalog.CallRequest) (Variant, error) {
 	if err := validID(runID); err != nil {
 		return Variant{}, err
 	}
@@ -122,6 +123,7 @@ func (r *Repository) SaveVariant(ctx context.Context, runID, blockID, id, name s
 			return err
 		}
 		payload := parent
+		payload.Expected = catalog.Expectation{}
 		if request != nil {
 			payload.HTTP = request.HTTP
 			payload.GRPC = request.GRPC
@@ -147,7 +149,7 @@ func (r *Repository) SaveVariant(ctx context.Context, runID, blockID, id, name s
 		if err != nil {
 			return problem.Database(err)
 		}
-		_, err = tx.Exec(ctx, dbscope.Render(tx, `INSERT INTO qag.run_call_variant_versions(id,variant_id,run_id,block_id,revision,request) VALUES($1,$2,$3,$4,$5,$6)`), versionID, id, runID, blockID, revision+1, payload)
+		_, err = tx.Exec(ctx, dbscope.Render(tx, `INSERT INTO qag.run_call_variant_versions(id,variant_id,run_id,block_id,revision,request) VALUES($1,$2,$3,$4,$5,$6)`), versionID, id, runID, blockID, revision+1, catalog.RequestFromBlock(payload, false))
 		return problem.Database(err)
 	})
 	if err != nil {

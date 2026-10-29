@@ -73,6 +73,15 @@ func ValidateSteps(steps []Step) error {
 }
 
 func ValidateBlock(b *Block, field string) error {
+	return validateBlock(b, field, true)
+}
+
+// ValidateRequest enforces the same request constraints without an expectation.
+func ValidateRequest(b *Block, field string) error {
+	return validateBlock(b, field, false)
+}
+
+func validateBlock(b *Block, field string, checkExpected bool) error {
 	invalid := func(s, message string) error { return problem.Invalid(field+"."+s, message) }
 	if !resourcePattern.MatchString(b.Resource) {
 		return invalid("resource", "Выберите именованный ресурс, например AI_GW_SERVISE")
@@ -113,11 +122,13 @@ func ValidateBlock(b *Block, field string) error {
 		if r.BodyMode == "json" && !json.Valid([]byte(r.Body)) {
 			return invalid("http.body", "Некорректный JSON запроса")
 		}
-		if b.Expected.StatusCode == nil || *b.Expected.StatusCode < 100 || *b.Expected.StatusCode > 599 {
+		if checkExpected && (b.Expected.StatusCode == nil || *b.Expected.StatusCode < 100 || *b.Expected.StatusCode > 599) {
 			return invalid("expected.statusCode", "Укажите ожидаемый HTTP-статус")
 		}
-		if err := validateHeaders(b.Expected.Headers); err != nil {
-			return invalid("expected.headers", err.Error())
+		if checkExpected {
+			if err := validateHeaders(b.Expected.Headers); err != nil {
+				return invalid("expected.headers", err.Error())
+			}
 		}
 	case "grpc":
 		if b.GRPC == nil {
@@ -129,7 +140,7 @@ func ValidateBlock(b *Block, field string) error {
 		if !json.Valid([]byte(b.GRPC.Body)) {
 			return invalid("grpc.body", "Некорректный JSON сообщения")
 		}
-		if !grpcCodes[b.Expected.GRPCCode] {
+		if checkExpected && !grpcCodes[b.Expected.GRPCCode] {
 			return invalid("expected.grpcCode", "Укажите ожидаемый gRPC-код")
 		}
 		if err := ValidateRequestHeaders(b.GRPC.Metadata); err != nil {
@@ -155,6 +166,9 @@ func ValidateBlock(b *Block, field string) error {
 			if err := ValidateValue(value); err != nil {
 				return invalid(fmt.Sprintf("sql.parameters.%d", i), err.Error())
 			}
+		}
+		if !checkExpected {
+			return nil
 		}
 		if b.SQL.Mode == "exec" {
 			if b.Expected.BodyMode != "exec" || b.Expected.RowsAffected == nil {
@@ -182,7 +196,7 @@ func ValidateBlock(b *Block, field string) error {
 	default:
 		return invalid("kind", "Поддерживаются HTTP, gRPC и PostgreSQL")
 	}
-	if b.Kind != "postgresql" {
+	if checkExpected && b.Kind != "postgresql" {
 		if b.Expected.BodyMode != "none" && b.Expected.BodyMode != "json" && b.Expected.BodyMode != "text" {
 			return invalid("expected.bodyMode", "Выберите формат ожидаемого тела")
 		}

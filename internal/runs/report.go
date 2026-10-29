@@ -85,7 +85,7 @@ func (r *Repository) ReportSnapshot(ctx context.Context, id string, includeExpec
 				}
 				variant := ReportVariant{ID: v.ID, Name: v.Name, Position: v.Position, Revision: v.Revision, Versions: []ReportVariantVersion{}, Attempts: []ReportAttempt{}}
 				for _, version := range v.Versions {
-					variant.Versions = append(variant.Versions, ReportVariantVersion{ID: version.ID, Revision: version.Revision, Request: reportRequest(version.Request), CreatedAt: version.CreatedAt})
+					variant.Versions = append(variant.Versions, ReportVariantVersion{ID: version.ID, Revision: version.Revision, Request: reportRequest(version.Request.Block()), CreatedAt: version.CreatedAt})
 				}
 				c.Variants = append(c.Variants, variant)
 			}
@@ -93,9 +93,9 @@ func (r *Repository) ReportSnapshot(ctx context.Context, id string, includeExpec
 				if a.BlockID != block.ID {
 					continue
 				}
-				attempt := ReportAttempt{ID: a.ID, Number: a.Number, VariantVersionID: a.VariantVersionID, State: a.State, StartedAt: a.StartedAt, FinishedAt: a.FinishedAt, DurationMS: a.DurationMS, Request: reportRequest(a.Request)}
-				if includeExpected {
-					expected := a.Request.Expected
+				attempt := ReportAttempt{ID: a.ID, Number: a.Number, VariantVersionID: a.VariantVersionID, State: a.State, StartedAt: a.StartedAt, FinishedAt: a.FinishedAt, DurationMS: a.DurationMS, Request: reportRequest(a.Request.Block())}
+				if includeExpected && a.VariantID == "" && a.Request.Expected != nil {
+					expected := *a.Request.Expected
 					attempt.Expected = &expected
 					addRefs(expected.Images)
 				}

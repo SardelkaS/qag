@@ -205,7 +205,11 @@ func (e *Engine) begin(ctx context.Context, caseID, runID string, revision int64
 	if err != nil {
 		return execution.Attempt{}, err
 	}
-	prepared, res, err := res.Prepare(block)
+	prepare := res.Prepare
+	if len(options) > 0 && options[0].VariantID != "" {
+		prepare = res.PrepareRequest
+	}
+	prepared, res, err := prepare(block)
 	if err != nil {
 		return execution.Attempt{}, err
 	}
@@ -270,7 +274,11 @@ func (e *Engine) execute(ctx context.Context, cancel context.CancelFunc, attempt
 		}
 		return e.Runs.CheckAttemptRunnable(ctx, attempt.ID)
 	})
-	state, result := e.Runner.Execute(ctx, scope, block, res)
+	execute := e.Runner.Execute
+	if attempt.VariantID != "" {
+		execute = e.Runner.ExecuteResearch
+	}
+	state, result := execute(ctx, scope, block, res)
 	for retry := 0; ; retry++ {
 		persistCtx, persistCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		err = e.Runs.CompleteAttempt(persistCtx, attempt.ID, state, result, time.Since(started))

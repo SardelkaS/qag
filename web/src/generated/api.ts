@@ -383,6 +383,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runs/{id}/steps/pass-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Пометить все шаги пройденными */
+        post: operations["passAllRunSteps"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/{id}/steps/{stepId}": {
         parameters: {
             query?: never;
@@ -570,7 +587,7 @@ export interface components {
             /** Format: int64 */
             number: number;
             persistencePending: boolean;
-            request: components["schemas"]["Block"];
+            request: components["schemas"]["CallRequest"];
             resource: components["schemas"]["Resource"];
             result?: components["schemas"]["ExecutionResult"];
             /** Format: int64 */
@@ -614,6 +631,18 @@ export interface components {
         };
         Block: {
             expected: components["schemas"]["Expectation"];
+            grpc?: components["schemas"]["GRPCRequest"];
+            http?: components["schemas"]["HTTPRequest"];
+            id: string;
+            /** @enum {string} */
+            kind: "http" | "grpc" | "postgresql";
+            resource: string;
+            sql?: components["schemas"]["SQLRequest"];
+            /** Format: int64 */
+            timeoutSeconds: number;
+        };
+        CallRequest: {
+            expected?: components["schemas"]["Expectation"];
             grpc?: components["schemas"]["GRPCRequest"];
             http?: components["schemas"]["HTTPRequest"];
             id: string;
@@ -1017,6 +1046,11 @@ export interface components {
             images?: components["schemas"]["ImageRef"][];
             text?: string;
         };
+        StepRevision: {
+            /** Format: int64 */
+            revision: number;
+            stepId: string;
+        };
         StepState: {
             comment: string;
             /** @enum {string} */
@@ -1033,6 +1067,9 @@ export interface components {
             revision: number;
             /** @enum {string} */
             status: "not_run" | "passed" | "failed";
+        };
+        StepsPassAll: {
+            steps: components["schemas"]["StepRevision"][];
         };
         TLSConfig: {
             ca?: string;
@@ -1103,13 +1140,13 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             id: string;
-            request: components["schemas"]["Block"];
+            request: components["schemas"]["CallRequest"];
             /** Format: int64 */
             revision: number;
         };
         VariantWrite: {
             name: string;
-            request?: components["schemas"]["Block"];
+            request?: components["schemas"]["CallRequest"];
             /** Format: int64 */
             revision: number;
         };
@@ -1935,6 +1972,37 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Успешный ответ */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    passAllRunSteps: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StepsPassAll"];
+            };
+        };
         responses: {
             /** @description Успешный ответ */
             200: {

@@ -48,9 +48,9 @@ type RunStart struct {
 	Revision      int64  `json:"revision"`
 }
 type VariantWrite struct {
-	Name     string         `json:"name"`
-	Revision int64          `json:"revision"`
-	Request  *catalog.Block `json:"request,omitempty"`
+	Name     string               `json:"name"`
+	Revision int64                `json:"revision"`
+	Request  *catalog.CallRequest `json:"request,omitempty"`
 }
 type AttemptStart struct {
 	EnvironmentID string `json:"environmentId,omitempty"`
@@ -60,6 +60,10 @@ type StepWrite struct {
 	Status   string `json:"status"`
 	Comment  string `json:"comment"`
 	Revision int64  `json:"revision"`
+}
+
+type StepsPassAll struct {
+	Steps []runs.StepRevision `json:"steps"`
 }
 type FolderPage struct {
 	Items      []catalog.Folder `json:"items"`

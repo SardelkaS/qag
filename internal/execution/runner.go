@@ -20,6 +20,18 @@ import (
 const MaxResponseBytes = 5 << 20
 
 func (r *Runner) Execute(ctx context.Context, scope string, block catalog.Block, res resources.Resolved) (string, Result) {
+	return r.execute(ctx, scope, block, res, false)
+}
+
+func (r *Runner) ExecuteResearch(ctx context.Context, scope string, block catalog.Block, res resources.Resolved) (string, Result) {
+	return r.execute(ctx, scope, block, res, true)
+}
+
+func ResearchComparison() comparison.Result {
+	return comparison.Result{Status: "not_compared", Reason: "Исследовательский вызов — без сравнения", Differences: []comparison.Difference{}}
+}
+
+func (r *Runner) execute(ctx context.Context, scope string, block catalog.Block, res resources.Resolved, research bool) (string, Result) {
 	seconds := block.TimeoutSeconds
 	if seconds == 0 {
 		seconds = 30
@@ -69,7 +81,11 @@ func (r *Runner) Execute(ctx context.Context, scope string, block catalog.Block,
 	if result.Truncated {
 		reason = "Результат усечён: превышен лимит данных"
 	}
-	result.Comparison = comparison.Compare(block, comparison.Actual{StatusCode: result.StatusCode, GRPCCode: result.GRPCCode, Headers: result.Headers, Body: result.Body, Columns: result.Columns, Rows: result.Rows, RowsAffected: result.RowsAffected, IncompleteReason: reason})
+	if research {
+		result.Comparison = ResearchComparison()
+	} else {
+		result.Comparison = comparison.Compare(block, comparison.Actual{StatusCode: result.StatusCode, GRPCCode: result.GRPCCode, Headers: result.Headers, Body: result.Body, Columns: result.Columns, Rows: result.Rows, RowsAffected: result.RowsAffected, IncompleteReason: reason})
+	}
 	MaskResult(&result, resources.NewRedactor(res.Secrets))
 	return state, result
 }

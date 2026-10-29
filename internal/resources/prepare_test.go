@@ -34,3 +34,23 @@ func TestPrepareTypedFieldsAndRejectMissingVariables(t *testing.T) {
 		t.Fatal("cycle accepted")
 	}
 }
+
+func TestPrepareResearchIgnoresLegacyExpectationVariables(t *testing.T) {
+	res := Resolved{Resource: Resource{Config: Config{}}, Variables: map[string]string{"ID": "task"}, Secrets: map[string]string{}}
+	code := 200
+	b := catalog.Block{ID: catalog.NewID(), Kind: "http", Resource: "DEMO", HTTP: &catalog.HTTPRequest{Method: "GET", Path: "/${ID}", BodyMode: "none"}, Expected: catalog.Expectation{StatusCode: &code, BodyMode: "json", Body: `{"value":"${EXPECTED_ONLY}"}`}}
+	if _, _, err := res.Prepare(b); err == nil {
+		t.Fatal("original missing expectation variable accepted")
+	}
+	prepared, _, err := res.PrepareRequest(b)
+	if err != nil || prepared.HTTP.Path != "/task" || prepared.Expected.Body != "" {
+		t.Fatal("research inherited expectation", err)
+	}
+	if b.Expected.Body == "" {
+		t.Fatal("old snapshot rewritten")
+	}
+	b.HTTP.Path = "/${MISSING}"
+	if _, _, err = res.PrepareRequest(b); err == nil {
+		t.Fatal("missing request variable accepted")
+	}
+}

@@ -33,10 +33,10 @@ type Run struct {
 }
 
 type VariantVersion struct {
-	ID        string        `json:"id"`
-	Revision  int64         `json:"revision"`
-	Request   catalog.Block `json:"request"`
-	CreatedAt time.Time     `json:"createdAt"`
+	ID        string              `json:"id"`
+	Revision  int64               `json:"revision"`
+	Request   catalog.CallRequest `json:"request"`
+	CreatedAt time.Time           `json:"createdAt"`
 }
 type Variant struct {
 	ID               string           `json:"id"`

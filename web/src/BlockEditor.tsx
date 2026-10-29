@@ -1,4 +1,4 @@
-import type { Block, Expectation, Resource, TypedValue } from './api'
+import type { Block, CallRequest, Expectation, Resource, TypedValue } from './api'
 import { newBlock, protocolLabel } from './api'
 import { Field, Pairs, ValueInput } from './ui'
 import { HeaderEditor } from './HeaderEditor'
@@ -87,7 +87,7 @@ export function BlockEditor({
         </div>
         <RequestFields
           block={b}
-          onChange={onChange}
+          onChange={(next) => onChange({ ...next, expected: next.expected ?? b.expected })}
           fields={fields}
           prefix={prefix}
           secrets={secrets}
@@ -345,12 +345,14 @@ export function RequestFields({
   fields = {},
   prefix = '',
   secrets,
+  requestOnly = false,
 }: {
-  block: Block
-  onChange: (b: Block) => void
+  block: CallRequest
+  onChange: (b: CallRequest) => void
   fields?: Record<string, string>
   prefix?: string
   secrets?: string[]
+  requestOnly?: boolean
 }) {
   const error = (key: string) => fields[prefix ? prefix + '.' + key : key] || ''
   return (
@@ -606,17 +608,17 @@ export function RequestFields({
                   ...b,
                   sql: { ...b.sql!, mode: e.target.value as 'rows' | 'exec' },
                   expected:
-                    e.target.value === 'rows'
+                    requestOnly ? undefined : e.target.value === 'rows'
                       ? {
                           bodyMode: 'rows',
                           columns: [],
                           rows: [],
-                          images: b.expected.images,
+                          images: b.expected?.images,
                         }
                       : {
                           bodyMode: 'exec',
                           rowsAffected: '1',
-                          images: b.expected.images,
+                          images: b.expected?.images,
                         },
                 })
               }

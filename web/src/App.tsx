@@ -523,7 +523,6 @@ export default function App() {
               </select>
             </label>
             <ThemeSwitch />
-            <span className="badge local-badge">Локально</span>
           </div>
         </header>
         {error && (

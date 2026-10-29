@@ -67,6 +67,13 @@ func (s *Server) RegisterRuns(engine *service.Engine) {
 		}
 		return engine.VariantAttempt(r.Context(), r.PathValue("id"), r.PathValue("variantId"), body.Revision, r.Header.Get("Idempotency-Key"))
 	})
+	s.register("POST /api/v1/runs/{id}/steps/pass-all", func(r *http.Request) (any, error) {
+		var body StepsPassAll
+		if err := readJSON(r, &body); err != nil {
+			return nil, err
+		}
+		return engine.Runs.PassAll(r.Context(), r.PathValue("id"), body.Steps)
+	})
 	s.register("PATCH /api/v1/runs/{id}/steps/{stepId}", func(r *http.Request) (any, error) {
 		var body StepWrite
 		if err := readJSON(r, &body); err != nil {

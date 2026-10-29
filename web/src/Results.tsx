@@ -1,4 +1,4 @@
-import type { Attempt, Block, Column, TypedValue } from './api'
+import type { Attempt, CallRequest, Column, Expectation, TypedValue } from './api'
 import { protocolLabel, statusLabel } from './api'
 import { Code, Notice } from './ui'
 import { ImageGallery } from './ImageGallery'
@@ -50,7 +50,7 @@ export function SQLTable({
   )
 }
 
-export function RequestSummary({ block }: { block: Block }) {
+export function RequestSummary({ block }: { block: CallRequest }) {
   const payload = block.http ?? block.grpc ?? block.sql
   const label = block.http
     ? `${block.http.method} ${block.http.path}`
@@ -69,10 +69,11 @@ export function ExpectedPreview({
   block,
   caseId,
 }: {
-  block: Block
+  block: CallRequest
   caseId: string
 }) {
   const expected = block.expected
+  if (!expected) return null
   return (
     <section className="expected-preview">
       <h5>Ожидаемый результат</h5>
@@ -102,14 +103,17 @@ export function Results({
   attempt,
   cancel,
 }: {
-  block: Block
+  block: CallRequest
   attempt?: Attempt
   cancel?: () => void
 }) {
   if (!attempt) return null
   const original = attempt.request ?? block,
-    expected = original.expected,
-    result = attempt.result
+    result = attempt.result,
+    research = !!attempt.variantId
+  const expected: Expectation = original.expected ?? { bodyMode: 'none' }
+  const shownStatus = research ? attempt.state : result?.comparison.status ?? attempt.state
+  const actualJSON = research ? original.kind === 'grpc' || !!result?.headers.some(h => h.name.toLowerCase() === 'content-type' && h.value.includes('json')) || /^[\s]*[\[{]/.test(result?.body ?? '') : expected.bodyMode === 'json'
   const busy = attempt.state === 'queued' || attempt.state === 'running'
   return (
     <section className="results" aria-label="Результат вызова">
@@ -120,10 +124,9 @@ export function Results({
             {protocolLabel[original.kind]} · версия сценария {attempt.revision}
           </strong>
           <span
-            className={`status ${result?.comparison.status ?? attempt.state}`}
+            className={`status ${shownStatus}`}
           >
-            {statusLabel[result?.comparison.status ?? attempt.state] ??
-              attempt.state}
+            {statusLabel[shownStatus] ?? shownStatus}
           </span>
         </div>
         {busy && cancel && (
@@ -136,7 +139,8 @@ export function Results({
           </button>
         )}
       </div>
-      <ImageGallery caseId={attempt.testCaseId} images={expected.images} />
+      {!research && <ImageGallery caseId={attempt.testCaseId} images={expected.images} />}
+      {research && <p className="muted small">Исследовательский вызов — без сравнения</p>}
       {result?.headerSources?.map((source, i) => (
         <div className={`source-result ${source.state}`} key={i}>
           <strong>Заголовок {source.headerName}</strong>
@@ -180,18 +184,18 @@ export function Results({
             <p className="protocol-message">{result.statusMessage}</p>
           )}
           {result.truncated && (
-            <Notice>Ответ усечён. Полное совпадение не подтверждено.</Notice>
+            <Notice>{research ? 'Ответ усечён. Показана доступная часть.' : 'Ответ усечён. Полное совпадение не подтверждено.'}</Notice>
           )}
           {result.redacted && (
             <p className="muted small">
-              Известные секреты скрыты. Сравнение выполнено до скрытия значений.
+              {research ? 'Известные секреты скрыты.' : 'Известные секреты скрыты. Сравнение выполнено до скрытия значений.'}
             </p>
           )}
-          {result.comparison.reason && (
+          {!research && result.comparison.reason && (
             <p className="muted small">{result.comparison.reason}</p>
           )}
-          <div className="comparison-grid">
-            <div>
+          <div className={research ? 'actual-result' : 'comparison-grid'}>
+            {!research && <div>
               <h5>Ожидалось</h5>
               <div className="protocol-summary">
                 {original.kind === 'http'
@@ -217,7 +221,7 @@ export function Results({
                   />
                 )
               )}
-            </div>
+            </div>}
             <div>
               <h5>Получено</h5>
               <div className="protocol-summary">
@@ -231,11 +235,11 @@ export function Results({
               {result.columns ? (
                 <SQLTable columns={result.columns} rows={result.rows ?? []} />
               ) : (
-                <Code text={result.body} json={expected.bodyMode === 'json'} />
+                <Code text={result.body} json={actualJSON} />
               )}
             </div>
           </div>
-          {result.comparison.differences.length > 0 && (
+          {!research && result.comparison.differences.length > 0 && (
             <details className="differences" open>
               <summary>
                 Различия · {result.comparison.differences.length}

@@ -1536,6 +1536,8 @@ test('оформление: favicon, предупреждения и закре�
   })
   await page.goto('/')
   const icon = page.locator('link[rel="icon"][type="image/png"]')
+  await expect(page.getByText('Локально', { exact: true })).toHaveCount(0)
+  await expect(page.getByLabel('Текущее окружение')).toBeVisible()
   await expect(icon).toHaveAttribute('sizes', '32x32')
   const iconUrl = await icon.getAttribute('href')
   expect(iconUrl).toMatch(/^\/qag-32\.png\?v=[a-f0-9]{12}$/)
@@ -1602,9 +1604,10 @@ test('оформление: favicon, предупреждения и закре�
       await first.evaluate(el => window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY + 700))
       await expect.poll(async () => first.evaluate(el => {
         const content = el.querySelector('.run-step-content')!.getBoundingClientRect(), status = el.querySelector('.run-step-status')!.getBoundingClientRect()
-        const panels = [...document.querySelectorAll('.toolbar, .document-header')].filter(p => ['sticky','fixed'].includes(getComputedStyle(p).position))
+        const panels = [...document.querySelectorAll('.toolbar, .document-header, .run-toolbar')].filter(p => ['sticky','fixed'].includes(getComputedStyle(p).position))
         const bottom = Math.max(0, ...panels.map(p => p.getBoundingClientRect().bottom))
-        return status.left >= content.right && status.top >= bottom && status.bottom <= innerHeight && status.right <= innerWidth
+        const buttons = [...document.querySelectorAll('.run-toolbar button')].map(b => b.getBoundingClientRect())
+        return status.left >= content.right && status.top >= bottom && status.bottom <= innerHeight && status.right <= innerWidth && buttons.every(b => b.top >= 0 && b.bottom <= innerHeight && b.right <= innerWidth)
       })).toBe(true)
       await expect(comment).toBeFocused()
       await expect(comment).toHaveValue('Черновик после ручной оценки')
@@ -1623,6 +1626,20 @@ test('оформление: favicon, предупреждения и закре�
   await page.setViewportSize({ width: 720, height: 450 })
   await first.evaluate(el => window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY + 700))
   await expect.poll(async () => first.locator('.run-step-status').evaluate(el => el.getBoundingClientRect().top >= 0 && el.getBoundingClientRect().bottom <= innerHeight)).toBe(true)
+  await page.setViewportSize({ width: 960, height: 720 })
+  await page.evaluate(() => { document.body.style.zoom = '1.25' })
+  await first.evaluate(el => window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY + 700))
+  await expect.poll(async () => first.locator('.run-step-status').evaluate(el => {
+    const status = el.getBoundingClientRect(), toolbar = document.querySelector('.run-toolbar')!.getBoundingClientRect()
+    return status.top >= toolbar.bottom && status.bottom <= innerHeight && toolbar.top >= 0
+  })).toBe(true)
+  await page.evaluate(() => { document.body.style.zoom = '' })
+  await next.scrollIntoViewIfNeeded()
+  await next.getByLabel('Статус шага 2', { exact: true }).focus()
+  await expect.poll(async () => page.locator('.run-toolbar button').evaluateAll(buttons => buttons.every(button => {
+    const r = button.getBoundingClientRect()
+    return r.top >= 0 && r.bottom <= innerHeight && r.right <= innerWidth
+  }))).toBe(true)
   expect(writes).toEqual([])
   await page.setViewportSize({ width: 1440, height: 1000 })
   await first.getByRole('button', { name: 'Сохранить комментарий', exact: true }).click()
@@ -1638,6 +1655,8 @@ test('оформление: favicon, предупреждения и закре�
   const history = page.getByRole('dialog', { name: 'Снимок прогона', exact: true })
   await expect(history.locator('.run-step-result .step-status-icon.passed')).toHaveCount(1)
   await expect(history.locator('.step-status-control select')).toHaveCount(0)
+  await expect(history.getByRole('button', { name: 'Пометить все пройденным', exact: true })).toHaveCount(0)
+  await expect(history.getByRole('button', { name: 'Завершить прогон', exact: true })).toHaveCount(0)
   await page.screenshot({ path: resolve(root, '.local/appearance-history.png') })
 })
 
@@ -1678,18 +1697,19 @@ test('очередь и вкладки: три протокола, ручные 
       await call
         .getByLabel('JSON сообщения', { exact: true })
         .fill('{"id":"missing-item"}')
-    if (index === 2)
+    if (index === 2) {
+      await call.getByLabel('Результат SQL', { exact: true }).selectOption('exec')
+      await expect(call.getByText('Ожидаемый результат', { exact: true })).toHaveCount(0)
+      await call.getByLabel('Результат SQL', { exact: true }).selectOption('rows')
       await call.getByLabel('Параметр $1', { exact: true }).fill('missing-item')
+    }
     await call
       .getByRole('button', { name: 'Запустить вариант', exact: true })
       .click()
-    await expect(
-      call
-        .getByText(index === 1 ? 'Не сравнено' : 'Есть различия', {
-          exact: true,
-        })
-        .first(),
-    ).toBeVisible()
+    await expect(call.locator('.results .status').first()).toHaveText('Ответ получен')
+    await expect(call.locator('.actual-result')).toHaveCount(1)
+    await expect(call.locator('.comparison-grid, .expected-images')).toHaveCount(0)
+    await expect(call.getByText('Есть различия', { exact: true })).toHaveCount(0)
   }
   await page.reload()
   await page
@@ -1707,12 +1727,34 @@ test('очередь и вкладки: три протокола, ручные 
       .first()
       .getByLabel('Путь или ссылка на ресурс', { exact: true }),
   ).toHaveValue('/items/missing-item')
-  for (let i = 0; i < 5; i++) {
-    const control = page.getByLabel(`Статус шага ${i + 1}`, { exact: true })
-    await expect(control.locator('option')).toHaveCount(3)
-    await control.selectOption('passed')
-    await expect(control).toBeEnabled()
-  }
+  await page.getByLabel('Статус шага 1', { exact: true }).selectOption('failed')
+  await expect(page.getByLabel('Статус шага 1', { exact: true })).toBeEnabled()
+  await page.getByLabel('Статус шага 2', { exact: true }).selectOption('passed')
+  await expect(page.getByLabel('Статус шага 2', { exact: true })).toBeEnabled()
+  const draft = page.getByLabel('Комментарий к шагу 1', { exact: true })
+  await draft.fill('Ручная проверка завершена')
+  // A concurrent tab changes a different step after this tab sends its revisions.
+  await page.route('**/steps/pass-all', async route => {
+    const current = await api(`/runs/${run.id}`), state = current.stepStates[1]
+    await api(`/runs/${run.id}/steps/${state.stepId}`, 'PATCH', { revision: state.revision, status: 'passed', comment: 'Другая вкладка' })
+    await route.continue()
+  }, { times: 1 })
+  const conflict = page.waitForResponse(r => r.url().endsWith('/steps/pass-all') && r.status() === 409)
+  const bulk = page.getByRole('button', { name: 'Пометить все пройденным', exact: true })
+  await bulk.click()
+  await conflict
+  await expect(bulk).toBeEnabled()
+  await expect(draft).toHaveValue('Ручная проверка завершена')
+  await bulk.click()
+  for (let i = 0; i < 5; i++) await expect(page.getByLabel(`Статус шага ${i + 1}`, { exact: true })).toHaveValue('passed')
+  await expect(draft).toHaveValue('Ручная проверка завершена')
+  await expect(page.getByRole('button', { name: 'Завершить прогон', exact: true })).toBeDisabled()
+  await page.getByRole('button', { name: 'Сохранить комментарий', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Сохранить комментарий', exact: true })).toHaveCount(0)
+  const afterBulk = await api(`/runs/${run.id}`)
+  expect(afterBulk.status).toBe('running')
+  expect(afterBulk.attempts).toHaveLength(8)
+  expect(afterBulk.stepStates[1].comment).toBe('Другая вкладка')
   await page
     .getByRole('button', { name: 'Завершить прогон', exact: true })
     .click()
@@ -1916,7 +1958,7 @@ test('экспорт: PDF, текст, Markdown, изображения, Word и
       run = await api(`/runs/${run.id}`)
       return run.batches[0].state === 'completed'
     })
-    const v = await api(`/runs/${run.id}/blocks/${blockId}/variants`, 'POST', {
+    let v = await api(`/runs/${run.id}/blocks/${blockId}/variants`, 'POST', {
       name: 'Исследование',
     })
     await api(
@@ -1932,8 +1974,14 @@ test('экспорт: PDF, текст, Markdown, изображения, Word и
         run.attempts.every((a: any) => a.finishedAt)
       )
     })
+    v = await api(`/runs/${run.id}/variants/${v.id}`, 'PATCH', { name: v.name, revision: v.revision, request: v.versions[0].request })
+    await api(`/runs/${run.id}/variants/${v.id}/attempts`, 'POST', { revision: v.revision }, randomUUID())
+    await eventually(async () => {
+      run = await api(`/runs/${run.id}`)
+      return run.attempts.length === 3 && run.attempts.every((a: any) => a.finishedAt)
+    })
     expect(sources).toBe(1)
-    expect(calls).toBe(2)
+    expect(calls).toBe(3)
     await page.addInitScript(() => {
       Object.defineProperty(navigator, 'clipboard', {
         configurable: true,
@@ -1970,6 +2018,17 @@ test('экспорт: PDF, текст, Markdown, изображения, Word и
     await expect(dialog.getByText(/Частичный отчёт/)).toBeVisible()
     const reader = await import('pdfjs-dist/legacy/build/pdf.mjs')
     for (const include of [true, false]) {
+      const report = await api(`/runs/${run.id}/report?includeExpected=${include}`)
+      const researchIds = new Set([
+        ...run.variants.flatMap((v: any) => v.versions.map((version: any) => 'version:' + version.id)),
+        ...run.attempts.filter((a: any) => a.variantId).map((a: any) => 'attempt:' + a.id),
+      ])
+      const nodes = report.document.filter((node: any) => researchIds.has(node.callId))
+      expect(nodes.length).toBeGreaterThan(4)
+      expect(JSON.stringify(nodes)).not.toContain(expectedMarker)
+      expect(nodes.some((node: any) => node.kind === 'image' || /Ожидалось|Сравнение:|Ожидаемый результат/.test(node.text))).toBe(false)
+      expect(report.steps[0].calls[0].variants[0].versions).toHaveLength(2)
+      expect(report.steps[0].calls[0].variants[0].attempts).toHaveLength(2)
       await dialog
         .getByLabel('Включать ожидаемые результаты')
         .setChecked(include)
@@ -2185,7 +2244,7 @@ test('экспорт: PDF, текст, Markdown, изображения, Word и
     const archived = await api(`/runs/${run.id}/report?includeExpected=false`)
     expect(archived.partial).toBe(false)
     expect(JSON.stringify(archived)).not.toContain(expectedMarker)
-    expect(calls).toBe(2)
+    expect(calls).toBe(3)
     expect(sources).toBe(1)
   } finally {
     await pasteBrowser?.close()
@@ -2308,7 +2367,7 @@ test('восстановление очереди после источника 
       randomUUID(),
     )
     await api(`/runs/${run.id}/steps/${step}`, 'PATCH', {
-      status: 'passed',
+      status: 'failed',
       comment: 'До остановки очереди',
       revision: 1,
     })
@@ -2319,6 +2378,24 @@ test('восстановление очереди после источника 
         : (await (await fetch(config.sqlEffectURL)).json()).effects ===
           sqlBefore.effects + 1,
     )
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Папка ' + folder.name, exact: true }).click()
+    await page.getByRole('button', { name: 'Открыть тест-кейс ' + doc.name, exact: true }).click()
+    await expect(page.locator('.batch-progress')).toContainText('выполняется')
+    const bulk = page.getByRole('button', { name: 'Пометить все пройденным', exact: true })
+    let release!: () => void
+    const gate = new Promise<void>(resolve => { release = resolve })
+    await page.route('**/steps/pass-all', async route => { await gate; await route.continue() }, { times: 1 })
+    await bulk.click()
+    await expect(bulk).toBeDisabled()
+    release()
+    await expect(page.getByLabel('Статус шага 1', { exact: true })).toHaveValue('passed')
+    await expect(page.getByLabel('Комментарий к шагу 1', { exact: true })).toHaveValue('До остановки очереди')
+    await expect(page.getByRole('button', { name: 'Отменить прогон', exact: true })).toBeEnabled()
+    await expect(page.getByRole('button', { name: 'Завершить прогон', exact: true })).toBeDisabled()
+    run = await api(`/runs/${run.id}`)
+    expect(run.status).toBe('running')
+    expect(run.attempts).toHaveLength(1)
     await stopApp()
     await startApp()
     run = await api(`/runs/${run.id}`)

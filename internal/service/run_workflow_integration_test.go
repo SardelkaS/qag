@@ -256,7 +256,7 @@ func TestRunBatchVariantsAndLegacyStatuses(t *testing.T) {
 		t.Fatal(err)
 	}
 	a = awaitAuthoringAttempt(t, f, a)
-	if a.Number != 1 || a.VariantVersionID != variant.CurrentVersionID || a.Result.Comparison.Status != "mismatch" {
+	if a.Number != 1 || a.VariantVersionID != variant.CurrentVersionID || a.Result.Comparison.Status != "not_compared" || a.Request.Expected != nil {
 		t.Fatal("variant result lost", a)
 	}
 	same, err := f.engine.VariantAttempt(f.ctx, run.ID, variant.ID, variant.Revision, attemptKey)

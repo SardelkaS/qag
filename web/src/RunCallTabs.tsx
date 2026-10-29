@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import type { Block, Run, Variant } from './api'
+import type { Block, CallRequest, Run, Variant } from './api'
 import { command, message, protocolLabel, request } from './api'
 import { RequestFields } from './BlockEditor'
 import { Results, RequestSummary, ExpectedPreview } from './Results'
 
-type Draft = { name: string; request: Block; revision: number }
-function formBlock(b: Block): Block {
+type Draft = { name: string; request: CallRequest; revision: number }
+function formBlock(b: CallRequest): CallRequest {
   return {
     ...b,
     http: b.http
@@ -177,6 +177,7 @@ export function RunCallTabs({
           </label>
           <RequestFields
             block={shown}
+            requestOnly
             onChange={(next) =>
               change({
                 request: {
@@ -184,7 +185,7 @@ export function RunCallTabs({
                   id: block.id,
                   kind: block.kind,
                   resource: block.resource,
-                  expected: block.expected,
+                  expected: undefined,
                 },
               })
             }
@@ -204,7 +205,7 @@ export function RunCallTabs({
       ) : (
         !latest && <RequestSummary block={shown} />
       )}
-      {!latest && <ExpectedPreview block={block} caseId={run.testCaseId} />}
+      {!variant && !latest && <ExpectedPreview block={block} caseId={run.testCaseId} />}
       {editable && (
         <button
           className="button small-button"

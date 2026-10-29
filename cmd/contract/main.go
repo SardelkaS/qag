@@ -85,6 +85,7 @@ func request(name string) object {
 
 func main() {
 	for name, value := range map[string]any{
+		"CallRequest": catalog.CallRequest{}, "StepRevision": runs.StepRevision{}, "StepsPassAll": httpapi.StepsPassAll{},
 		"ClipboardWrite": reporting.ClipboardWrite{}, "PNGPart": reporting.PNGPart{}, "ClipboardResult": reporting.ClipboardResult{},
 		"ReportNode": runs.ReportNode{},
 		"Variant":    runs.Variant{}, "VariantVersion": runs.VariantVersion{}, "Batch": runs.Batch{}, "BatchItem": runs.BatchItem{}, "VariantWrite": httpapi.VariantWrite{}, "Report": runs.Report{}, "ReportStep": runs.ReportStep{}, "ReportCall": runs.ReportCall{}, "ReportRequest": runs.ReportRequest{}, "ReportVariant": runs.ReportVariant{}, "ReportVariantVersion": runs.ReportVariantVersion{}, "ReportAttempt": runs.ReportAttempt{}, "ReportImage": runs.ReportImage{},
@@ -103,6 +104,7 @@ func main() {
 	schemas["Health"] = object{"type": "object", "required": []string{"status"}, "properties": object{"status": object{"type": "string", "enum": []string{"ready"}}}}
 	schemas["Session"] = object{"type": "object", "required": []string{"csrfToken"}, "properties": object{"csrfToken": object{"type": "string"}}}
 	setEnum("Block", "kind", "http", "grpc", "postgresql")
+	setEnum("CallRequest", "kind", "http", "grpc", "postgresql")
 	setEnum("Resource", "kind", "http", "grpc", "postgresql")
 	setEnum("ResourceWrite", "kind", "http", "grpc", "postgresql")
 	setEnum("TypedValue", "type", "null", "string", "boolean", "integer", "decimal", "timestamp", "bytes", "json")
@@ -181,6 +183,7 @@ func main() {
 		{"get", "/test-cases/{id}/runs", "listRuns", "История прогонов", "", "RunPage"}, {"post", "/test-cases/{id}/runs", "startRun", "Начать прогон", "RunStart", "Run"}, {"get", "/runs/{id}", "getRun", "Прочитать снимок прогона", "", "Run"},
 		{"patch", "/runs/{id}/steps/{stepId}", "updateRunStep", "Сохранить ручной статус и комментарий", "StepWrite", "Run"}, {"post", "/runs/{id}/blocks/{blockId}/attempts", "startRunAttempt", "Выполнить блок прогона", "", "Attempt"},
 		{"post", "/runs/{id}/batches", "startBatch", "Выполнить все исходные вызовы", "", "Batch"},
+		{"post", "/runs/{id}/steps/pass-all", "passAllRunSteps", "Пометить все шаги пройденными", "StepsPassAll", "Run"},
 		{"get", "/runs/{id}/report", "getRunReport", "Подготовить согласованный отчёт", "", "Report"},
 		{"post", "/runs/{id}/report/clipboard", "copyRunReport", "Скопировать оформленный отчёт в Windows clipboard", "ClipboardWrite", "ClipboardResult"},
 		{"post", "/runs/{id}/blocks/{blockId}/variants", "createVariant", "Создать исследовательский вариант", "VariantWrite", "Variant"},

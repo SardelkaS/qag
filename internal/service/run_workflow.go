@@ -135,8 +135,8 @@ func (e *Engine) VariantAttempt(ctx context.Context, runID, variantID string, re
 			if version.ID != variant.CurrentVersionID {
 				continue
 			}
-			block := version.Request
-			if err = catalog.ValidateBlock(&block, "request"); err != nil {
+			block := version.Request.Block()
+			if err = catalog.ValidateRequest(&block, "request"); err != nil {
 				return execution.Attempt{}, err
 			}
 			snapshot, err := e.Runs.Context(ctx, runID)

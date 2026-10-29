@@ -163,8 +163,58 @@ func TestContainerRuntime(t *testing.T) {
 			t.Fatalf("protocol block %s: state %s result %+v", a.BlockID, a.State, a.Result)
 		}
 	}
+	// Each research protocol retains the actual response, without inheriting the
+	// original expectation. Negative codes are facts, not failed comparisons.
+	for index := 0; index < 3; index++ {
+		block := demo.Steps[index].Blocks[0]
+		request := catalog.RequestFromBlock(block, false)
+		if request.HTTP != nil {
+			copy := *request.HTTP
+			copy.Path = "/items/missing-item"
+			request.HTTP = &copy
+		}
+		if request.GRPC != nil {
+			copy := *request.GRPC
+			copy.Body = `{"id":"missing-item"}`
+			request.GRPC = &copy
+		}
+		var variant runs.Variant
+		api("POST", "/runs/"+run.ID+"/blocks/"+block.ID+"/variants", httpapi.VariantWrite{Name: "Исследование " + block.Kind}, &variant)
+		if len(variant.Versions) != 1 || variant.Versions[0].Request.Expected != nil {
+			t.Fatal("research version inherited expected")
+		}
+		api("PATCH", "/runs/"+run.ID+"/variants/"+variant.ID, httpapi.VariantWrite{Name: variant.Name, Revision: variant.Revision, Request: &request}, &variant)
+		var attempt execution.Attempt
+		api("POST", "/runs/"+run.ID+"/variants/"+variant.ID+"/attempts", httpapi.AttemptStart{Revision: variant.Revision}, &attempt)
+		for n := 0; n < 100; n++ {
+			api("GET", "/attempts/"+attempt.ID, nil, &attempt)
+			if attempt.FinishedAt != nil {
+				break
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		if attempt.State != "completed" || attempt.Result == nil || attempt.Request.Expected != nil || attempt.Result.Comparison.Status != "not_compared" || len(attempt.Result.Comparison.Differences) != 0 {
+			t.Fatalf("research %s did not retain request-only actual result: %+v", block.Kind, attempt)
+		}
+		if index == 0 && (attempt.Result.StatusCode == nil || *attempt.Result.StatusCode != 404) {
+			t.Fatal("HTTP actual status lost")
+		}
+		if index == 1 && attempt.Result.GRPCCode != "NOT_FOUND" {
+			t.Fatal("gRPC actual status lost")
+		}
+		if index == 2 && (len(attempt.Result.Rows) == 0 || len(attempt.Result.Columns) == 0) {
+			t.Fatal("SQL actual rows lost")
+		}
+		expectedCalls++
+	}
+	api("GET", "/runs/"+run.ID, nil, &run)
+	bulk := httpapi.StepsPassAll{}
 	for _, step := range run.StepStates {
-		api("PATCH", "/runs/"+run.ID+"/steps/"+step.StepID, httpapi.StepWrite{Status: "passed", Revision: step.Revision}, nil)
+		bulk.Steps = append(bulk.Steps, runs.StepRevision{StepID: step.StepID, Revision: step.Revision})
+	}
+	api("POST", "/runs/"+run.ID+"/steps/pass-all", bulk, &run)
+	if run.Status != "running" || len(run.Attempts) != expectedCalls {
+		t.Fatal("manual bulk command executed or completed a run")
 	}
 	api("POST", "/runs/"+run.ID+"/finish", map[string]any{}, &run)
 	// The host browser checks the actual Linux capability and every export format.

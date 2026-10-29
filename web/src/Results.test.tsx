@@ -6,6 +6,22 @@ import { newBlock, type Attempt, type Run } from './api'
 import { mergeRun } from './RunView'
 
 describe('точное безопасное представление', () => {
+  it('показывает старый исследовательский ответ без унаследованного ожидания и различий', () => {
+    const block = newBlock('http')
+    block.expected.body = 'legacy-expected-sentinel'
+    const attempt = {
+      variantId: 'research', state: 'completed', request: block, revision: 1, durationMs: 12,
+      result: { protocol: 'http', statusCode: 404, headers: [], body: '{"number":9007199254740993123}',
+        comparison: { status: 'mismatch', reason: 'legacy-comparison-sentinel', differences: [{path:'legacy-diff',expected:'legacy-expected-sentinel',actual:'old'}] } },
+    } as unknown as Attempt
+    const {container} = render(<Results block={block} attempt={attempt} />)
+    expect(screen.getByText('HTTP 404')).toBeInTheDocument()
+    expect(container.textContent).toContain('9007199254740993123')
+    expect(screen.getByText(/Исследовательский вызов — без сравнения/)).toBeInTheDocument()
+    expect(screen.queryByText('Ожидалось')).toBeNull()
+    expect(container.textContent).not.toContain('legacy-')
+    expect(container.querySelector('.mismatch')).toBeNull()
+  })
   it('сохраняет большие JSON-числа и выводит HTML как текст', () => {
     const value = '{"n":9007199254740993123,"html":"<img src=x onerror=alert(1)>"}'
     expect(prettyJSON(value)).toContain('9007199254740993123')

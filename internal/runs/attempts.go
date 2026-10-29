@@ -16,9 +16,9 @@ import (
 )
 
 type attemptEnvelope struct {
-	Block           catalog.Block      `json:"block"`
-	Resource        resources.Resource `json:"resource"`
-	EnvironmentName string             `json:"environmentName"`
+	Block           catalog.CallRequest `json:"block"`
+	Resource        resources.Resource  `json:"resource"`
+	EnvironmentName string              `json:"environmentName"`
 }
 
 const attemptSelect = `SELECT id::text,run_id::text,test_case_id::text,block_id::text,case_revision,attempt_number,state,safe_request,result,started_at,finished_at,duration_ms,coalesce(variant_id::text,''),coalesce(variant_version_id::text,''),coalesce(batch_id::text,''),coalesce(batch_position,0) FROM qag.call_attempts`
@@ -34,6 +34,12 @@ func scanAttempt(row scanner) (execution.Attempt, error) {
 		attempt.RunID = *runID
 	}
 	attempt.Request = envelope.Block
+	if attempt.VariantID != "" {
+		attempt.Request.Expected = nil
+		if attempt.Result != nil {
+			attempt.Result.Comparison = execution.ResearchComparison()
+		}
+	}
 	attempt.Resource = envelope.Resource
 	attempt.EnvironmentName = envelope.EnvironmentName
 	attempt.EnvironmentID = envelope.Resource.EnvironmentID
@@ -191,7 +197,7 @@ func (r *Repository) BeginAttempt(ctx context.Context, candidateID, caseID, runI
 		if resource.ID == "" {
 			return problem.Invalid("resource", "Ресурс не найден в снимке")
 		}
-		envelope := attemptEnvelope{Block: safeBlock, Resource: resource, EnvironmentName: snapshot.EnvironmentName}
+		envelope := attemptEnvelope{Block: catalog.RequestFromBlock(safeBlock, opt.VariantID == ""), Resource: resource, EnvironmentName: snapshot.EnvironmentName}
 		id = candidateID
 		_, err = tx.Exec(ctx, dbscope.Render(tx, `INSERT INTO qag.call_attempts(id,run_id,test_case_id,block_id,case_revision,environment_version_id,resource_version_id,attempt_number,idempotency_key,request_hash,safe_request,variant_id,variant_version_id,batch_id,batch_position) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`), id, nullableID(runID), caseID, block.ID, revision, snapshot.EnvironmentVersionID, snapshot.ResourceVersions[block.Resource], number, key, hash, envelope, nullableID(opt.VariantID), nullableID(opt.VariantVersionID), nullableID(opt.BatchID), func() any {
 			if opt.BatchID == "" {
