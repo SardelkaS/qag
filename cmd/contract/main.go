@@ -15,6 +15,7 @@ import (
 	"qag/internal/comparison"
 	"qag/internal/execution"
 	"qag/internal/httpapi"
+	"qag/internal/mcpserver"
 	"qag/internal/reporting"
 	"qag/internal/resources"
 	"qag/internal/runs"
@@ -209,6 +210,16 @@ func main() {
 		panic(err)
 	}
 	fmt.Println("api/openapi.json generated from Go DTOs")
+	mcp := mcpserver.New(mcpserver.Options{})
+	manifest := object{"server": "qag", "version": "1.0.0", "protocols": []string{"2026-07-28", "2025-11-25"}, "tools": mcp.Manifest()}
+	data, err = json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+	if err = os.WriteFile("api/mcp-tools.json", append(data, '\n'), 0644); err != nil {
+		panic(err)
+	}
+	fmt.Println("api/mcp-tools.json generated")
 }
 
 func setEnum(name, field string, values ...string) {

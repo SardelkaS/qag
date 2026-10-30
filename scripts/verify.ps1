@@ -20,6 +20,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Chromium installation failed' }
     } finally { Pop-Location }
     & "$PSScriptRoot/test-integration.ps1"
+    & "$PSScriptRoot/test-mcp.ps1" -BinaryPath $qagVerifyBinary -SkipBuild
     & "$PSScriptRoot/test-e2e.ps1" -BinaryPath $qagVerifyBinary -SkipBuild
     & openspec.cmd validate --all --strict --no-interactive
     if ($LASTEXITCODE -ne 0) { throw 'OpenSpec validation failed' }

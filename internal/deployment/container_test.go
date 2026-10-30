@@ -217,6 +217,7 @@ func TestContainerRuntime(t *testing.T) {
 		t.Fatal("manual bulk command executed or completed a run")
 	}
 	api("POST", "/runs/"+run.ID+"/finish", map[string]any{}, &run)
+	mcpRunID := smokeMCP(t, ctx, base, true)
 	// The host browser checks the actual Linux capability and every export format.
 	browser := exec.CommandContext(ctx, "node", filepath.Join(root, "web/scripts/container-smoke.mjs"), base, run.ID)
 	browser.Dir = root
@@ -273,6 +274,11 @@ func TestContainerRuntime(t *testing.T) {
 	api("GET", "/runs/"+run.ID, nil, &run)
 	if len(run.Attempts) != expectedCalls || run.Status != "passed" {
 		t.Fatal("history lost")
+	}
+	var mcpHistory runs.Run
+	api("GET", "/runs/"+mcpRunID, nil, &mcpHistory)
+	if mcpHistory.Status != "passed" || len(mcpHistory.Attempts) != 5 {
+		t.Fatal("MCP history lost after recreate")
 	}
 	t.Log(fmt.Sprintf("one PostgreSQL; isolated %s; all protocols, browser exports, SIGTERM and recreate passed", fixture.Namespace.App))
 }

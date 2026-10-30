@@ -27,10 +27,11 @@ type Error struct {
 }
 
 type Server struct {
-	mux     *http.ServeMux
-	token   string
-	hosts   map[string]bool
-	origins map[string]bool
+	mux        *http.ServeMux
+	token      string
+	hosts      map[string]bool
+	origins    map[string]bool
+	mcpHandler http.Handler
 }
 
 func New(config appruntime.Config, assets fs.FS, ping func(context.Context) error) (*Server, error) {
@@ -97,6 +98,8 @@ func New(config appruntime.Config, assets fs.FS, ping func(context.Context) erro
 		writeError(w, r, http.StatusNotFound, "not_found", "Маршрут не найден")
 	})
 	files := http.FileServer(http.FS(assets))
+	s.mux.HandleFunc("/mcp", s.serveMCP)
+	s.mux.HandleFunc("/mcp/", func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) })
 	s.mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -141,7 +144,14 @@ func (s *Server) Handler() http.Handler {
 		w.Header().Set("X-Request-ID", hex.EncodeToString(id))
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
+		if r.URL.Path == "/mcp" || strings.HasPrefix(r.URL.Path, "/mcp/") {
+			w.Header().Set("Cache-Control", "no-store")
+		}
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+		if r.URL.Path == "/mcp" {
+			s.mux.ServeHTTP(w, r)
+			return
+		}
 		if !s.hosts[strings.ToLower(r.Host)] {
 			writeError(w, r, http.StatusForbidden, "invalid_host", "Недопустимый адрес локального приложения")
 			return

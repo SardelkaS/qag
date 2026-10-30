@@ -118,6 +118,25 @@ docker compose stop qag
 
 Для Vite загрузите оба подключения и ключ в окружение Go-процесса, задайте `QAG_DEV_ORIGIN=http://127.0.0.1:5173`, запустите backend и выполните `npm.cmd run dev` в `web/`. Dev proxy направляет API на `127.0.0.1:8080`.
 
+## MCP
+
+MCP включён по умолчанию и предоставляет 43 инструмента для всех предметных действий UI: каталог, изображения, окружения, ресурсы, HTTP/gRPC/SQL-вызовы, прогоны, варианты, история и экспорт. Сервер работает в том же процессе и контейнере, на том же порту: **`http://127.0.0.1:8080/mcp`**. Транспорт — stateless Streamable HTTP, протоколы `2026-07-28` и `2025-11-25`.
+
+В MCP-клиенте достаточно указать HTTP URL. Токен, Authorization и браузерная сессия не нужны. MCP принимает произвольные Host/Origin и cross-site запросы, поддерживает открытый CORS. Все 43 инструмента доступны сразу после штатного запуска Compose, Make или нативного приложения.
+
+`docker compose up --build -d --wait` или `make up` запускают UI, БД и MCP. При `QAG_HTTP_PORT=18088` адрес MCP — `http://127.0.0.1:18088/mcp`; отдельный контейнер или порт не требуется. Прежняя переменная `QAG_MCP_TOKEN` больше не используется.
+
+Полный пример на официальном Go SDK запускает встроенный кейс, ожидает очередь, явно помечает шаги пройденными, завершает прогон и сохраняет отчёт с проверкой SHA-256:
+
+```powershell
+go run ./cmd/mcp-example -url http://127.0.0.1:8080/mcp -format pdf -out .local/mcp-report
+go run ./cmd/mcp-example -url http://127.0.0.1:18088/mcp -protocol 2025-11-25 -format rich -out .local/mcp-rich
+```
+
+Каждая команда создаёт новый демонстрационный прогон; для обычного Compose-запуска Go на хосте не требуется. Сервер сам создаёт PDF, text, Markdown и rich HTML/RTF/text с встроенными PNG. В Linux-контейнере `qag_report_copy` возвращает `copied=false` и файлы для копирования средствами клиента; native Windows поддерживает системный clipboard.
+
+Каталог инструментов, точные параметры, revision/idempotency, ошибки и чтение крупных артефактов — в [docs/mcp.md](docs/mcp.md), машиночитаемые схемы — в [api/mcp-tools.json](api/mcp-tools.json), исходник примера — [cmd/mcp-example/main.go](cmd/mcp-example/main.go).
+
 ## Проверки
 
 ```powershell
@@ -135,6 +154,7 @@ docker compose stop qag
 .\scripts\test-integration.ps1
 .\scripts\test-e2e.ps1
 .\scripts\test-container.ps1
+.\scripts\test-mcp.ps1
 ```
 
 Перед отдельным E2E соберите frontend через `scripts/build.ps1 -OutputPath .local/verify/qag.exe`. Стенд создаёт уникальные схемы и ограниченные роли в `qag`, HTTP/gRPC-цели и сертификаты. Compose использует единственный PostgreSQL на 15432; старый тестовый том сохраняется при переходе. `verify` собирает отдельный бинарник и не перезаписывает работающий `dist/qag.exe`. Результаты — [docs/verification.md](docs/verification.md).

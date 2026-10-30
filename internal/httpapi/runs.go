@@ -3,12 +3,13 @@ package httpapi
 import (
 	"net/http"
 	"qag/internal/problem"
+	"qag/internal/reporting"
 	"qag/internal/service"
 	"strconv"
 )
 
-func (s *Server) RegisterRuns(engine *service.Engine) {
-	s.registerReports(engine)
+func (s *Server) RegisterRuns(engine *service.Engine, reports ...*reporting.Service) {
+	s.registerReports(engine, reports...)
 	s.register("POST /api/v1/test-cases/{id}/runs", func(r *http.Request) (any, error) {
 		var body RunStart
 		if err := readJSON(r, &body); err != nil {

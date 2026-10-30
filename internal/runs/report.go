@@ -51,6 +51,7 @@ func (r *Repository) ReportSnapshot(ctx context.Context, id string, includeExpec
 		return Report{}, err
 	}
 	report := Report{SnapshotID: catalog.NewID(), RunID: run.ID, Title: run.Snapshot.Name, EnvironmentName: run.EnvironmentName, Status: run.Status, Partial: run.Status == "running", IncludeExpected: includeExpected, CreatedAt: time.Now().UTC(), StartedAt: run.StartedAt, FinishedAt: run.FinishedAt, Steps: []ReportStep{}, Batches: run.Batches, Images: []ReportImage{}}
+	report.OwnerCaseID = run.TestCaseID
 	refs := map[string]bool{}
 	addRefs := func(images []catalog.ImageRef) {
 		for _, image := range images {

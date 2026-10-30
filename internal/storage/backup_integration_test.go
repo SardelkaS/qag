@@ -11,11 +11,15 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"image"
 	"image/png"
 	"net/http"
 	"net/http/httptest"
+	"qag/internal/mcpserver"
+	"qag/internal/reporting"
 	"qag/internal/testfixture"
+	"qag/web"
 
 	"os"
 	"os/exec"
@@ -305,5 +309,67 @@ func TestBackupRestoreCatalogHistoryAndSecret(t *testing.T) {
 	var amount string
 	if err = restoredReader.QueryRow(ctx, dbscope.Render(restoredReader, `SELECT amount::text FROM qag_demo.items`)).Scan(&amount); err != nil || amount != "9007199254740993.125" {
 		t.Fatal("demo schema not restored")
+	}
+	// Read and render restored history through both MCP protocols. Hash every
+	// persisted public/encrypted/snapshot field before and after these operations.
+	digests := func() map[string]string {
+		out := map[string]string{}
+		for _, table := range []string{"test_cases", "runs", "call_attempts", "resource_versions", "environment_versions", "expected_images", "run_call_variants", "run_call_variant_versions", "run_batches", "run_batch_items", "run_steps"} {
+			var digest string
+			if err := restored.Pool.QueryRow(ctx, dbscope.Render(restored.Pool, `SELECT md5(coalesce(string_agg(to_jsonb(t)::text,'' ORDER BY to_jsonb(t)::text),'')) FROM qag.`+table+` t`)).Scan(&digest); err != nil {
+				t.Fatal(err)
+			}
+			out[table] = digest
+		}
+		return out
+	}
+	beforeMCP := digests()
+	mcpEngine := service.New(ctx, catalog.NewRepository(restored.Pool), rr, runs.NewRepository(restored.Pool))
+	defer mcpEngine.Close()
+	reports := reporting.NewService(mcpEngine.Runs, mcpEngine.Catalog, web.Assets(), false)
+	mcpServer := httptest.NewServer(mcpserver.New(mcpserver.Options{Engine: mcpEngine, Reports: reports}).Handler())
+	defer mcpServer.Close()
+	for _, version := range []string{"2026-07-28", "2025-11-25"} {
+		client := mcp.NewClient(&mcp.Implementation{Name: "backup-verify", Version: "1"}, nil)
+		session, e := client.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: mcpServer.URL}, &mcp.ClientSessionOptions{ProtocolVersion: version})
+		if e != nil {
+			t.Fatal(e)
+		}
+		call := func(name string, args, out any) {
+			t.Helper()
+			result, e := session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+			if e != nil || result.IsError {
+				t.Fatalf("restored %s failed: %v", name, e)
+			}
+			raw, _ := json.Marshal(result.StructuredContent)
+			var envelope struct {
+				Data json.RawMessage `json:"data"`
+			}
+			json.Unmarshal(raw, &envelope)
+			if out != nil && json.Unmarshal(envelope.Data, out) != nil {
+				t.Fatal("restored MCP decode")
+			}
+		}
+		var historic runs.Run
+		call("qag_run_get", map[string]any{"id": run.ID}, &historic)
+		if historic.ID != run.ID || historic.Attempts[0].ID != r.Attempts[0].ID {
+			t.Fatal("MCP changed restored IDs")
+		}
+		var report runs.Report
+		call("qag_report_prepare", map[string]any{"runId": run.ID, "includeExpected": true}, &report)
+		for _, format := range []string{"pdf", "text", "markdown", "rich"} {
+			var result mcpserver.ExportResult
+			call("qag_report_export", map[string]any{"runId": run.ID, "snapshotId": report.SnapshotID, "hash": report.Hash, "includeExpected": true, "format": format}, &result)
+			if len(result.Files) == 0 {
+				t.Fatal("restored report empty")
+			}
+		}
+		session.Close()
+	}
+	afterMCP := digests()
+	for table, before := range beforeMCP {
+		if afterMCP[table] != before {
+			t.Fatal("MCP changed restored persisted data: " + table)
+		}
 	}
 }

@@ -9,6 +9,7 @@ import (
 // Report contains only public, persisted fields. Resource credentials and TLS
 // material are deliberately absent from this wire model.
 type Report struct {
+	OwnerCaseID     string        `json:"-"`
 	ClipboardNative bool          `json:"clipboardNative"`
 	Document        []ReportNode  `json:"document"`
 	SnapshotID      string        `json:"snapshotId"`

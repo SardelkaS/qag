@@ -9,8 +9,11 @@ import (
 	"strconv"
 )
 
-func (s *Server) registerReports(engine *service.Engine) {
-	cache := reporting.NewCache()
+func (s *Server) registerReports(engine *service.Engine, provided ...*reporting.Service) {
+	reports := reporting.NewService(engine.Runs, engine.Catalog, nil, clipboard.Available())
+	if len(provided) > 0 && provided[0] != nil {
+		reports = provided[0]
+	}
 	s.register("GET /api/v1/runs/{id}/report", func(r *http.Request) (any, error) {
 		include := true
 		if value := r.URL.Query().Get("includeExpected"); value != "" {
@@ -20,12 +23,8 @@ func (s *Server) registerReports(engine *service.Engine) {
 				return nil, problem.Invalid("includeExpected", "Ожидается true или false")
 			}
 		}
-		report, err := engine.Runs.ReportSnapshot(r.Context(), r.PathValue("id"), include)
+		report, err := reports.Prepare(r.Context(), r.PathValue("id"), include)
 		if err != nil {
-			return nil, err
-		}
-		report.ClipboardNative = clipboard.Available()
-		if err = cache.Put(&report); err != nil {
 			return nil, err
 		}
 		return report, nil
@@ -35,7 +34,7 @@ func (s *Server) registerReports(engine *service.Engine) {
 		if err := readJSON(r, &body); err != nil {
 			return nil, err
 		}
-		report, err := cache.Get(body.SnapshotID, body.Hash, r.PathValue("id"), body.IncludeExpected)
+		report, err := reports.Cached(reporting.Reference{SnapshotID: body.SnapshotID, Hash: body.Hash, RunID: r.PathValue("id"), IncludeExpected: body.IncludeExpected})
 		if err != nil {
 			return nil, err
 		}

@@ -13,6 +13,7 @@ import (
 	"image"
 	"image/png"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 
@@ -28,6 +29,8 @@ import (
 	"qag/internal/demo"
 	"qag/internal/execution"
 	"qag/internal/httpapi"
+	"qag/internal/mcpserver"
+	"qag/internal/reporting"
 	"qag/internal/resources"
 	"qag/internal/runs"
 	appruntime "qag/internal/runtime"
@@ -37,14 +40,18 @@ import (
 )
 
 type authoringFixture struct {
-	ctx    context.Context
-	store  *storage.Store
-	c      *catalog.Repository
-	res    *resources.Repository
-	engine *service.Engine
-	env    resources.Environment
-	server *httptest.Server
-	csrf   string
+	ctx     context.Context
+	store   *storage.Store
+	c       *catalog.Repository
+	res     *resources.Repository
+	engine  *service.Engine
+	env     resources.Environment
+	server  *httptest.Server
+	csrf    string
+	db      *testfixture.Database
+	reports *reporting.Service
+	mcp     *mcpserver.Server
+	audit   *bytes.Buffer
 }
 
 func authoringApp(t *testing.T) *authoringFixture {
@@ -55,7 +62,7 @@ func authoringApp(t *testing.T) *authoringFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &authoringFixture{ctx: ctx, store: store}
+	f := &authoringFixture{ctx: ctx, store: store, db: dbFixture}
 	t.Cleanup(func() {
 		if f.server != nil {
 			f.server.Close()
@@ -91,7 +98,11 @@ func authoringApp(t *testing.T) *authoringFixture {
 	}
 	api.RegisterCatalog(f.c)
 	api.RegisterResources(f.res)
-	api.RegisterRuns(f.engine)
+	f.reports = reporting.NewService(f.engine.Runs, f.c, web.Assets(), false)
+	api.RegisterRuns(f.engine, f.reports)
+	f.audit = &bytes.Buffer{}
+	f.mcp = mcpserver.New(mcpserver.Options{Engine: f.engine, Reports: f.reports, Ping: store.Ping, Logger: slog.New(slog.NewJSONHandler(f.audit, nil))})
+	api.RegisterMCP(f.mcp.Handler())
 	f.server.Config.Handler = api.Handler()
 	f.server.Start()
 	response, err := http.Get(f.server.URL + "/api/v1/session")

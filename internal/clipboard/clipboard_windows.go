@@ -38,6 +38,14 @@ func htmlClipboard(fragment string) []byte {
 	return append([]byte(header+body), 0)
 }
 func Write(content reporting.RichContent) error {
+	return write(content, false)
+}
+
+func WriteText(text string) error {
+	return write(reporting.RichContent{Text: text}, true)
+}
+
+func write(content reporting.RichContent, plain bool) error {
 	mu.Lock()
 	defer mu.Unlock()
 	runtime.LockOSThread()
@@ -70,6 +78,9 @@ func Write(content reporting.RichContent) error {
 		data   []byte
 		handle uintptr
 	}{{rtfID, append([]byte(content.RTF), 0), 0}, {htmlID, htmlClipboard(content.HTML), 0}, {13, unicodeBytes, 0}}
+	if plain {
+		values = values[2:]
+	}
 	alloc := kernel32.NewProc("GlobalAlloc")
 	lock := kernel32.NewProc("GlobalLock")
 	unlock := kernel32.NewProc("GlobalUnlock")

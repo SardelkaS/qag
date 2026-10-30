@@ -13,6 +13,7 @@ import (
 type cacheEntry struct {
 	data        []byte
 	runID, hash string
+	ownerCaseID string
 	expected    bool
 	at          time.Time
 }
@@ -74,7 +75,7 @@ func (c *Cache) Put(report *runs.Report) error {
 		}
 		c.remove(oldest)
 	}
-	c.entries[report.SnapshotID] = cacheEntry{data: raw, runID: report.RunID, hash: report.Hash, expected: report.IncludeExpected, at: c.now()}
+	c.entries[report.SnapshotID] = cacheEntry{data: raw, runID: report.RunID, hash: report.Hash, ownerCaseID: report.OwnerCaseID, expected: report.IncludeExpected, at: c.now()}
 	c.bytes += len(raw)
 	return nil
 }
@@ -88,5 +89,6 @@ func (c *Cache) Get(id, hash, runID string, expected bool) (runs.Report, error) 
 	}
 	var report runs.Report
 	err := json.Unmarshal(e.data, &report)
+	report.OwnerCaseID = e.ownerCaseID
 	return report, err
 }

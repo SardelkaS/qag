@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -14,8 +15,11 @@ import (
 	"google.golang.org/grpc"
 
 	"qag/internal/catalog"
+	"qag/internal/clipboard"
 	"qag/internal/demo"
 	"qag/internal/httpapi"
+	"qag/internal/mcpserver"
+	"qag/internal/reporting"
 	"qag/internal/resources"
 	"qag/internal/runs"
 	appruntime "qag/internal/runtime"
@@ -124,7 +128,18 @@ func run() error {
 	api.RegisterResources(resourceRepo)
 	engine := service.New(ctx, catalogRepo, resourceRepo, runRepo)
 	defer engine.Close()
-	api.RegisterRuns(engine)
+	reports := reporting.NewService(runRepo, catalogRepo, web.Assets(), clipboard.Available())
+	api.RegisterRuns(engine, reports)
+	mcp := mcpserver.New(mcpserver.Options{Engine: engine, Reports: reports, Logger: slog.Default(), Ping: func(c context.Context) error {
+		if !grpcLive.Load() {
+			return fmt.Errorf("demo gRPC недоступен")
+		}
+		if err := store.Ping(c); err != nil {
+			return err
+		}
+		return demoService.Ready(c)
+	}})
+	api.RegisterMCP(mcp.Handler())
 	server := &http.Server{Handler: api.Handler(), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 64 << 10}
 	done := make(chan error, 1)
 	go func() { done <- server.Serve(listener) }()
