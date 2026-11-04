@@ -3,8 +3,8 @@ package resources
 import (
 	"crypto/tls"
 	"net/url"
-	"qag/internal/catalog"
-	"qag/internal/problem"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/problem"
 )
 
 func HeaderTLS(source catalog.HTTPHeaderSource, secrets map[string]string) (*tls.Config, error) {

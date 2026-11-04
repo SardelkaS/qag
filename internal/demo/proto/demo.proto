@@ -1,6 +1,6 @@
 syntax = "proto3";
 package qag.demo.v1;
-option go_package = "qag/internal/demo/proto;demopb";
+option go_package = "github.com/SardelkaS/qag/internal/demo/proto;demopb";
 
 service DemoService {
   rpc GetItem(GetItemRequest) returns (Item);

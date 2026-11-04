@@ -11,7 +11,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-COPY --from=web-build /src/web/dist ./web/dist
+COPY --from=web-build /src/web/bundle ./web/bundle
 RUN CGO_ENABLED=0 go build -trimpath -o /out/qag ./cmd/qag && \
     CGO_ENABLED=0 go build -trimpath -o /out/qag-setup ./cmd/container-setup
 

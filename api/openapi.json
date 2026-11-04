@@ -1614,6 +1614,9 @@
           "tls": {
             "$ref": "#/components/schemas/TLSConfig"
           },
+          "unavailableReason": {
+            "type": "string"
+          },
           "username": {
             "type": "string"
           }

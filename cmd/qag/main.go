@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -14,66 +16,43 @@ import (
 
 	"google.golang.org/grpc"
 
-	"qag/internal/catalog"
-	"qag/internal/clipboard"
-	"qag/internal/demo"
-	"qag/internal/httpapi"
-	"qag/internal/mcpserver"
-	"qag/internal/reporting"
-	"qag/internal/resources"
-	"qag/internal/runs"
-	appruntime "qag/internal/runtime"
-	"qag/internal/service"
-	"qag/internal/storage"
-	"qag/web"
+	"github.com/SardelkaS/qag/internal/clipboard"
+	"github.com/SardelkaS/qag/internal/httpapi"
+	"github.com/SardelkaS/qag/internal/mcpserver"
+	"github.com/SardelkaS/qag/internal/reporting"
+	appruntime "github.com/SardelkaS/qag/internal/runtime"
+	"github.com/SardelkaS/qag/internal/service"
+	"github.com/SardelkaS/qag/web"
 )
 
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "qag:", err)
-		os.Exit(1)
+		code := 1
+		var ce *commandError
+		if errors.As(err, &ce) {
+			code = ce.code
+		}
+		os.Exit(code)
 	}
 }
 
-func run() error {
-	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
-		return healthcheck()
-	}
-	config, err := appruntime.LoadConfigEnv(os.LookupEnv)
-	if err != nil {
-		return err
-	}
+func run() error { return command(os.Args[1:], os.LookupEnv, os.Stdout) }
+
+func serve(config appruntime.Config, out io.Writer) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	startup, cancel := context.WithTimeout(ctx, 15*time.Second)
-	store, err := storage.Open(startup, config.DatabaseURL, config.Namespace)
+	store, err := openBackend(startup, config)
+	cancel()
 	if err != nil {
-		cancel()
 		return err
 	}
 	defer store.Close()
-	if err = store.AcquireInstance(startup); err != nil {
-		cancel()
-		return err
-	}
-	err = store.Migrate(startup)
-	if err != nil {
-		cancel()
-		return err
-	}
-	runRepo := runs.NewRepository(store.Pool)
-	cancel()
-	demoConfig, demoSecrets, err := demo.DatabaseConfig(config.DatabaseURL, config.DemoDatabaseURL)
-	if err != nil {
-		return err
-	}
+	runRepo := store.Runs
+	demoService := store.Demo
 	demoStartup, cancelDemoStartup := context.WithTimeout(ctx, 15*time.Second)
 	defer cancelDemoStartup()
-	demoPool, err := demo.OpenReader(demoStartup, store.Pool, demoConfig, demoSecrets)
-	if err != nil {
-		return err
-	}
-	defer demoPool.Close()
 	grpcListener, err := net.Listen("tcp", config.DemoGRPCAddress)
 	if err != nil {
 		return fmt.Errorf("демонстрационный gRPC-порт недоступен; измените QAG_DEMO_GRPC_ADDRESS")
@@ -84,17 +63,12 @@ func run() error {
 		return fmt.Errorf("локальный порт недоступен; измените QAG_ADDRESS")
 	}
 	defer listener.Close()
-	vault, err := resources.NewVault(config.SecretKey)
-	if err != nil {
-		return fmt.Errorf("не удалось настроить хранилище секретов")
-	}
-	if _, err = demo.Bootstrap(demoStartup, store.Pool, vault, "http://"+appruntime.ClientAddress(listener.Addr().String()), grpcListener.Addr().String(), demoConfig, demoSecrets); err != nil {
+	if err = store.Bootstrap(demoStartup, "http://"+appruntime.ClientAddress(listener.Addr().String()), grpcListener.Addr().String()); err != nil {
 		return err
 	}
 	if err = runRepo.Recover(demoStartup); err != nil {
 		return err
 	}
-	demoService := &demo.Service{Pool: demoPool}
 	grpcServer := grpc.NewServer(grpc.MaxRecvMsgSize(64 << 10))
 	demoService.RegisterGRPC(grpcServer)
 	defer func() {
@@ -121,10 +95,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	catalogRepo := catalog.NewRepository(store.Pool)
+	catalogRepo := store.Catalog
 	api.RegisterCatalog(catalogRepo)
 	api.RegisterDemo(demoService, catalogRepo)
-	resourceRepo := resources.NewRepository(store.Pool, vault)
+	resourceRepo := store.Resources
 	api.RegisterResources(resourceRepo)
 	engine := service.New(ctx, catalogRepo, resourceRepo, runRepo)
 	defer engine.Close()
@@ -143,7 +117,10 @@ func run() error {
 	server := &http.Server{Handler: api.Handler(), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 64 << 10}
 	done := make(chan error, 1)
 	go func() { done <- server.Serve(listener) }()
-	fmt.Printf("qag: http://%s\n", listener.Addr())
+	fmt.Fprintf(out, "qag: http://%s\nMCP: http://%s/mcp\nХранилище: %s\n", appruntime.ClientAddress(listener.Addr().String()), appruntime.ClientAddress(listener.Addr().String()), config.Storage)
+	if config.Storage == "yaml" {
+		fmt.Fprintln(out, "YAML содержит открытые секреты; сохраняйте приватные права файла")
+	}
 	select {
 	case <-grpcDone:
 		stop()
@@ -156,7 +133,7 @@ func run() error {
 		shutdown, closeCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer closeCancel()
 		_ = server.Shutdown(shutdown)
-		return fmt.Errorf("потеряна блокировка PostgreSQL; приложение остановлено")
+		return fmt.Errorf("потеряно владение или подтверждение хранилища; приложение остановлено")
 	case <-ctx.Done():
 		shutdown, closeCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer closeCancel()
@@ -169,8 +146,8 @@ func run() error {
 	}
 }
 
-func healthcheck() error {
-	address := os.Getenv("QAG_ADDRESS")
+func healthcheck() error { return healthcheckAddress(os.Getenv("QAG_ADDRESS")) }
+func healthcheckAddress(address string) error {
 	if address == "" {
 		address = "127.0.0.1:8080"
 	}

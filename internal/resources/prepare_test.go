@@ -1,7 +1,7 @@
 package resources
 
 import (
-	"qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/catalog"
 	"strings"
 	"testing"
 )

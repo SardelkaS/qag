@@ -3,7 +3,7 @@ package reporting
 import (
 	"bytes"
 	"encoding/json"
-	"qag/internal/runs"
+	"github.com/SardelkaS/qag/internal/runs"
 	"testing"
 	"time"
 )

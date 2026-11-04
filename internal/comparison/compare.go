@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/catalog"
 )
 
 type Actual struct {

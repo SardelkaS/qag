@@ -9,9 +9,9 @@ import (
 	"strings"
 
 	"github.com/signintech/gopdf"
-	"qag/internal/catalog"
-	"qag/internal/problem"
-	"qag/internal/runs"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/problem"
+	"github.com/SardelkaS/qag/internal/runs"
 )
 
 const pdfMargin = 42.

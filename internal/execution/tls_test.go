@@ -10,9 +10,9 @@ import (
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 	"net"
-	"qag/internal/catalog"
-	"qag/internal/resources"
-	"qag/internal/testfixture"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/resources"
+	"github.com/SardelkaS/qag/internal/testfixture"
 	"sync/atomic"
 	"testing"
 )

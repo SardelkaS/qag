@@ -3,9 +3,9 @@ package runs
 import (
 	"context"
 	"github.com/jackc/pgx/v5"
-	"qag/internal/catalog"
-	"qag/internal/dbscope"
-	"qag/internal/problem"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/dbscope"
+	"github.com/SardelkaS/qag/internal/problem"
 )
 
 type StepRevision struct {

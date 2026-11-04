@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 	"image"
 	"image/png"
-	"qag/internal/runs"
+	"github.com/SardelkaS/qag/internal/runs"
 	"strings"
 	"testing"
 )

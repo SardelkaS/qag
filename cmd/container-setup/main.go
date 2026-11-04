@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"qag/internal/demo"
-	"qag/internal/deployment"
-	appruntime "qag/internal/runtime"
+	"github.com/SardelkaS/qag/internal/demo"
+	"github.com/SardelkaS/qag/internal/deployment"
+	appruntime "github.com/SardelkaS/qag/internal/runtime"
 )
 
 func main() {

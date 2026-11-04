@@ -13,7 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"qag/internal/dbscope"
+	"github.com/SardelkaS/qag/internal/dbscope"
 )
 
 // Database owns schemas and restricted roles in the existing qag database.

@@ -10,15 +10,15 @@ import (
 	"strings"
 	"time"
 
-	"qag/internal/builtin"
-	"qag/internal/catalog"
-	"qag/internal/comparison"
-	"qag/internal/execution"
-	"qag/internal/httpapi"
-	"qag/internal/mcpserver"
-	"qag/internal/reporting"
-	"qag/internal/resources"
-	"qag/internal/runs"
+	"github.com/SardelkaS/qag/internal/builtin"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/comparison"
+	"github.com/SardelkaS/qag/internal/execution"
+	"github.com/SardelkaS/qag/internal/httpapi"
+	"github.com/SardelkaS/qag/internal/mcpserver"
+	"github.com/SardelkaS/qag/internal/reporting"
+	"github.com/SardelkaS/qag/internal/resources"
+	"github.com/SardelkaS/qag/internal/runs"
 )
 
 type object = map[string]any

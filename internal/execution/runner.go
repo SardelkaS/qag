@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"qag/internal/catalog"
-	"qag/internal/comparison"
-	"qag/internal/resources"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/comparison"
+	"github.com/SardelkaS/qag/internal/resources"
 )
 
 const MaxResponseBytes = 5 << 20
@@ -32,6 +32,14 @@ func ResearchComparison() comparison.Result {
 }
 
 func (r *Runner) execute(ctx context.Context, scope string, block catalog.Block, res resources.Resolved, research bool) (string, Result) {
+	if block.Kind == "postgresql" && res.Resource.ReadOnly && res.Resource.Config.UnavailableReason == "demo_sql_unavailable" {
+		message := "Демонстрационная PostgreSQL недоступна в YAML-режиме; пользовательские SQL-ресурсы могут использовать внешнюю БД"
+		result := Result{Protocol: block.Kind, Headers: []catalog.KeyValue{}, ErrorCode: "demo_sql_unavailable", Error: message, Comparison: comparison.Result{Status: "not_compared", Reason: message, Differences: []comparison.Difference{}}}
+		if research {
+			result.Comparison = ResearchComparison()
+		}
+		return "error", result
+	}
 	seconds := block.TimeoutSeconds
 	if seconds == 0 {
 		seconds = 30

@@ -15,7 +15,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"qag/internal/testfixture"
+	"github.com/SardelkaS/qag/internal/testfixture"
 )
 
 func main() {

@@ -14,10 +14,10 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"qag/internal/catalog"
-	"qag/internal/comparison"
-	"qag/internal/dbscope"
-	"qag/internal/reporting"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/comparison"
+	"github.com/SardelkaS/qag/internal/dbscope"
+	"github.com/SardelkaS/qag/internal/reporting"
 )
 
 func TestLegacyResearchProjectionNeverRewritesOrExportsExpectations(t *testing.T) {

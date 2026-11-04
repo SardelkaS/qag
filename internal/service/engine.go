@@ -6,13 +6,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/comparison"
+	"github.com/SardelkaS/qag/internal/execution"
+	"github.com/SardelkaS/qag/internal/ports"
+	"github.com/SardelkaS/qag/internal/problem"
+	"github.com/SardelkaS/qag/internal/resources"
+	"github.com/SardelkaS/qag/internal/runs"
 	"os"
-	"qag/internal/catalog"
-	"qag/internal/comparison"
-	"qag/internal/execution"
-	"qag/internal/problem"
-	"qag/internal/resources"
-	"qag/internal/runs"
 	"sync"
 	"time"
 )
@@ -23,9 +24,9 @@ type job struct {
 	persistencePending bool
 }
 type Engine struct {
-	Catalog   *catalog.Repository
-	Resources *resources.Repository
-	Runs      *runs.Repository
+	Catalog   ports.Catalog
+	Resources ports.Resources
+	Runs      ports.Runs
 	Runner    *execution.Runner
 	ctx       context.Context
 	stop      context.CancelFunc
@@ -37,7 +38,7 @@ type Engine struct {
 	wg        sync.WaitGroup
 }
 
-func New(ctx context.Context, c *catalog.Repository, res *resources.Repository, r *runs.Repository) *Engine {
+func New(ctx context.Context, c ports.Catalog, res ports.Resources, r ports.Runs) *Engine {
 	root, stop := context.WithCancel(ctx)
 	return &Engine{Catalog: c, Resources: res, Runs: r, Runner: execution.NewRunner(), ctx: root, stop: stop, jobs: map[string]job{}, batches: map[string]bool{}, slots: make(chan struct{}, 4)}
 }
@@ -292,7 +293,7 @@ func (e *Engine) execute(ctx context.Context, cancel context.CancelFunc, attempt
 		e.jobs[attempt.ID] = pending
 		e.mu.Unlock()
 		if retry == 0 {
-			fmt.Fprintln(os.Stderr, "qag: результат попытки не подтверждён PostgreSQL:", attempt.ID)
+			fmt.Fprintln(os.Stderr, "qag: результат попытки не подтверждён хранилищем:", attempt.ID)
 		}
 		select {
 		case <-e.ctx.Done():

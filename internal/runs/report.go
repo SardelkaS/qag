@@ -7,13 +7,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/comparison"
+	"github.com/SardelkaS/qag/internal/dbscope"
+	"github.com/SardelkaS/qag/internal/problem"
 	"github.com/jackc/pgx/v5"
-	"qag/internal/catalog"
-	"qag/internal/comparison"
-	"qag/internal/dbscope"
-	"qag/internal/problem"
 )
 
 func reportRequest(b catalog.Block) ReportRequest {
@@ -50,6 +51,49 @@ func (r *Repository) ReportSnapshot(ctx context.Context, id string, includeExpec
 	if err != nil {
 		return Report{}, err
 	}
+	report, imageIDs := ProjectReport(run, includeExpected)
+	total := 0
+	// Stable order comes from the stored image ID, independent of map iteration.
+	rows, err := tx.Query(ctx, dbscope.Render(tx, `SELECT id::text,content_type,sha256,width,height,data FROM qag.expected_images WHERE test_case_id=$1 AND id=ANY($2::uuid[]) ORDER BY id`), run.TestCaseID, imageIDs)
+	if err != nil {
+		return Report{}, problem.Database(err)
+	}
+	for rows.Next() {
+		var image ReportImage
+		var data []byte
+		if err = rows.Scan(&image.ID, &image.MIME, &image.SHA256, &image.Width, &image.Height, &data); err != nil {
+			rows.Close()
+			return Report{}, problem.Database(err)
+		}
+		total += len(data)
+		if total > 48<<20 {
+			rows.Close()
+			return Report{}, problem.Invalid("report", "Эталоны отчёта превышают 48 MiB")
+		}
+		sum := sha256.Sum256(data)
+		if hex.EncodeToString(sum[:]) != image.SHA256 {
+			rows.Close()
+			return Report{}, problem.Invalid("report", "Эталон повреждён")
+		}
+		image.Data = base64.StdEncoding.EncodeToString(data)
+		report.Images = append(report.Images, image)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return Report{}, problem.Database(err)
+	}
+	if len(report.Images) != len(imageIDs) {
+		return Report{}, problem.Invalid("report", "Не удалось прочитать все эталоны отчёта")
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return Report{}, problem.Database(err)
+	}
+	return report, nil
+}
+
+// ProjectReport builds the same immutable public report for every backend.
+func ProjectReport(run Run, includeExpected bool) (Report, []string) {
 	report := Report{SnapshotID: catalog.NewID(), RunID: run.ID, Title: run.Snapshot.Name, EnvironmentName: run.EnvironmentName, Status: run.Status, Partial: run.Status == "running", IncludeExpected: includeExpected, CreatedAt: time.Now().UTC(), StartedAt: run.StartedAt, FinishedAt: run.FinishedAt, Steps: []ReportStep{}, Batches: run.Batches, Images: []ReportImage{}}
 	report.OwnerCaseID = run.TestCaseID
 	refs := map[string]bool{}
@@ -123,48 +167,10 @@ func (r *Repository) ReportSnapshot(ctx context.Context, id string, includeExpec
 		}
 		report.Steps = append(report.Steps, s)
 	}
-	total := 0
-	// Stable order comes from the stored image ID, independent of map iteration.
-	rows, err := tx.Query(ctx, dbscope.Render(tx, `SELECT id::text,content_type,sha256,width,height,data FROM qag.expected_images WHERE test_case_id=$1 AND id=ANY($2::uuid[]) ORDER BY id`), run.TestCaseID, func() []string {
-		ids := []string{}
-		for id := range refs {
-			ids = append(ids, id)
-		}
-		return ids
-	}())
-	if err != nil {
-		return Report{}, problem.Database(err)
+	ids := make([]string, 0, len(refs))
+	for id := range refs {
+		ids = append(ids, id)
 	}
-	for rows.Next() {
-		var image ReportImage
-		var data []byte
-		if err = rows.Scan(&image.ID, &image.MIME, &image.SHA256, &image.Width, &image.Height, &data); err != nil {
-			rows.Close()
-			return Report{}, problem.Database(err)
-		}
-		total += len(data)
-		if total > 48<<20 {
-			rows.Close()
-			return Report{}, problem.Invalid("report", "Эталоны отчёта превышают 48 MiB")
-		}
-		sum := sha256.Sum256(data)
-		if hex.EncodeToString(sum[:]) != image.SHA256 {
-			rows.Close()
-			return Report{}, problem.Invalid("report", "Эталон повреждён")
-		}
-		image.Data = base64.StdEncoding.EncodeToString(data)
-		report.Images = append(report.Images, image)
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return Report{}, problem.Database(err)
-	}
-	if len(report.Images) != len(refs) {
-		return Report{}, problem.Invalid("report", "Не удалось прочитать все эталоны отчёта")
-	}
-	if err = tx.Commit(ctx); err != nil {
-		return Report{}, problem.Database(err)
-	}
-	return report, nil
+	sort.Strings(ids)
+	return report, ids
 }

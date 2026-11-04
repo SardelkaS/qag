@@ -976,6 +976,7 @@ export interface components {
                 [key: string]: string;
             };
             tls: components["schemas"]["TLSConfig"];
+            unavailableReason?: string;
             username?: string;
         };
         ResourcePage: {

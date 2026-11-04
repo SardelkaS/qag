@@ -17,10 +17,10 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"qag/internal/catalog"
-	"qag/internal/problem"
-	"qag/internal/reporting"
-	"qag/internal/service"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/problem"
+	"github.com/SardelkaS/qag/internal/reporting"
+	"github.com/SardelkaS/qag/internal/service"
 )
 
 type Options struct {

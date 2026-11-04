@@ -5,12 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"github.com/SardelkaS/qag/internal/ports"
+	"github.com/SardelkaS/qag/internal/problem"
+	"github.com/SardelkaS/qag/internal/runs"
 	"io/fs"
 	"time"
-
-	"qag/internal/catalog"
-	"qag/internal/problem"
-	"qag/internal/runs"
 )
 
 type Reference struct {
@@ -25,14 +24,14 @@ type File struct {
 }
 type Service struct {
 	Cache           *Cache
-	Runs            *runs.Repository
-	Catalog         *catalog.Repository
+	Runs            ports.Runs
+	Catalog         ports.Catalog
 	Assets          fs.FS
 	ClipboardNative bool
 	slots           chan struct{}
 }
 
-func NewService(r *runs.Repository, c *catalog.Repository, assets fs.FS, native bool) *Service {
+func NewService(r ports.Runs, c ports.Catalog, assets fs.FS, native bool) *Service {
 	return &Service{Cache: NewCache(), Runs: r, Catalog: c, Assets: assets, ClipboardNative: native, slots: make(chan struct{}, 2)}
 }
 func (s *Service) Prepare(ctx context.Context, id string, expected bool) (runs.Report, error) {

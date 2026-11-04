@@ -1,6 +1,6 @@
 package demo
 
-import "qag/internal/dbscope"
+import "github.com/SardelkaS/qag/internal/dbscope"
 
 import (
 	"context"
@@ -10,13 +10,13 @@ import (
 	"net/http"
 	"time"
 
+	demopb "github.com/SardelkaS/qag/internal/demo/proto"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
-	demopb "qag/internal/demo/proto"
 )
 
 //go:embed proto/demo.proto
@@ -24,10 +24,19 @@ var Proto string
 
 type Service struct {
 	demopb.UnimplementedDemoServiceServer
-	Pool *pgxpool.Pool
+	Pool   *pgxpool.Pool
+	Reader ItemReader
+}
+
+type ItemReader interface {
+	ReadItem(context.Context, string) (Item, error)
+	Ready(context.Context) error
 }
 
 func (s *Service) Ready(ctx context.Context) error {
+	if s.Reader != nil {
+		return s.Reader.Ready(ctx)
+	}
 	var ok int
 	return s.Pool.QueryRow(ctx, dbscope.Render(s.Pool, `SELECT 1 FROM qag_demo.items WHERE id='example-001'`)).Scan(&ok)
 }
@@ -42,6 +51,9 @@ type Item struct {
 func (s *Service) read(ctx context.Context, id string) (Item, error) {
 	if len(id) > 128 {
 		return Item{}, pgx.ErrNoRows
+	}
+	if s.Reader != nil {
+		return s.Reader.ReadItem(ctx, id)
 	}
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()

@@ -1,7 +1,7 @@
 package comparison
 
 import (
-	"qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/catalog"
 	"testing"
 )
 

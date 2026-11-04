@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	appruntime "qag/internal/runtime"
+	appruntime "github.com/SardelkaS/qag/internal/runtime"
 	"reflect"
 	"runtime"
 	"strings"

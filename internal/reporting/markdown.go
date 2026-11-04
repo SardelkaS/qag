@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"qag/internal/problem"
-	"qag/internal/runs"
+	"github.com/SardelkaS/qag/internal/problem"
+	"github.com/SardelkaS/qag/internal/runs"
 )
 
 func escapeMarkdown(s string) string {

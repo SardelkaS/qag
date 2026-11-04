@@ -11,6 +11,8 @@
 # Test binary, built with `go test -c`
 *.test
 cmd/qag/*.syso
+!cmd/qag/icon_windows_amd64.syso
+!cmd/qag/icon_windows_arm64.syso
 
 # Code coverage profiles and other test artifacts
 *.out
@@ -44,3 +46,8 @@ playwright-report/
 test-results/
 .env.*
 !.env.example
+
+# Default native YAML workspace contains connection secrets.
+/qag.yaml
+/qag.yaml.lock
+/.qag-*.tmp

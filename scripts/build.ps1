@@ -12,8 +12,10 @@ try {
 } finally { Pop-Location }
 Push-Location $qagRoot
 try {
-    & go run github.com/akavel/rsrc@v0.10.2 -ico assets/branding/qag.ico -arch amd64 -o cmd/qag/icon_windows_amd64.syso
-    if ($LASTEXITCODE -ne 0) { throw 'Не удалось подготовить Windows icon resource' }
+    foreach ($qagArch in @('amd64','arm64')) {
+        & go run github.com/akavel/rsrc@v0.10.2 -ico assets/branding/qag.ico -arch $qagArch -o "cmd/qag/icon_windows_$qagArch.syso"
+        if ($LASTEXITCODE -ne 0) { throw 'Не удалось подготовить Windows icon resource' }
+    }
     New-Item -ItemType Directory -Path (Join-Path $qagRoot 'dist') -Force | Out-Null
     if (-not [IO.Path]::IsPathRooted($OutputPath)) { $OutputPath = Join-Path $qagRoot $OutputPath }
     New-Item -ItemType Directory -Path (Split-Path -Parent $OutputPath) -Force | Out-Null

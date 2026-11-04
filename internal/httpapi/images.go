@@ -2,13 +2,14 @@ package httpapi
 
 import (
 	"context"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/ports"
 	"mime"
 	"net/http"
-	"qag/internal/catalog"
 	"time"
 )
 
-func (s *Server) RegisterImages(repo *catalog.Repository) {
+func (s *Server) RegisterImages(repo ports.Catalog) {
 	s.register("POST /api/v1/test-cases/{id}/images", func(r *http.Request) (any, error) {
 		var body catalog.ImageUpload
 		if err := readJSON(r, &body); err != nil {

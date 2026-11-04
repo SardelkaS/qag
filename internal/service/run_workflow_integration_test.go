@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"qag/internal/catalog"
-	"qag/internal/dbscope"
-	"qag/internal/resources"
-	"qag/internal/runs"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/dbscope"
+	"github.com/SardelkaS/qag/internal/resources"
+	"github.com/SardelkaS/qag/internal/runs"
 )
 
 func waitBatch(t *testing.T, f *authoringFixture, id string) runs.Run {

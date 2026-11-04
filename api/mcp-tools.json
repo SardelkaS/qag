@@ -284,6 +284,9 @@
                   "config": {
                     "type": "object",
                     "properties": {
+                      "unavailableReason": {
+                        "type": "string"
+                      },
                       "baseUrl": {
                         "type": "string"
                       },
@@ -1485,6 +1488,9 @@
                   "config": {
                     "type": "object",
                     "properties": {
+                      "unavailableReason": {
+                        "type": "string"
+                      },
                       "baseUrl": {
                         "type": "string"
                       },
@@ -3040,6 +3046,9 @@
                   "config": {
                     "type": "object",
                     "properties": {
+                      "unavailableReason": {
+                        "type": "string"
+                      },
                       "baseUrl": {
                         "type": "string"
                       },
@@ -5767,6 +5776,9 @@
               "config": {
                 "type": "object",
                 "properties": {
+                  "unavailableReason": {
+                    "type": "string"
+                  },
                   "baseUrl": {
                     "type": "string"
                   },
@@ -9557,6 +9569,9 @@
           "config": {
             "type": "object",
             "properties": {
+              "unavailableReason": {
+                "type": "string"
+              },
               "baseUrl": {
                 "type": "string"
               },
@@ -9800,6 +9815,9 @@
               "config": {
                 "type": "object",
                 "properties": {
+                  "unavailableReason": {
+                    "type": "string"
+                  },
                   "baseUrl": {
                     "type": "string"
                   },
@@ -10154,6 +10172,9 @@
               "config": {
                 "type": "object",
                 "properties": {
+                  "unavailableReason": {
+                    "type": "string"
+                  },
                   "baseUrl": {
                     "type": "string"
                   },
@@ -10481,6 +10502,9 @@
           "config": {
             "type": "object",
             "properties": {
+              "unavailableReason": {
+                "type": "string"
+              },
               "baseUrl": {
                 "type": "string"
               },
@@ -10725,6 +10749,9 @@
               "config": {
                 "type": "object",
                 "properties": {
+                  "unavailableReason": {
+                    "type": "string"
+                  },
                   "baseUrl": {
                     "type": "string"
                   },
@@ -11095,6 +11122,9 @@
                     "config": {
                       "type": "object",
                       "properties": {
+                        "unavailableReason": {
+                          "type": "string"
+                        },
                         "baseUrl": {
                           "type": "string"
                         },
@@ -11505,6 +11535,9 @@
                   "config": {
                     "type": "object",
                     "properties": {
+                      "unavailableReason": {
+                        "type": "string"
+                      },
                       "baseUrl": {
                         "type": "string"
                       },
@@ -14030,6 +14063,9 @@
                     "config": {
                       "type": "object",
                       "properties": {
+                        "unavailableReason": {
+                          "type": "string"
+                        },
                         "baseUrl": {
                           "type": "string"
                         },
@@ -14338,6 +14374,9 @@
                         "config": {
                           "type": "object",
                           "properties": {
+                            "unavailableReason": {
+                              "type": "string"
+                            },
                             "baseUrl": {
                               "type": "string"
                             },
@@ -17033,6 +17072,9 @@
                     "config": {
                       "type": "object",
                       "properties": {
+                        "unavailableReason": {
+                          "type": "string"
+                        },
                         "baseUrl": {
                           "type": "string"
                         },
@@ -17341,6 +17383,9 @@
                         "config": {
                           "type": "object",
                           "properties": {
+                            "unavailableReason": {
+                              "type": "string"
+                            },
                             "baseUrl": {
                               "type": "string"
                             },
@@ -19903,6 +19948,9 @@
                     "config": {
                       "type": "object",
                       "properties": {
+                        "unavailableReason": {
+                          "type": "string"
+                        },
                         "baseUrl": {
                           "type": "string"
                         },
@@ -20211,6 +20259,9 @@
                         "config": {
                           "type": "object",
                           "properties": {
+                            "unavailableReason": {
+                              "type": "string"
+                            },
                             "baseUrl": {
                               "type": "string"
                             },
@@ -22773,6 +22824,9 @@
                     "config": {
                       "type": "object",
                       "properties": {
+                        "unavailableReason": {
+                          "type": "string"
+                        },
                         "baseUrl": {
                           "type": "string"
                         },
@@ -23081,6 +23135,9 @@
                         "config": {
                           "type": "object",
                           "properties": {
+                            "unavailableReason": {
+                              "type": "string"
+                            },
                             "baseUrl": {
                               "type": "string"
                             },
@@ -25661,6 +25718,9 @@
                     "config": {
                       "type": "object",
                       "properties": {
+                        "unavailableReason": {
+                          "type": "string"
+                        },
                         "baseUrl": {
                           "type": "string"
                         },
@@ -25969,6 +26029,9 @@
                         "config": {
                           "type": "object",
                           "properties": {
+                            "unavailableReason": {
+                              "type": "string"
+                            },
                             "baseUrl": {
                               "type": "string"
                             },
@@ -28554,6 +28617,9 @@
                     "config": {
                       "type": "object",
                       "properties": {
+                        "unavailableReason": {
+                          "type": "string"
+                        },
                         "baseUrl": {
                           "type": "string"
                         },
@@ -28862,6 +28928,9 @@
                         "config": {
                           "type": "object",
                           "properties": {
+                            "unavailableReason": {
+                              "type": "string"
+                            },
                             "baseUrl": {
                               "type": "string"
                             },
@@ -31447,6 +31516,9 @@
                     "config": {
                       "type": "object",
                       "properties": {
+                        "unavailableReason": {
+                          "type": "string"
+                        },
                         "baseUrl": {
                           "type": "string"
                         },
@@ -31755,6 +31827,9 @@
                         "config": {
                           "type": "object",
                           "properties": {
+                            "unavailableReason": {
+                              "type": "string"
+                            },
                             "baseUrl": {
                               "type": "string"
                             },
@@ -34342,6 +34417,9 @@
                           "config": {
                             "type": "object",
                             "properties": {
+                              "unavailableReason": {
+                                "type": "string"
+                              },
                               "baseUrl": {
                                 "type": "string"
                               },
@@ -34650,6 +34728,9 @@
                               "config": {
                                 "type": "object",
                                 "properties": {
+                                  "unavailableReason": {
+                                    "type": "string"
+                                  },
                                   "baseUrl": {
                                     "type": "string"
                                   },
@@ -40815,6 +40896,9 @@
                   "config": {
                     "type": "object",
                     "properties": {
+                      "unavailableReason": {
+                        "type": "string"
+                      },
                       "baseUrl": {
                         "type": "string"
                       },

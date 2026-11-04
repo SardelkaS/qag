@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"qag/internal/problem"
+	"github.com/SardelkaS/qag/internal/problem"
 	"strings"
 )
 

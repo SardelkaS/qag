@@ -2,14 +2,14 @@ package mcpserver
 
 import (
 	"context"
-	"qag/internal/builtin"
-	"qag/internal/catalog"
-	"qag/internal/clipboard"
-	"qag/internal/execution"
-	"qag/internal/problem"
-	"qag/internal/reporting"
-	"qag/internal/resources"
-	"qag/internal/runs"
+	"github.com/SardelkaS/qag/internal/builtin"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/clipboard"
+	"github.com/SardelkaS/qag/internal/execution"
+	"github.com/SardelkaS/qag/internal/problem"
+	"github.com/SardelkaS/qag/internal/reporting"
+	"github.com/SardelkaS/qag/internal/resources"
+	"github.com/SardelkaS/qag/internal/runs"
 )
 
 func page(p Page) (int, error) {

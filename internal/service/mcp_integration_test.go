@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"image"
 	"image/png"
 	"io"
@@ -23,18 +24,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SardelkaS/qag/internal/builtin"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/dbscope"
+	"github.com/SardelkaS/qag/internal/demo"
+	"github.com/SardelkaS/qag/internal/execution"
+	"github.com/SardelkaS/qag/internal/mcpserver"
+	"github.com/SardelkaS/qag/internal/reporting"
+	"github.com/SardelkaS/qag/internal/resources"
+	"github.com/SardelkaS/qag/internal/runs"
+	"github.com/SardelkaS/qag/internal/testfixture"
 	"github.com/jackc/pgx/v5"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"qag/internal/builtin"
-	"qag/internal/catalog"
-	"qag/internal/dbscope"
-	"qag/internal/demo"
-	"qag/internal/execution"
-	"qag/internal/mcpserver"
-	"qag/internal/reporting"
-	"qag/internal/resources"
-	"qag/internal/runs"
-	"qag/internal/testfixture"
 )
 
 type loseResponseTransport struct{ dropped atomic.Bool }
@@ -226,10 +227,20 @@ func TestMCPJobOwnershipCancellationAndStorageFailure(t *testing.T) {
 				t.Fatal("run did not cancel job")
 			}
 			// Refused writes return a safe error, with no row committed or target call.
-			_, err = f.store.Pool.Exec(f.ctx, dbscope.Render(f.store.Pool, `CREATE FUNCTION qag.reject_mcp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture-auth-password'; END $$; CREATE TRIGGER reject_mcp BEFORE INSERT ON qag.folders FOR EACH ROW EXECUTE FUNCTION qag.reject_mcp()`), pgx.QueryExecModeSimpleProtocol)
-			if err != nil {
-				t.Fatal(err)
+			if f.fileStore != nil {
+				f.fileStore.Failpoint = func(stage string) error {
+					if stage == "before-replace" {
+						return fmt.Errorf("fixture-auth-password")
+					}
+					return nil
+				}
+			} else {
+				_, err = f.store.Pool.Exec(f.ctx, dbscope.Render(f.store.Pool, `CREATE FUNCTION qag.reject_mcp() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture-auth-password'; END $$; CREATE TRIGGER reject_mcp BEFORE INSERT ON qag.folders FOR EACH ROW EXECUTE FUNCTION qag.reject_mcp()`), pgx.QueryExecModeSimpleProtocol)
+				if err != nil {
+					t.Fatal(err)
+				}
 			}
+
 			mcpError(t, f, other, "qag_folder_create", map[string]any{"name": "Refused"}, "storage_unavailable")
 			var count int
 			err = f.store.Pool.QueryRow(f.ctx, dbscope.Render(f.store.Pool, `SELECT count(*) FROM qag.folders WHERE name='Refused'`)).Scan(&count)
@@ -238,6 +249,18 @@ func TestMCPJobOwnershipCancellationAndStorageFailure(t *testing.T) {
 			}
 			if bytes.Contains(f.audit.Bytes(), []byte("fixture-auth-password")) || !bytes.Contains(f.audit.Bytes(), []byte("storage_unavailable")) {
 				t.Fatal("audit leaks arguments or misses safe code")
+			}
+			if f.fileStore != nil {
+				doc, e := f.fileStore.Snapshot(f.ctx)
+				if e != nil {
+					t.Fatal(e)
+				}
+				for _, v := range doc.Data.Folders {
+					if v.Name == "Refused" {
+						t.Fatal("file write not atomic")
+					}
+				}
+				f.fileStore.Failpoint = nil
 			}
 			// Lose an acknowledgement after registration, then retry from another
 			// client. The persisted key owns one effect independently of RPC IDs.
@@ -562,7 +585,15 @@ func TestMCPUIParityAndLifecycle(t *testing.T) {
 			mcpCall[runs.Run](t, f, s, "qag_run_cancel", map[string]any{"id": cancelled.ID})
 			mcpCall[mcpserver.Deleted](t, f, s, "qag_run_delete", map[string]any{"id": cancelled.ID})
 			vault, _ := resources.NewVault(bytes.Repeat([]byte{8}, 32))
-			info, err := demo.Bootstrap(f.ctx, f.store.Pool, vault, f.server.URL, "127.0.0.1:19091", resources.Config{Address: "127.0.0.1:15433", Database: "qag", Username: "fixture_reader", TLS: resources.TLSConfig{Mode: "plaintext"}}, map[string]string{"PASSWORD": "fixture-only"})
+			var info builtin.Info
+			if f.fileStore != nil {
+				err = f.fileStore.Bootstrap(f.ctx, f.server.URL, "127.0.0.1:19091")
+				if err == nil {
+					info, err = f.c.DemoInfo(f.ctx)
+				}
+			} else {
+				info, err = demo.Bootstrap(f.ctx, f.store.Pool, vault, f.server.URL, "127.0.0.1:19091", resources.Config{Address: "127.0.0.1:15433", Database: "qag", Username: "fixture_reader", TLS: resources.TLSConfig{Mode: "plaintext"}}, map[string]string{"PASSWORD": "fixture-only"})
+			}
 			if err != nil {
 				t.Fatal(err)
 			}

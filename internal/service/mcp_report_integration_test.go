@@ -13,11 +13,11 @@ import (
 	"strings"
 	"testing"
 
-	"qag/internal/catalog"
-	"qag/internal/dbscope"
-	"qag/internal/mcpserver"
-	"qag/internal/reporting"
-	"qag/internal/runs"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/dbscope"
+	"github.com/SardelkaS/qag/internal/mcpserver"
+	"github.com/SardelkaS/qag/internal/reporting"
+	"github.com/SardelkaS/qag/internal/runs"
 )
 
 func TestMCPLargePayloadsAndImmutableReportImages(t *testing.T) {

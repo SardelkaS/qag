@@ -1,10 +1,10 @@
 package mcpserver
 
 import (
-	"qag/internal/catalog"
-	"qag/internal/reporting"
-	"qag/internal/resources"
-	"qag/internal/runs"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/reporting"
+	"github.com/SardelkaS/qag/internal/resources"
+	"github.com/SardelkaS/qag/internal/runs"
 )
 
 type Empty struct{}

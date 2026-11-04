@@ -1,6 +1,6 @@
 package demo
 
-import "qag/internal/dbscope"
+import "github.com/SardelkaS/qag/internal/dbscope"
 
 import (
 	"context"
@@ -11,8 +11,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"qag/internal/catalog"
-	"qag/internal/resources"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/resources"
 )
 
 const RoleComment = "qag demo reader v1"

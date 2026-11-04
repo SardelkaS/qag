@@ -16,10 +16,10 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"qag/internal/catalog"
-	"qag/internal/dbscope"
-	"qag/internal/reporting"
-	"qag/internal/runs"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/dbscope"
+	"github.com/SardelkaS/qag/internal/reporting"
+	"github.com/SardelkaS/qag/internal/runs"
 )
 
 func TestReportProjectionAndUnconfirmedBatchResult(t *testing.T) {

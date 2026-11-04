@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	appruntime "qag/internal/runtime"
+	appruntime "github.com/SardelkaS/qag/internal/runtime"
 )
 
 type Error struct {

@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"qag/internal/catalog"
-	"qag/internal/resources"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/resources"
 )
 
 func TestResearchPreservesActualFailuresLimitsAndHeaderSources(t *testing.T) {

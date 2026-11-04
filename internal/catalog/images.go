@@ -1,6 +1,6 @@
 package catalog
 
-import "qag/internal/dbscope"
+import "github.com/SardelkaS/qag/internal/dbscope"
 
 import (
 	"bytes"
@@ -13,8 +13,8 @@ import (
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
-	"qag/internal/builtin"
-	"qag/internal/problem"
+	"github.com/SardelkaS/qag/internal/builtin"
+	"github.com/SardelkaS/qag/internal/problem"
 	"strings"
 	"unicode"
 )

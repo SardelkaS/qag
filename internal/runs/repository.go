@@ -1,17 +1,17 @@
 package runs
 
-import "qag/internal/dbscope"
+import "github.com/SardelkaS/qag/internal/dbscope"
 
 import (
 	"context"
 	"errors"
 	"time"
 
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/problem"
+	"github.com/SardelkaS/qag/internal/resources"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"qag/internal/catalog"
-	"qag/internal/problem"
-	"qag/internal/resources"
 )
 
 type Repository struct{ pool *pgxpool.Pool }
@@ -319,17 +319,11 @@ func (r *Repository) finish(ctx context.Context, id, forced string) (Run, error)
 		if status == "" {
 			status = Evaluate(run)
 		}
-		reasons := []string{}
 		var first, success bool
 		if err = tx.QueryRow(ctx, dbscope.Render(tx, `SELECT EXISTS(SELECT 1 FROM qag.runs WHERE test_case_id=$1 AND 'first_run'=ANY(retention_reasons)),EXISTS(SELECT 1 FROM qag.runs WHERE test_case_id=$1 AND 'first_success'=ANY(retention_reasons))`), caseID).Scan(&first, &success); err != nil {
 			return problem.Database(err)
 		}
-		if !first {
-			reasons = append(reasons, "first_run")
-		}
-		if status == "passed" && !success {
-			reasons = append(reasons, "first_success")
-		}
+		reasons := RetentionReasons(status, first, success)
 		_, err = tx.Exec(ctx, dbscope.Render(tx, `UPDATE qag.runs SET status=$2,retention_reasons=$3,finished_at=clock_timestamp() WHERE id=$1`), id, status, reasons)
 		return problem.Database(err)
 	})
@@ -444,4 +438,16 @@ func (r *Repository) Recover(ctx context.Context) error {
 	}
 	_, err = r.pool.Exec(ctx, dbscope.Render(r.pool, `UPDATE qag.call_attempts SET state='interrupted',finished_at=clock_timestamp(),result=$1 WHERE run_id IS NULL AND state IN ('queued','running')`), interruptedResult("interrupted"))
 	return problem.Database(err)
+}
+
+// RetentionReasons chooses automatic pins without changing existing history.
+func RetentionReasons(status string, first, success bool) []string {
+	reasons := []string{}
+	if !first {
+		reasons = append(reasons, "first_run")
+	}
+	if status == "passed" && !success {
+		reasons = append(reasons, "first_success")
+	}
+	return reasons
 }

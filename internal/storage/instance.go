@@ -1,6 +1,6 @@
 package storage
 
-import "qag/internal/dbscope"
+import "github.com/SardelkaS/qag/internal/dbscope"
 
 import (
 	"context"

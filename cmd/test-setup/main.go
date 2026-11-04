@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/jackc/pgx/v5"
 	"os"
-	"qag/internal/testfixture"
+	"github.com/SardelkaS/qag/internal/testfixture"
 	"time"
 )
 

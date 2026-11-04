@@ -2,7 +2,7 @@
 
 package demo
 
-import "qag/internal/dbscope"
+import "github.com/SardelkaS/qag/internal/dbscope"
 
 import (
 	"bytes"
@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"net"
 	"net/http/httptest"
-	"qag/internal/testfixture"
+	"github.com/SardelkaS/qag/internal/testfixture"
 
 	"os"
 	"reflect"
@@ -26,13 +26,13 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"qag/internal/catalog"
-	demopb "qag/internal/demo/proto"
-	"qag/internal/execution"
-	"qag/internal/resources"
-	"qag/internal/runs"
-	"qag/internal/service"
-	"qag/internal/storage"
+	"github.com/SardelkaS/qag/internal/catalog"
+	demopb "github.com/SardelkaS/qag/internal/demo/proto"
+	"github.com/SardelkaS/qag/internal/execution"
+	"github.com/SardelkaS/qag/internal/resources"
+	"github.com/SardelkaS/qag/internal/runs"
+	"github.com/SardelkaS/qag/internal/service"
+	"github.com/SardelkaS/qag/internal/storage"
 )
 
 type fixture struct {

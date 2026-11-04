@@ -2,7 +2,7 @@
 
 package storage_test
 
-import "qag/internal/dbscope"
+import "github.com/SardelkaS/qag/internal/dbscope"
 
 import (
 	"bytes"
@@ -16,10 +16,10 @@ import (
 	"image/png"
 	"net/http"
 	"net/http/httptest"
-	"qag/internal/mcpserver"
-	"qag/internal/reporting"
-	"qag/internal/testfixture"
-	"qag/web"
+	"github.com/SardelkaS/qag/internal/mcpserver"
+	"github.com/SardelkaS/qag/internal/reporting"
+	"github.com/SardelkaS/qag/internal/testfixture"
+	"github.com/SardelkaS/qag/web"
 
 	"os"
 	"os/exec"
@@ -29,12 +29,12 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"qag/internal/catalog"
-	"qag/internal/demo"
-	"qag/internal/resources"
-	"qag/internal/runs"
-	"qag/internal/service"
-	"qag/internal/storage"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/demo"
+	"github.com/SardelkaS/qag/internal/resources"
+	"github.com/SardelkaS/qag/internal/runs"
+	"github.com/SardelkaS/qag/internal/service"
+	"github.com/SardelkaS/qag/internal/storage"
 )
 
 func TestBackupRestoreCatalogHistoryAndSecret(t *testing.T) {

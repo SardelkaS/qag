@@ -9,13 +9,16 @@ import (
 	"strconv"
 	"strings"
 
-	"qag/internal/catalog"
-	"qag/internal/problem"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/problem"
 )
 
 var variableName = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
 
 func ValidateConfig(kind string, c Config, secrets map[string]string, sourceSecrets ...map[string]string) error {
+	if c.UnavailableReason != "" {
+		return problem.Invalid("config", "Недоступность ресурса задаётся только встроенным примером")
+	}
 	if c.TLS.Mode != "tls" && c.TLS.Mode != "mtls" && c.TLS.Mode != "plaintext" {
 		return problem.Invalid("config.tls.mode", "Выберите TLS или явный plaintext")
 	}

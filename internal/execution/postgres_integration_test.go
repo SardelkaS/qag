@@ -2,15 +2,15 @@
 
 package execution
 
-import "qag/internal/dbscope"
+import "github.com/SardelkaS/qag/internal/dbscope"
 
 import (
 	"context"
 	"github.com/jackc/pgx/v5"
-	"qag/internal/testfixture"
+	"github.com/SardelkaS/qag/internal/testfixture"
 
-	"qag/internal/catalog"
-	"qag/internal/resources"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/resources"
 	"strconv"
 	"strings"
 	"testing"

@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"qag/internal/catalog"
-	"qag/internal/problem"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/problem"
 )
 
 const (

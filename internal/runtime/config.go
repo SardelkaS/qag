@@ -4,17 +4,19 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"github.com/SardelkaS/qag/internal/dbscope"
+	"github.com/SardelkaS/qag/internal/demo"
 	"io"
 	"net"
 	"net/url"
 	"os"
-	"qag/internal/dbscope"
-	"qag/internal/demo"
 	"strconv"
 	"strings"
 )
 
 type Config struct {
+	Storage         string
+	DataFile        string
 	Namespace       dbscope.Namespace
 	Address         string
 	DatabaseURL     string
@@ -60,7 +62,13 @@ func LoadConfig(lookup func(string) string) (Config, error) {
 	return LoadConfigEnv(func(k string) (string, bool) { v := lookup(k); return v, v != "" })
 }
 
-func LoadConfigEnv(env func(string) (string, bool)) (Config, error) {
+func LoadConfigEnv(env func(string) (string, bool)) (Config, error) { return loadConfigEnv(env, false) }
+
+func LoadDataConfigEnv(env func(string) (string, bool)) (Config, error) {
+	return loadConfigEnv(env, true)
+}
+
+func loadConfigEnv(env func(string) (string, bool), dataOnly bool) (Config, error) {
 	values := map[string]string{}
 	if path, _ := env("QAG_CONFIG_FILE"); path != "" {
 		f, err := ReadConfigFile(path)
@@ -68,8 +76,8 @@ func LoadConfigEnv(env func(string) (string, bool)) (Config, error) {
 			return Config{}, err
 		}
 		values = f.Values
-		if _, err = loadValues(func(k string) string { return values[k] }); err != nil {
-			return Config{}, err
+		if values["QAG_STORAGE"] == "" && values["QAG_DATABASE_URL"] == "" && values["QAG_DATA_FILE"] == "" {
+			return Config{}, errors.New("QAG_CONFIG_FILE не содержит настройки хранилища")
 		}
 	}
 	lookup := func(k string) string {
@@ -78,11 +86,35 @@ func LoadConfigEnv(env func(string) (string, bool)) (Config, error) {
 		}
 		return values[k]
 	}
-	return loadValues(lookup)
+	if lookup("QAG_STORAGE") == "" {
+		_, explicitDB := env("QAG_DATABASE_URL")
+		if explicitDB && lookup("QAG_DATABASE_URL") == "" && lookup("QAG_DATA_FILE") == "" {
+			return Config{}, errors.New("QAG_DATABASE_URL задан пустым")
+		}
+	}
+	return loadValues(lookup, dataOnly)
 }
 
-func loadValues(lookup func(string) string) (Config, error) {
+func loadValues(lookup func(string) string, dataOnly bool) (Config, error) {
 	c := Config{Address: "127.0.0.1:8080", DatabaseURL: lookup("QAG_DATABASE_URL"), DevOrigin: lookup("QAG_DEV_ORIGIN")}
+	c.Storage = lookup("QAG_STORAGE")
+	c.DataFile = lookup("QAG_DATA_FILE")
+	if c.Storage == "" {
+		if c.DatabaseURL != "" && c.DataFile != "" {
+			return Config{}, errors.New("одновременно заданы БД и файл; укажите QAG_STORAGE")
+		}
+		if c.DatabaseURL != "" {
+			c.Storage = "postgres"
+		} else {
+			c.Storage = "yaml"
+		}
+	}
+	if c.Storage != "postgres" && c.Storage != "yaml" {
+		return Config{}, errors.New("QAG_STORAGE: допустимы postgres и yaml")
+	}
+	if c.Storage == "yaml" && c.DataFile == "" {
+		c.DataFile = "./qag.yaml"
+	}
 	c.NetworkMode = lookup("QAG_NETWORK_MODE")
 	c.PublicOrigin = lookup("QAG_PUBLIC_ORIGIN")
 	if c.NetworkMode != "" && c.NetworkMode != "native" && c.NetworkMode != "container" {
@@ -111,13 +143,18 @@ func loadValues(lookup func(string) string) (Config, error) {
 	if err != nil || ip == nil || (!ip.IsLoopback() && !(c.NetworkMode == "container" && ip.IsUnspecified())) || portErr != nil || port < 1 || port > 65535 {
 		return Config{}, errors.New("QAG_ADDRESS должен быть loopback-адресом с портом 1–65535")
 	}
-	u, err := url.Parse(c.DatabaseURL)
-	if err != nil || u.Hostname() == "" || (u.Scheme != "postgres" && u.Scheme != "postgresql") {
-		return Config{}, errors.New("задайте корректный QAG_DATABASE_URL для PostgreSQL приложения")
-	}
-	c.DemoDatabaseURL = lookup("QAG_DEMO_DATABASE_URL")
-	if _, _, err = demo.DatabaseConfig(c.DatabaseURL, c.DemoDatabaseURL); err != nil {
-		return Config{}, err
+	if c.Storage == "postgres" {
+		u, err := url.Parse(c.DatabaseURL)
+		if err != nil || u.Hostname() == "" || (u.Scheme != "postgres" && u.Scheme != "postgresql") {
+			return Config{}, errors.New("задайте корректный QAG_DATABASE_URL для PostgreSQL приложения")
+		}
+		c.DemoDatabaseURL = lookup("QAG_DEMO_DATABASE_URL")
+		if !dataOnly {
+			if _, _, err = demo.DatabaseConfig(c.DatabaseURL, c.DemoDatabaseURL); err != nil {
+				return Config{}, err
+			}
+		}
+
 	}
 	c.DemoGRPCAddress = lookup("QAG_DEMO_GRPC_ADDRESS")
 	if c.DemoGRPCAddress == "" {
@@ -129,9 +166,12 @@ func loadValues(lookup func(string) string) (Config, error) {
 	if demoErr != nil || demoIP == nil || !demoIP.IsLoopback() || demoPortErr != nil || demoPort < 0 || demoPort > 65535 {
 		return Config{}, errors.New("QAG_DEMO_GRPC_ADDRESS должен быть loopback-адресом с портом 0–65535")
 	}
-	c.SecretKey, err = base64.StdEncoding.DecodeString(lookup("QAG_SECRET_KEY"))
-	if err != nil || len(c.SecretKey) != 32 {
-		return Config{}, errors.New("QAG_SECRET_KEY должен содержать 32 байта в base64")
+	if c.Storage == "postgres" {
+		c.SecretKey, err = base64.StdEncoding.DecodeString(lookup("QAG_SECRET_KEY"))
+		if err != nil || len(c.SecretKey) != 32 {
+			return Config{}, errors.New("QAG_SECRET_KEY должен содержать 32 байта в base64")
+		}
+
 	}
 	if c.DevOrigin != "" {
 		if !validLocalOrigin(c.DevOrigin) {

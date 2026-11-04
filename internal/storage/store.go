@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"qag/internal/dbscope"
+	"github.com/SardelkaS/qag/internal/dbscope"
 )
 
 var ErrUnavailable = errors.New("PostgreSQL приложения недоступна; проверьте подключение и учётные данные")

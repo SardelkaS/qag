@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	appruntime "qag/internal/runtime"
+	appruntime "github.com/SardelkaS/qag/internal/runtime"
 	"strings"
 	"testing"
 	"testing/fstest"

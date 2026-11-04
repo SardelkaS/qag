@@ -18,12 +18,12 @@ import (
 	"testing"
 	"time"
 
-	"qag/internal/builtin"
-	"qag/internal/catalog"
-	"qag/internal/execution"
-	"qag/internal/httpapi"
-	"qag/internal/runs"
-	"qag/internal/testfixture"
+	"github.com/SardelkaS/qag/internal/builtin"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/execution"
+	"github.com/SardelkaS/qag/internal/httpapi"
+	"github.com/SardelkaS/qag/internal/runs"
+	"github.com/SardelkaS/qag/internal/testfixture"
 )
 
 // This test uses the SAME PostgreSQL and the normal manifest/limited-role

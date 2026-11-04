@@ -15,8 +15,8 @@ import (
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/math/fixed"
-	"qag/internal/problem"
-	"qag/internal/runs"
+	"github.com/SardelkaS/qag/internal/problem"
+	"github.com/SardelkaS/qag/internal/runs"
 )
 
 type bitmapLine struct {

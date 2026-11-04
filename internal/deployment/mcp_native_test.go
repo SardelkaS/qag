@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"qag/internal/testfixture"
+	"github.com/SardelkaS/qag/internal/testfixture"
 )
 
 func TestMCPNativeRuntime(t *testing.T) {

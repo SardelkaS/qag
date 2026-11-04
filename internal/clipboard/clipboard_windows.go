@@ -11,7 +11,7 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
-	"qag/internal/reporting"
+	"github.com/SardelkaS/qag/internal/reporting"
 )
 
 var mu sync.Mutex

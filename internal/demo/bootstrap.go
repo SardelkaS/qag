@@ -1,6 +1,6 @@
 package demo
 
-import "qag/internal/dbscope"
+import "github.com/SardelkaS/qag/internal/dbscope"
 
 import (
 	"bytes"
@@ -11,12 +11,12 @@ import (
 	"sort"
 	"time"
 
+	"github.com/SardelkaS/qag/internal/builtin"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/problem"
+	"github.com/SardelkaS/qag/internal/resources"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"qag/internal/builtin"
-	"qag/internal/catalog"
-	"qag/internal/problem"
-	"qag/internal/resources"
 )
 
 func Bootstrap(ctx context.Context, pool *pgxpool.Pool, vault *resources.Vault, httpURL, grpcAddress string, sql resources.Config, secrets map[string]string) (builtin.Info, error) {
@@ -97,6 +97,30 @@ func Bootstrap(ctx context.Context, pool *pgxpool.Pool, vault *resources.Vault, 
 	} {
 		if err = seedResource(ctx, tx, vault, i.EnvironmentID, r.id, r.name, r.kind, r.c, r.s, create); err != nil {
 			return i, err
+		}
+	}
+	// A portable dataset can have come from another isolated namespace. Rebind
+	// only the current built-in SQL definition; historical snapshots stay intact.
+	if !create {
+		var steps []catalog.Step
+		if err = tx.QueryRow(ctx, dbscope.Render(tx, `SELECT steps FROM qag.test_cases WHERE id=$1 FOR UPDATE`), i.TestCaseID).Scan(&steps); err != nil {
+			return i, problem.Database(err)
+		}
+		changed := false
+		query := dbscope.Render(pool, "SELECT id, name, status, amount FROM qag_demo.items WHERE id=$1 ORDER BY id")
+		for si := range steps {
+			for bi := range steps[si].Blocks {
+				b := &steps[si].Blocks[bi]
+				if b.Resource == "DEMO_SQL" && b.SQL != nil && b.SQL.Query != query {
+					b.SQL.Query = query
+					changed = true
+				}
+			}
+		}
+		if changed {
+			if _, err = tx.Exec(ctx, dbscope.Render(tx, `UPDATE qag.test_cases SET steps=$2,revision=revision+1,updated_at=now() WHERE id=$1`), i.TestCaseID, steps); err != nil {
+				return i, problem.Database(err)
+			}
 		}
 	}
 	if create {

@@ -16,8 +16,8 @@ import (
 	"runtime"
 	"strings"
 
-	appruntime "qag/internal/runtime"
-	"qag/internal/testfixture"
+	appruntime "github.com/SardelkaS/qag/internal/runtime"
+	"github.com/SardelkaS/qag/internal/testfixture"
 )
 
 type Paths struct{ Config, PKI, Postgres, Data string }

@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"qag/internal/problem"
+	"github.com/SardelkaS/qag/internal/problem"
 )
 
 type Vault struct{ aead cipher.AEAD }

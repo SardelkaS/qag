@@ -15,8 +15,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
-	"qag/internal/catalog"
-	"qag/internal/resources"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/resources"
 )
 
 func (r *Runner) sql(ctx context.Context, b catalog.Block, res resources.Resolved) (Result, error) {

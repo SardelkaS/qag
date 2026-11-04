@@ -10,8 +10,8 @@ import (
 	"strings"
 	"unicode/utf16"
 
-	"qag/internal/problem"
-	"qag/internal/runs"
+	"github.com/SardelkaS/qag/internal/problem"
+	"github.com/SardelkaS/qag/internal/runs"
 )
 
 type PNGPart struct {

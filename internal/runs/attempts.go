@@ -1,18 +1,18 @@
 package runs
 
-import "qag/internal/dbscope"
+import "github.com/SardelkaS/qag/internal/dbscope"
 
 import (
 	"context"
 	"errors"
 	"time"
 
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/comparison"
+	"github.com/SardelkaS/qag/internal/execution"
+	"github.com/SardelkaS/qag/internal/problem"
+	"github.com/SardelkaS/qag/internal/resources"
 	"github.com/jackc/pgx/v5"
-	"qag/internal/catalog"
-	"qag/internal/comparison"
-	"qag/internal/execution"
-	"qag/internal/problem"
-	"qag/internal/resources"
 )
 
 type attemptEnvelope struct {
@@ -269,7 +269,10 @@ func (r *Repository) CancelAttempt(ctx context.Context, id string) (execution.At
 	}
 	return r.GetAttempt(ctx, id)
 }
-func interruptedResult(state string) execution.Result {
+func interruptedResult(state string) execution.Result { return InterruptedResult(state) }
+
+// InterruptedResult is shared by every durable backend's recovery path.
+func InterruptedResult(state string) execution.Result {
 	message := "Процесс остановлен; результат внешнего действия неизвестен. Автоматического повтора не было"
 	if state == "cancelled" {
 		message = "Попытка отменена; внешнее действие могло уже выполниться"

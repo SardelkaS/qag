@@ -2,12 +2,12 @@
 
 package storage
 
-import "qag/internal/dbscope"
+import "github.com/SardelkaS/qag/internal/dbscope"
 
 import (
 	"context"
 	"errors"
-	"qag/internal/testfixture"
+	"github.com/SardelkaS/qag/internal/testfixture"
 	"testing"
 	"time"
 

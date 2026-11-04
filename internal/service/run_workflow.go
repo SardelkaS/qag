@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"qag/internal/catalog"
-	"qag/internal/execution"
-	"qag/internal/problem"
-	"qag/internal/runs"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/execution"
+	"github.com/SardelkaS/qag/internal/problem"
+	"github.com/SardelkaS/qag/internal/runs"
 )
 
 func (e *Engine) fence(runID string) *sync.Mutex {

@@ -1,5 +1,7 @@
 # Развёртывание, PostgreSQL и восстановление
 
+Самостоятельный Go-бинарник теперь также работает с одним YAML-файлом. Полный перенос PostgreSQL ↔ YAML, секреты, блокировки и dry-run описаны в [yaml-storage.md](yaml-storage.md). Это отдельные команды `qag data export/import`; прежние контейнерные `export-config` и `pg_dump/pg_restore` сохраняют своё назначение.
+
 ## Состояние установки
 
 `docker compose up --build -d --wait` запускает qag и один PostgreSQL. Одноразовые init и db-setup последовательно готовят конфигурацию/PKI и ограниченную demo-роль. Готовность qag проверяет основную БД, demo-пул и работающий gRPC. `docker compose ps -a` показывает подготовительные контейнеры с Exit 0 и оба постоянных сервиса healthy.

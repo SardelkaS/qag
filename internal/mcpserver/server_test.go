@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"qag/internal/mcpserver"
+	"github.com/SardelkaS/qag/internal/mcpserver"
 )
 
 func TestTransportMethodsAndRequestBounds(t *testing.T) {

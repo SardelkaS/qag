@@ -19,5 +19,10 @@ try {
     $env:QAG_E2E_BINARY=$BinaryPath
     $env:QAG_TEST_PKI_DIR=Join-Path $qagRoot '.local/pki'
     Push-Location web
-    try { & npm.cmd run test:e2e; if ($LASTEXITCODE -ne 0) { throw 'E2E tests failed' } } finally { Pop-Location }
+    try {
+        $qagE2EErrorPreference=$ErrorActionPreference
+        try { $ErrorActionPreference='Continue'; & npm.cmd run test:e2e }
+        finally { $ErrorActionPreference=$qagE2EErrorPreference }
+        if ($LASTEXITCODE -ne 0) { throw 'E2E tests failed' }
+    } finally { Pop-Location }
 } finally { Pop-Location }

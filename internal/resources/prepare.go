@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"strings"
 
-	"qag/internal/catalog"
-	"qag/internal/problem"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/problem"
 )
 
 var substitution = regexp.MustCompile(`\$\{([A-Z][A-Z0-9_]*)\}`)

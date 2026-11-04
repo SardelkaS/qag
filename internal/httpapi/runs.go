@@ -2,9 +2,9 @@ package httpapi
 
 import (
 	"net/http"
-	"qag/internal/problem"
-	"qag/internal/reporting"
-	"qag/internal/service"
+	"github.com/SardelkaS/qag/internal/problem"
+	"github.com/SardelkaS/qag/internal/reporting"
+	"github.com/SardelkaS/qag/internal/service"
 	"strconv"
 )
 

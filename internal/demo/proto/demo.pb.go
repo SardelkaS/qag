@@ -146,7 +146,7 @@ const file_internal_demo_proto_demo_proto_rawDesc = "" +
 	"\x06status\x18\x03 \x01(\tR\x06status\x12\x16\n" +
 	"\x06amount\x18\x04 \x01(\tR\x06amount2H\n" +
 	"\vDemoService\x129\n" +
-	"\aGetItem\x12\x1b.qag.demo.v1.GetItemRequest\x1a\x11.qag.demo.v1.ItemB Z\x1eqag/internal/demo/proto;demopbb\x06proto3"
+	"\aGetItem\x12\x1b.qag.demo.v1.GetItemRequest\x1a\x11.qag.demo.v1.ItemB5Z3github.com/SardelkaS/qag/internal/demo/proto;demopbb\x06proto3"
 
 var (
 	file_internal_demo_proto_demo_proto_rawDescOnce sync.Once

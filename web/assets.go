@@ -5,12 +5,12 @@ import (
 	"io/fs"
 )
 
-//go:embed all:dist
+//go:embed all:bundle
 var embedded embed.FS
 
-// Assets contains the production frontend. Run scripts/build.ps1 before go build.
+// Assets contains the prepared frontend shipped in the Go module itself.
 func Assets() fs.FS {
-	assets, err := fs.Sub(embedded, "dist")
+	assets, err := fs.Sub(embedded, "bundle")
 	if err != nil {
 		panic("embedded frontend is missing")
 	}

@@ -2,20 +2,20 @@
 
 package catalog_test
 
-import "qag/internal/dbscope"
+import "github.com/SardelkaS/qag/internal/dbscope"
 
 import (
 	"context"
 	"errors"
-	"qag/internal/testfixture"
+	"github.com/SardelkaS/qag/internal/testfixture"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"qag/internal/catalog"
-	"qag/internal/problem"
-	"qag/internal/storage"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/problem"
+	"github.com/SardelkaS/qag/internal/storage"
 )
 
 func TestCatalogPersistenceRevisionAndArchive(t *testing.T) {

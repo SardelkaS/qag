@@ -587,6 +587,13 @@ function ResourceForm({
   }
   return (
     <form className="resource-form" onSubmit={(e) => void submit(e)}>
+      {initial?.config.unavailableReason === 'demo_sql_unavailable' && (
+        <Notice>
+          В YAML-режиме демонстрационная PostgreSQL не настроена. SQL-шаг
+          доступен для запуска и вернёт ошибку. Пользовательские SQL-ресурсы
+          могут обращаться к внешней БД.
+        </Notice>
+      )}
       <fieldset disabled={busy || initial?.readOnly} className="plain-fieldset">
         <div className="row-heading">
           <h2>{initial ? initial.name : 'Новый ресурс'}</h2>

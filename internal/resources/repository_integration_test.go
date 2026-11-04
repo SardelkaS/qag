@@ -2,19 +2,19 @@
 
 package resources_test
 
-import "qag/internal/dbscope"
+import "github.com/SardelkaS/qag/internal/dbscope"
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"qag/internal/testfixture"
+	"github.com/SardelkaS/qag/internal/testfixture"
 	"testing"
 	"time"
 
-	"qag/internal/catalog"
-	"qag/internal/resources"
-	"qag/internal/storage"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/resources"
+	"github.com/SardelkaS/qag/internal/storage"
 )
 
 func TestResourceVersionsAndWriteOnlySecrets(t *testing.T) {

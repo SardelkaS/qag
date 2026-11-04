@@ -2,7 +2,7 @@
 
 package service_test
 
-import "qag/internal/dbscope"
+import "github.com/SardelkaS/qag/internal/dbscope"
 
 import (
 	"bytes"
@@ -12,14 +12,14 @@ import (
 	"github.com/jackc/pgx/v5"
 	"net/http"
 	"net/http/httptest"
-	"qag/internal/catalog"
-	"qag/internal/execution"
-	"qag/internal/problem"
-	"qag/internal/resources"
-	"qag/internal/runs"
-	"qag/internal/service"
-	"qag/internal/storage"
-	"qag/internal/testfixture"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/execution"
+	"github.com/SardelkaS/qag/internal/problem"
+	"github.com/SardelkaS/qag/internal/resources"
+	"github.com/SardelkaS/qag/internal/runs"
+	"github.com/SardelkaS/qag/internal/service"
+	"github.com/SardelkaS/qag/internal/storage"
+	"github.com/SardelkaS/qag/internal/testfixture"
 	"strings"
 	"sync"
 	"sync/atomic"

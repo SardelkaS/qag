@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"os"
-	"qag/internal/demo"
+	"github.com/SardelkaS/qag/internal/demo"
 	"time"
 )
 

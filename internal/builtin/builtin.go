@@ -1,12 +1,12 @@
 // Package builtin identifies protected objects without depending on repositories.
 package builtin
 
-import "qag/internal/dbscope"
+import "github.com/SardelkaS/qag/internal/dbscope"
 
 import (
 	"context"
 	"github.com/jackc/pgx/v5"
-	"qag/internal/problem"
+	"github.com/SardelkaS/qag/internal/problem"
 )
 
 type Info struct {

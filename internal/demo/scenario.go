@@ -1,6 +1,6 @@
 package demo
 
-import "qag/internal/catalog"
+import "github.com/SardelkaS/qag/internal/catalog"
 
 const CaseName = "Пример: HTTP, gRPC и PostgreSQL"
 const ExpectedItem = `{"id":"example-001","name":"Локальный пример qag","status":"ready","amount":"9007199254740993.125"}`

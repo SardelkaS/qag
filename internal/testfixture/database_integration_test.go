@@ -10,13 +10,13 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"qag/internal/catalog"
-	"qag/internal/demo"
-	"qag/internal/resources"
-	"qag/internal/runs"
-	"qag/internal/service"
-	"qag/internal/storage"
-	"qag/internal/testfixture"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/demo"
+	"github.com/SardelkaS/qag/internal/resources"
+	"github.com/SardelkaS/qag/internal/runs"
+	"github.com/SardelkaS/qag/internal/service"
+	"github.com/SardelkaS/qag/internal/storage"
+	"github.com/SardelkaS/qag/internal/testfixture"
 )
 
 func TestSharedDatabaseNamespaceIsolation(t *testing.T) {

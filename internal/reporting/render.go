@@ -10,8 +10,8 @@ import (
 	"io/fs"
 	"strings"
 
-	"qag/internal/problem"
-	"qag/internal/runs"
+	"github.com/SardelkaS/qag/internal/problem"
+	"github.com/SardelkaS/qag/internal/runs"
 )
 
 const MaxRenderedBytes = 64 << 20

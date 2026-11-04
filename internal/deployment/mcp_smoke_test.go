@@ -15,10 +15,10 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"qag/internal/builtin"
-	"qag/internal/catalog"
-	"qag/internal/mcpserver"
-	"qag/internal/runs"
+	"github.com/SardelkaS/qag/internal/builtin"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/mcpserver"
+	"github.com/SardelkaS/qag/internal/runs"
 )
 
 func smokeCall[T any](t *testing.T, ctx context.Context, s *mcp.ClientSession, name string, args any) T {

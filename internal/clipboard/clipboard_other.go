@@ -4,7 +4,7 @@ package clipboard
 
 import (
 	"fmt"
-	"qag/internal/reporting"
+	"github.com/SardelkaS/qag/internal/reporting"
 )
 
 func Available() bool { return false }

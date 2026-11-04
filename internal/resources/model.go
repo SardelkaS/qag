@@ -1,7 +1,7 @@
 package resources
 
 import (
-	"qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/catalog"
 	"time"
 )
 
@@ -18,13 +18,15 @@ type Environment struct {
 type TLSConfig = catalog.TLSConfig
 
 type Config struct {
-	BaseURL    string                  `json:"baseUrl,omitempty"`
-	Address    string                  `json:"address,omitempty"`
-	Database   string                  `json:"database,omitempty"`
-	Username   string                  `json:"username,omitempty"`
-	Headers    []catalog.RequestHeader `json:"headers"`
-	TLS        TLSConfig               `json:"tls"`
-	ProtoFiles map[string]string       `json:"protoFiles,omitempty"`
+	// UnavailableReason is set only by bootstrap for a version of built-in SQL.
+	UnavailableReason string                  `json:"unavailableReason,omitempty"`
+	BaseURL           string                  `json:"baseUrl,omitempty"`
+	Address           string                  `json:"address,omitempty"`
+	Database          string                  `json:"database,omitempty"`
+	Username          string                  `json:"username,omitempty"`
+	Headers           []catalog.RequestHeader `json:"headers"`
+	TLS               TLSConfig               `json:"tls"`
+	ProtoFiles        map[string]string       `json:"protoFiles,omitempty"`
 }
 
 // Resource is the public representation. Secret values are never returned.

@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/SardelkaS/qag/internal/ports"
 	"io"
 	"net/http"
 	"strconv"
 	"time"
 
-	"qag/internal/catalog"
-	"qag/internal/problem"
+	"github.com/SardelkaS/qag/internal/problem"
 )
 
 type operation func(*http.Request) (any, error)
@@ -67,7 +67,7 @@ func pageOptions(r *http.Request) (int, string, error) {
 	return limit, r.URL.Query().Get("cursor"), nil
 }
 
-func (s *Server) RegisterCatalog(repo *catalog.Repository) {
+func (s *Server) RegisterCatalog(repo ports.Catalog) {
 	s.RegisterImages(repo)
 	s.register("GET /api/v1/folders", func(r *http.Request) (any, error) {
 		limit, cursor, err := pageOptions(r)

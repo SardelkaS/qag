@@ -2,7 +2,7 @@
 
 package service_test
 
-import "qag/internal/dbscope"
+import "github.com/SardelkaS/qag/internal/dbscope"
 
 import (
 	"bytes"
@@ -10,14 +10,18 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/SardelkaS/qag/internal/filestore"
+	"github.com/SardelkaS/qag/internal/ports"
 	"image"
 	"image/png"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 
-	"qag/internal/testfixture"
+	"github.com/SardelkaS/qag/internal/testfixture"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -25,38 +29,40 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"qag/internal/catalog"
-	"qag/internal/demo"
-	"qag/internal/execution"
-	"qag/internal/httpapi"
-	"qag/internal/mcpserver"
-	"qag/internal/reporting"
-	"qag/internal/resources"
-	"qag/internal/runs"
-	appruntime "qag/internal/runtime"
-	"qag/internal/service"
-	"qag/internal/storage"
-	"qag/web"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/demo"
+	"github.com/SardelkaS/qag/internal/execution"
+	"github.com/SardelkaS/qag/internal/httpapi"
+	"github.com/SardelkaS/qag/internal/mcpserver"
+	"github.com/SardelkaS/qag/internal/reporting"
+	"github.com/SardelkaS/qag/internal/resources"
+	"github.com/SardelkaS/qag/internal/runs"
+	appruntime "github.com/SardelkaS/qag/internal/runtime"
+	"github.com/SardelkaS/qag/internal/service"
+	"github.com/SardelkaS/qag/internal/storage"
+	"github.com/SardelkaS/qag/web"
 )
 
 type authoringFixture struct {
-	ctx     context.Context
-	store   *storage.Store
-	c       *catalog.Repository
-	res     *resources.Repository
-	engine  *service.Engine
-	env     resources.Environment
-	server  *httptest.Server
-	csrf    string
-	db      *testfixture.Database
-	reports *reporting.Service
-	mcp     *mcpserver.Server
-	audit   *bytes.Buffer
+	fileStore *filestore.Store
+	ctx       context.Context
+	store     *storage.Store
+	c         ports.Catalog
+	res       ports.Resources
+	engine    *service.Engine
+	env       resources.Environment
+	server    *httptest.Server
+	csrf      string
+	db        *testfixture.Database
+	reports   *reporting.Service
+	mcp       *mcpserver.Server
+	audit     *bytes.Buffer
 }
 
 func authoringApp(t *testing.T) *authoringFixture {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	yamlDir := t.TempDir()
 	dbFixture := testfixture.ForTest(t, ctx)
 	store, err := storage.Open(ctx, dbFixture.AppURL)
 	if err != nil {
@@ -69,6 +75,9 @@ func authoringApp(t *testing.T) *authoringFixture {
 		}
 		if f.engine != nil {
 			f.engine.Close()
+		}
+		if f.fileStore != nil {
+			f.fileStore.Close()
 		}
 		store.Close()
 		clean, done := context.WithTimeout(context.Background(), 8*time.Second)
@@ -83,6 +92,17 @@ func authoringApp(t *testing.T) *authoringFixture {
 	f.c = catalog.NewRepository(store.Pool)
 	f.res = resources.NewRepository(store.Pool, vault)
 	f.engine = service.New(ctx, f.c, f.res, runs.NewRepository(store.Pool))
+	if os.Getenv("QAG_TEST_BACKEND") == "yaml" {
+		fileStore, e := filestore.Open(filepath.Join(yamlDir, "qag.yaml"), true)
+		if e != nil {
+			t.Fatal(e)
+		}
+		f.fileStore = fileStore
+		f.c = &filestore.Catalog{Store: fileStore}
+		f.res = &filestore.Resources{Store: fileStore}
+		f.engine.Close()
+		f.engine = service.New(ctx, f.c, f.res, &filestore.Runs{Store: fileStore})
+	}
 	f.env, err = f.res.SaveEnvironmentMetadata(ctx, "", "Test environment", "Original description", 0)
 	if err != nil {
 		t.Fatal(err)
@@ -92,7 +112,11 @@ func authoringApp(t *testing.T) *authoringFixture {
 		t.Fatal(err)
 	}
 	f.server = httptest.NewUnstartedServer(nil)
-	api, err := httpapi.New(appruntime.Config{Address: f.server.Listener.Addr().String()}, web.Assets(), store.Ping)
+	ping := store.Ping
+	if f.fileStore != nil {
+		ping = f.fileStore.Ping
+	}
+	api, err := httpapi.New(appruntime.Config{Address: f.server.Listener.Addr().String()}, web.Assets(), ping)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +125,7 @@ func authoringApp(t *testing.T) *authoringFixture {
 	f.reports = reporting.NewService(f.engine.Runs, f.c, web.Assets(), false)
 	api.RegisterRuns(f.engine, f.reports)
 	f.audit = &bytes.Buffer{}
-	f.mcp = mcpserver.New(mcpserver.Options{Engine: f.engine, Reports: f.reports, Ping: store.Ping, Logger: slog.New(slog.NewJSONHandler(f.audit, nil))})
+	f.mcp = mcpserver.New(mcpserver.Options{Engine: f.engine, Reports: f.reports, Ping: ping, Logger: slog.New(slog.NewJSONHandler(f.audit, nil))})
 	api.RegisterMCP(f.mcp.Handler())
 	f.server.Config.Handler = api.Handler()
 	f.server.Start()

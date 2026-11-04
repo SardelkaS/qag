@@ -1,9 +1,9 @@
 package runs
 
 import (
-	"qag/internal/catalog"
-	"qag/internal/execution"
-	"qag/internal/resources"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/execution"
+	"github.com/SardelkaS/qag/internal/resources"
 	"time"
 )
 

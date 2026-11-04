@@ -13,8 +13,8 @@ import (
 	"strings"
 	"testing"
 
-	"qag/internal/catalog"
-	"qag/internal/runs"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/runs"
 )
 
 func renderFixture(t *testing.T) runs.Report {

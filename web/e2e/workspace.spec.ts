@@ -72,7 +72,7 @@ async function api(path: string, method = 'GET', body?: unknown, key?: string) {
   return value
 }
 test.beforeAll(async () => {
-  const path = resolve(root, '.local/e2e.json')
+  const path = resolve(root, `.local/e2e-${randomUUID()}.json`)
   fixture = spawn(resolve(root, 'dist/testfixture.exe'), ['-config', path], {
     cwd: root,
     windowsHide: true,

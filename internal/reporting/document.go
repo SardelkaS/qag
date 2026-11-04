@@ -3,8 +3,8 @@ package reporting
 import (
 	"encoding/json"
 	"fmt"
-	"qag/internal/catalog"
-	"qag/internal/runs"
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/runs"
 	"strings"
 )
 

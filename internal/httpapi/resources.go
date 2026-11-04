@@ -1,11 +1,12 @@
 package httpapi
 
 import (
+	"github.com/SardelkaS/qag/internal/ports"
+
 	"net/http"
-	"qag/internal/resources"
 )
 
-func (s *Server) RegisterResources(repo *resources.Repository) {
+func (s *Server) RegisterResources(repo ports.Resources) {
 	s.register("GET /api/v1/environments", func(r *http.Request) (any, error) {
 		limit, cursor, err := pageOptions(r)
 		if err != nil {

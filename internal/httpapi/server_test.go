@@ -13,7 +13,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	appruntime "qag/internal/runtime"
+	appruntime "github.com/SardelkaS/qag/internal/runtime"
 )
 
 func testServer(t *testing.T, ping func(context.Context) error) *Server {
