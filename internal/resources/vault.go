@@ -7,7 +7,9 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/SardelkaS/qag/internal/problem"
@@ -64,12 +66,18 @@ func mergeSecrets(old map[string]string, changes SecretChanges) (map[string]stri
 		result[k] = v
 	}
 	for _, name := range changes.Clear {
+		if strings.TrimSpace(name) == "" {
+			continue
+		}
 		if !variableName.MatchString(name) {
 			return nil, problem.Invalid("secrets", "Имена секретов должны быть в формате TOKEN_NAME")
 		}
 		delete(result, name)
 	}
 	for name, value := range changes.Replace {
+		if strings.TrimSpace(name) == "" {
+			continue
+		}
 		if !variableName.MatchString(name) {
 			return nil, problem.Invalid("secrets", "Имена секретов должны быть в формате TOKEN_NAME")
 		}
@@ -95,6 +103,10 @@ func NewRedactor(values map[string]string) *Redactor {
 	for _, v := range values {
 		if v != "" {
 			set[v] = true
+			set[url.QueryEscape(v)] = true
+			set[url.PathEscape(v)] = true
+			encoded, _ := json.Marshal(v)
+			set[string(encoded[1:len(encoded)-1])] = true
 		}
 	}
 	keys := []string{}
@@ -131,6 +143,12 @@ func (r *Redactor) Mask(value string) string {
 		case json.Number:
 			masked := r.replacer.Replace(string(v))
 			if masked != string(v) {
+				changed = true
+				return masked
+			}
+		case bool:
+			original := strconv.FormatBool(v)
+			if masked := r.replacer.Replace(original); masked != original {
 				changed = true
 				return masked
 			}

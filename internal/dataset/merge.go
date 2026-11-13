@@ -37,6 +37,23 @@ func equivalent(a, b reflect.Value) bool {
 				d.UseNumber()
 				var data any
 				if d.Decode(&data) == nil {
+					if root, ok := data.(map[string]any); ok {
+						// Defaults are compared without rewriting any stored JSON.
+						if copy.Type() == reflect.TypeFor[ResourceVersion]() && copy.Type().Field(i).Name == "Config" {
+							compareResourceDefaults(root)
+						}
+						if copy.Type() == reflect.TypeFor[Run]() && copy.Type().Field(i).Name == "Context" {
+							if list, ok := root["resources"].([]any); ok {
+								for _, item := range list {
+									if resource, ok := item.(map[string]any); ok {
+										if config, ok := resource["config"].(map[string]any); ok {
+											compareResourceDefaults(config)
+										}
+									}
+								}
+							}
+						}
+					}
 					b, _ := json.Marshal(data)
 					f.SetString(string(b))
 				}
@@ -46,6 +63,13 @@ func equivalent(a, b reflect.Value) bool {
 		return b
 	}
 	return bytes.Equal(canon(a), canon(b))
+}
+
+func compareResourceDefaults(config map[string]any) {
+	value, exists := config["variables"]
+	if variables, ok := value.(map[string]any); exists && (value == nil || ok && len(variables) == 0) {
+		delete(config, "variables")
+	}
 }
 
 // Merge is pure. Both callers retain their data on every conflict or error.

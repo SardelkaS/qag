@@ -1,10 +1,12 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"github.com/SardelkaS/qag/internal/ports"
+	"github.com/SardelkaS/qag/internal/resources"
 	"io"
 	"net/http"
 	"strconv"
@@ -45,7 +47,16 @@ func (s *Server) operationError(w http.ResponseWriter, r *http.Request, err erro
 	writeJSON(w, status, Error{Code: issue.Code, Message: issue.Message, FieldErrors: issue.Fields, RequestID: w.Header().Get("X-Request-ID")})
 }
 func readJSON(r *http.Request, value any) error {
-	decoder := json.NewDecoder(r.Body)
+	var source io.Reader = r.Body
+	switch value.(type) {
+	case *VariablesWrite, *ResourceWrite:
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			return problem.Invalid("body", "Не удалось прочитать JSON запроса")
+		}
+		source = bytes.NewReader(resources.NormalizeVariableWriteJSON(raw))
+	}
+	decoder := json.NewDecoder(source)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(value); err != nil {
 		return problem.Invalid("body", "Некорректный JSON или неизвестные поля запроса")
@@ -68,6 +79,7 @@ func pageOptions(r *http.Request) (int, string, error) {
 }
 
 func (s *Server) RegisterCatalog(repo ports.Catalog) {
+	s.registerCaseExport(repo)
 	s.RegisterImages(repo)
 	s.register("GET /api/v1/folders", func(r *http.Request) (any, error) {
 		limit, cursor, err := pageOptions(r)

@@ -1,5 +1,7 @@
 import type { components } from './generated/api'
 
+export type VariableDefinition = components['schemas']['VariableDefinition']
+export type CaseExport = components['schemas']['CaseExport']
 export type Folder = components['schemas']['Folder']
 export type TestCase = components['schemas']['TestCase']
 export type DemoInfo = components['schemas']['DemoInfo']

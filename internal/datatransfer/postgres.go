@@ -30,7 +30,7 @@ func column(name string) string {
 	return strings.ToLower(boundary2.ReplaceAllString(boundary1.ReplaceAllString(name, `${1}_${2}`), `${1}_${2}`))
 }
 func nullable(name, table string) bool {
-	return name == "RunID" && table == "qag.call_attempts" || name == "VariantID" || name == "VariantVersionID" || name == "BatchID" && table == "qag.call_attempts" || name == "AttemptID"
+	return name == "RunID" && table == "qag.call_attempts" || name == "VariantID" || name == "VariantVersionID" || name == "BatchID" && table == "qag.call_attempts" || name == "AttemptID" || name == "StepID" && table == "qag.run_batches"
 }
 
 func (p *PostgreSQL) Snapshot(ctx context.Context) (dataset.Document, error) {

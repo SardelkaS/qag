@@ -79,7 +79,7 @@ func smokeMCP(t *testing.T, ctx context.Context, base string, linux bool) string
 			t.Fatal("protocol negotiation")
 		}
 		tools, err := s.ListTools(ctx, nil)
-		if err != nil || len(tools.Tools) != 43 {
+		if err != nil || len(tools.Tools) != 45 {
 			t.Fatal("runtime tools", err)
 		}
 		info := smokeCall[builtin.Info](t, ctx, s, "qag_demo_get", map[string]any{})
@@ -133,7 +133,7 @@ func smokeMCP(t *testing.T, ctx context.Context, base string, linux bool) string
 				}
 			}
 		}
-		t.Log("MCP " + version + ": 43 tools, full demo, all server exports")
+		t.Log("MCP " + version + ": 45 tools, full demo, all server exports")
 	}
 	for _, auth := range []string{"", "Bearer wrong"} {
 		req, _ := http.NewRequestWithContext(ctx, "POST", base+"/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"qag_status","arguments":{}}}`))

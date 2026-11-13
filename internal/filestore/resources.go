@@ -130,6 +130,7 @@ func (r *Resources) SaveVariables(ctx context.Context, id string, revision int64
 	return r.SaveEnvironment(ctx, id, old.Name, revision, variables, changes)
 }
 func (r *Resources) saveEnvironment(ctx context.Context, id, value string, revision int64, variables map[string]string, changes resources.SecretChanges, description *string) (resources.Environment, error) {
+	variables = resources.NormalizeNewVariables(variables)
 	name, norm, e := catalog.Name(value)
 	if e != nil {
 		return resources.Environment{}, e
@@ -272,6 +273,13 @@ func (r *Resources) SaveResource(ctx context.Context, id, env, name, kind string
 		}
 		for k, v := range secrets {
 			sourceSecrets[k] = v
+		}
+		envValue, e := environment(d, env)
+		if e != nil {
+			return e
+		}
+		if e = resources.VariableContext(config, envValue.Variables, sourceSecrets); e != nil {
+			return e
 		}
 		if e = resources.ValidateConfig(kind, config, secrets, sourceSecrets); e != nil {
 			return e

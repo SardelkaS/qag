@@ -11,11 +11,18 @@ import (
 	"github.com/SardelkaS/qag/internal/runs"
 )
 
-func insertBatch(d *dataset.Data, runID, key, hash string, doc catalog.TestCase) string {
+func insertBatch(d *dataset.Data, runID, key, hash string, doc catalog.TestCase, selected ...string) string {
+	step := ""
+	if len(selected) > 0 {
+		step = selected[0]
+	}
 	id := catalog.NewID()
-	b := dataset.Batch{ID: id, RunID: runID, IdempotencyKey: key, RequestHash: hash, State: "running", StartedAt: now()}
+	b := dataset.Batch{StepID: step, ID: id, RunID: runID, IdempotencyKey: key, RequestHash: hash, State: "running", StartedAt: now()}
 	position := 0
 	for _, s := range doc.Steps {
+		if step != "" && s.ID != step {
+			continue
+		}
 		for _, block := range s.Blocks {
 			position++
 			d.BatchItems = append(d.BatchItems, dataset.BatchItem{BatchID: id, RunID: runID, Position: position, BlockID: block.ID, State: "pending"})
@@ -29,7 +36,7 @@ func insertBatch(d *dataset.Data, runID, key, hash string, doc catalog.TestCase)
 	d.Batches = append(d.Batches, b)
 	return id
 }
-func (r *Runs) StartBatch(ctx context.Context, runID, key, hash string) (runs.Batch, error) {
+func (r *Runs) StartBatch(ctx context.Context, runID, key, hash string, stepID ...string) (runs.Batch, error) {
 	id := ""
 	e := r.Store.Update(ctx, func(d *dataset.Data) error {
 		run, e := getRun(d, runID)
@@ -58,7 +65,14 @@ func (r *Runs) StartBatch(ctx context.Context, runID, key, hash string) (runs.Ba
 				return problem.Conflict("Дождитесь текущего вызова")
 			}
 		}
-		id = insertBatch(d, runID, key, hash, run.Snapshot)
+		step := ""
+		if len(stepID) > 0 {
+			step = stepID[0]
+		}
+		if _, e = runs.SelectStep(run.Snapshot, step); e != nil {
+			return e
+		}
+		id = insertBatch(d, runID, key, hash, run.Snapshot, step)
 		return nil
 	})
 	if e != nil {

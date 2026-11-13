@@ -1,3 +1,4 @@
 # Embedded assets must match their SHA-256 manifest on every platform.
 # Whitespace inside generated JavaScript string literals is significant.
 web/bundle/** -text -whitespace linguist-generated=true
+internal/reporting/testdata/*.golden text eol=lf

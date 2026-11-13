@@ -1,0 +1,147 @@
+h1. Кейс \[a\]\|\*b\*
+
+h2. 1. Первый
+
+Строка 1\\
+\{noformat\}\\
+\{code:java\}\\
+\# \[unsafe\|url\] \\ \!image\!
+
+h3. Ожидаемый результат шага
+
+Ручное ожидание
+
+Эталон: Эталон \[1\].png — Подпись. Приложите изображение к Jira вручную.
+
+h3. Вызов 1: http — GW
+
+{noformat}
+{
+  "method": "POST",
+  "path": "/${TASK}",
+  "query": [
+    {
+      "name": "n",
+      "value": "9007199254740993123.125"
+    }
+  ],
+  "headers": [
+    {
+      "name": "Authorization",
+      "value": "[скрыто]"
+    },
+    {
+      "name": "X-Api-Key",
+      "value": "${API_KEY}"
+    },
+    {
+      "name": "X-Source",
+      "source": {
+        "method": "POST",
+        "url": "https://auth.invalid",
+        "query": null,
+        "headers": [
+          {
+            "name": "Cookie",
+            "value": "[скрыто]"
+          }
+        ],
+        "bodyMode": "json",
+        "body": "{\"secret\":\"${CLIENT_SECRET}\"}",
+        "tls": {
+          "mode": "mtls"
+        },
+        "jsonPointer": "/token",
+        "fetchMode": "per_run"
+      }
+    }
+  ],
+  "bodyMode": "json",
+  "body": "{\"n\":9007199254740993123.125,\"x\":null,\"empty\":\"\"}"
+}
+{noformat}
+
+h4. Ожидаемый результат вызова
+
+{noformat}
+{
+  "headers": [
+    {
+      "name": "Set-Cookie",
+      "value": "[скрыто]"
+    }
+  ],
+  "bodyMode": "text",
+  "body": "Ожидание HTTP"
+}
+{noformat}
+
+h3. Вызов 2: grpc — GRPC
+
+{noformat}
+{
+  "service": "pkg.Service",
+  "method": "Method",
+  "body": "{}",
+  "metadata": [
+    {
+      "name": "authorization",
+      "value": "[скрыто]"
+    }
+  ]
+}
+{noformat}
+
+h4. Ожидаемый результат вызова
+
+{noformat}
+{
+  "bodyMode": "json",
+  "body": "{}"
+}
+{noformat}
+
+h3. Вызов 3: postgresql — SQL
+
+{noformat}
+{
+  "query": "SELECT $1, $2, $3",
+  "parameters": [
+    {
+      "type": "decimal",
+      "value": "9007199254740993123.125"
+    },
+    {
+      "type": "null"
+    },
+    {
+      "type": "string"
+    }
+  ],
+  "mode": "rows"
+}
+{noformat}
+
+h4. Ожидаемый результат вызова
+
+{noformat}
+{
+  "bodyMode": "rows"
+}
+{noformat}
+
+h2. 2. Шаг
+
+Неполный черновик
+
+h3. Вызов 1: http —
+
+(запрос не заполнен)
+
+h4. Ожидаемый результат вызова
+
+{noformat}
+{
+  "bodyMode": ""
+}
+{noformat}

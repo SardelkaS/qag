@@ -8,6 +8,7 @@ import (
 )
 
 type Result struct {
+	VariableSources    []VariableSourceResult `json:"variableSources,omitempty"`
 	HeaderSources      []HeaderSourceResult   `json:"headerSources,omitempty"`
 	MainRequestStarted *bool                  `json:"mainRequestStarted,omitempty"`
 	Protocol           string                 `json:"protocol"`

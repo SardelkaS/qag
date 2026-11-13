@@ -78,13 +78,23 @@ func needs(c catalog.TestCase) (map[string]string, error) {
 }
 
 func (e *Engine) StartRun(ctx context.Context, caseID, environmentID string, revision int64, key string, executeAll ...bool) (runs.Run, error) {
+	return e.StartRunWithPolicy(ctx, caseID, environmentID, revision, key, "auto", len(executeAll) > 0 && executeAll[0])
+}
+func (e *Engine) StartRunWithPolicy(ctx context.Context, caseID, environmentID string, revision int64, key, policy string, all bool) (runs.Run, error) {
+	policy = runs.NormalizeHistoryPolicy(policy)
+	if !runs.ValidHistoryPolicy(policy) {
+		return runs.Run{}, problem.Invalid("historyPolicy", "Выберите auto, retain или unretained")
+	}
 	if err := commandKey(key); err != nil {
 		return runs.Run{}, err
 	}
 	hash := requestHash("run", caseID, environmentID, revision)
-	all := len(executeAll) > 0 && executeAll[0]
+
 	if all {
 		hash = requestHash("run", caseID, environmentID, revision, true)
+	}
+	if policy != "auto" {
+		hash = requestHash(hash, policy)
 	}
 	if previous, found, err := e.Runs.LookupRun(ctx, key, hash); err != nil || found {
 		if err == nil {
@@ -128,12 +138,12 @@ func (e *Engine) StartRun(ctx context.Context, caseID, environmentID string, rev
 			if err != nil {
 				return runs.Run{}, err
 			}
-			if _, _, err = res.Prepare(block); err != nil {
+			if _, _, err = res.Plan(block); err != nil {
 				return runs.Run{}, err
 			}
 		}
 	}
-	run, err := e.Runs.Start(ctx, c, snapshot, key, hash, all)
+	run, err := e.Runs.StartWithOptions(ctx, c, snapshot, key, hash, runs.StartOptions{ExecuteAll: all, HistoryPolicy: policy})
 	if err == nil {
 		e.ensureBatches(run)
 	}
@@ -206,9 +216,9 @@ func (e *Engine) begin(ctx context.Context, caseID, runID string, revision int64
 	if err != nil {
 		return execution.Attempt{}, err
 	}
-	prepare := res.Prepare
+	prepare := res.Plan
 	if len(options) > 0 && options[0].VariantID != "" {
-		prepare = res.PrepareRequest
+		prepare = res.PlanRequest
 	}
 	prepared, res, err := prepare(block)
 	if err != nil {

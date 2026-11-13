@@ -80,9 +80,14 @@ func TestMCPNetworkResourcesProtoAndSQL(t *testing.T) {
 		return mcpCall[resources.Resource](t, f, s, "qag_resource_create", mcpserver.ResourceCreate{EnvironmentID: f.env.ID, ResourceData: mcpserver.ResourceData{Name: name, Kind: kind, Config: cfg, Secrets: mcpserver.SecretChanges{Replace: secrets}}})
 	}
 	tlsConfig := catalog.TLSConfig{Mode: "mtls", CA: cert.CA, Certificate: cert.Client}
-	httpRes := makeResource("TLS_HTTP", "http", resources.Config{BaseURL: targets.HTTP.URL, TLS: tlsConfig}, map[string]string{"PRIVATE_KEY": cert.Key})
+	variable := func(pointer string) map[string]resources.VariableDefinition {
+		return map[string]resources.VariableDefinition{"DYNAMIC": {Mode: "http", Source: &catalog.HTTPHeaderSource{Method: "GET", URL: targets.HTTP.URL + "/token", TLS: tlsConfig, PrivateKeySecret: "PRIVATE_KEY", JSONPointer: pointer, BodyMode: "none", FetchMode: "per_run"}}}
+	}
+	numericSource := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(`{"n":42}`)) }))
+	defer numericSource.Close()
+	httpRes := makeResource("TLS_HTTP", "http", resources.Config{BaseURL: targets.HTTP.URL, TLS: tlsConfig, Variables: variable("/tokens/0/value"), Headers: []catalog.RequestHeader{{Name: "Authorization", Value: "Bearer ${DYNAMIC}"}}}, map[string]string{"PRIVATE_KEY": cert.Key})
 	grpcSource := catalog.RequestHeader{ID: catalog.NewID(), Name: "authorization", Source: &catalog.HTTPHeaderSource{Method: "GET", URL: targets.HTTP.URL + "/token", TLS: tlsConfig, PrivateKeySecret: "PRIVATE_KEY", JSONPointer: "/tokens/0/value", BodyMode: "none", FetchMode: "per_attempt", Prefix: "Bearer "}}
-	grpcRes := makeResource("TLS_GRPC", "grpc", resources.Config{Address: targets.GRPC, TLS: tlsConfig, Headers: []catalog.RequestHeader{grpcSource}}, map[string]string{"PRIVATE_KEY": cert.Key})
+	grpcRes := makeResource("TLS_GRPC", "grpc", resources.Config{Address: targets.GRPC, TLS: tlsConfig, Variables: variable("/tokens/0/value"), Headers: []catalog.RequestHeader{grpcSource, {Name: "x-dynamic", Value: "${DYNAMIC}"}}}, map[string]string{"PRIVATE_KEY": cert.Key})
 	grpcRes = mcpCall[resources.Resource](t, f, s, "qag_proto_bundle_upload", map[string]any{"id": grpcRes.ID, "revision": grpcRes.Revision, "files": map[string]string{"health.proto": testfixture.HealthProto, "types.proto": testfixture.HealthTypesProto}})
 	mcpError(t, f, s, "qag_proto_bundle_upload", map[string]any{"id": grpcRes.ID, "revision": grpcRes.Revision, "files": map[string]string{"../private.proto": "sentinel-private-value"}}, "invalid")
 	role, sqlCert, err := f.db.EnableMTLS(f.ctx, os.Getenv("QAG_TEST_PKI_DIR"))
@@ -93,13 +98,13 @@ func TestMCPNetworkResourcesProtoAndSQL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	makeResource("TLS_SQL", "postgresql", resources.Config{Address: net.JoinHostPort(pg.Host, strconv.Itoa(int(pg.Port))), Database: pg.Database, Username: role, TLS: catalog.TLSConfig{Mode: "mtls", CA: sqlCert.CA, Certificate: sqlCert.Client}}, map[string]string{"PRIVATE_KEY": sqlCert.Key})
+	makeResource("TLS_SQL", "postgresql", resources.Config{Address: net.JoinHostPort(pg.Host, strconv.Itoa(int(pg.Port))), Database: pg.Database, Username: role, Variables: map[string]resources.VariableDefinition{"DYNAMIC_NUMBER": {Mode: "http", Source: &catalog.HTTPHeaderSource{Method: "GET", URL: numericSource.URL, TLS: catalog.TLSConfig{Mode: "plaintext"}, JSONPointer: "/n", BodyMode: "none", FetchMode: "per_run"}}}, TLS: catalog.TLSConfig{Mode: "mtls", CA: sqlCert.CA, Certificate: sqlCert.Client}}, map[string]string{"PRIVATE_KEY": sqlCert.Key})
 	c := f.caseInFolder(t)
 	code := 200
 	blocks := []catalog.Block{
 		{ID: catalog.NewID(), Kind: "http", Resource: "TLS_HTTP", HTTP: &catalog.HTTPRequest{Method: "GET", Path: "/api/task", BodyMode: "none"}, Expected: catalog.Expectation{StatusCode: &code, BodyMode: "none"}},
-		{ID: catalog.NewID(), Kind: "grpc", Resource: "TLS_GRPC", GRPC: &catalog.GRPCRequest{Service: "grpc.health.v1.Health", Method: "Check", Body: `{}`}, Expected: catalog.Expectation{GRPCCode: "OK", BodyMode: "json", Body: `{"status":"SERVING"}`}},
-		{ID: catalog.NewID(), Kind: "postgresql", Resource: "TLS_SQL", SQL: &catalog.SQLRequest{Query: "SELECT 9007199254740993123.125::numeric AS exact, NULL::text AS missing, ''::text AS empty", Mode: "rows"}, Expected: catalog.Expectation{BodyMode: "rows", Columns: []catalog.Column{{Name: "exact", Type: "numeric"}, {Name: "missing", Type: "text"}, {Name: "empty", Type: "text"}}, Rows: [][]catalog.TypedValue{{{Type: "decimal", Value: "9007199254740993123.125"}, {Type: "null"}, {Type: "string"}}}}},
+		{ID: catalog.NewID(), Kind: "grpc", Resource: "TLS_GRPC", GRPC: &catalog.GRPCRequest{Service: "grpc.health.v1.Health", Method: "Check", Body: `{"service":"${DYNAMIC}"}`}, Expected: catalog.Expectation{GRPCCode: "OK", BodyMode: "json", Body: `{"status":"SERVING"}`}},
+		{ID: catalog.NewID(), Kind: "postgresql", Resource: "TLS_SQL", SQL: &catalog.SQLRequest{Query: "SELECT 9007199254740993123.125::numeric AS exact, NULL::text AS missing, ''::text AS empty WHERE $1::int=42", Parameters: []catalog.TypedValue{{Type: "integer", Value: "${DYNAMIC_NUMBER}"}}, Mode: "rows"}, Expected: catalog.Expectation{BodyMode: "rows", Columns: []catalog.Column{{Name: "exact", Type: "numeric"}, {Name: "missing", Type: "text"}, {Name: "empty", Type: "text"}}, Rows: [][]catalog.TypedValue{{{Type: "decimal", Value: "9007199254740993123.125"}, {Type: "null"}, {Type: "string"}}}}},
 	}
 	c = mcpCall[catalog.TestCase](t, f, s, "qag_test_case_save", map[string]any{"id": c.ID, "revision": c.Revision, "name": c.Name, "steps": []catalog.Step{{ID: catalog.NewID(), Description: "Все протоколы", Blocks: blocks}}})
 	run := mcpCall[runs.Run](t, f, s, "qag_run_start", map[string]any{"testCaseId": c.ID, "environmentId": f.env.ID, "revision": c.Revision, "executeAll": true, "idempotencyKey": catalog.NewID()})
@@ -118,12 +123,12 @@ func TestMCPNetworkResourcesProtoAndSQL(t *testing.T) {
 	if run.Attempts[1].Result.GRPCCode != "OK" || len(run.Attempts[1].Result.Trailers) == 0 || run.Attempts[2].Result.Rows[0][0].Value != "9007199254740993123.125" {
 		t.Fatal("protocol detail/precision lost")
 	}
-	if targets.Sources.Load() != 1 || len(run.Attempts[1].Result.HeaderSources) != 1 {
+	if targets.Sources.Load() != 3 || len(run.Attempts[1].Result.HeaderSources) != 1 || len(run.Attempts[2].Result.VariableSources) != 1 {
 		t.Fatal("gRPC source/mTLS missing")
 	}
 	// The same SQL entry points support password resources and request-only exec.
 	pw := pg.Password
-	makeResource("SQL_PASSWORD", "postgresql", resources.Config{Address: net.JoinHostPort(pg.Host, strconv.Itoa(int(pg.Port))), Database: pg.Database, Username: pg.User, TLS: catalog.TLSConfig{Mode: "plaintext"}}, map[string]string{"PASSWORD": pw})
+	makeResource("SQL_PASSWORD", "postgresql", resources.Config{Address: net.JoinHostPort(pg.Host, strconv.Itoa(int(pg.Port))), Database: pg.Database, Username: pg.User, Variables: map[string]resources.VariableDefinition{"DYNAMIC_NUMBER": {Mode: "literal", Value: "42"}}, TLS: catalog.TLSConfig{Mode: "plaintext"}}, map[string]string{"PASSWORD": pw})
 	c.Steps[0].Blocks[2].Resource = "SQL_PASSWORD"
 	c = mcpCall[catalog.TestCase](t, f, s, "qag_test_case_save", map[string]any{"id": c.ID, "revision": c.Revision, "name": c.Name, "steps": c.Steps})
 	passwordAttempt := mcpCall[execution.Attempt](t, f, s, "qag_editor_attempt_start", map[string]any{"testCaseId": c.ID, "blockId": blocks[2].ID, "environmentId": f.env.ID, "revision": c.Revision, "idempotencyKey": catalog.NewID()})

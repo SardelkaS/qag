@@ -2,6 +2,8 @@ package dataset
 
 import (
 	"bytes"
+	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +19,22 @@ func sample() Document {
 	d.Data.Folders = []Folder{{ID: id, Name: "Папка", NormalizedName: norm, CreatedAt: now, UpdatedAt: now}}
 	d.Data.TestCases = []TestCase{{ID: catalog.NewID(), FolderID: id, Name: "Кейс", NormalizedName: "кейс", Revision: 1, Steps: JSON(`[{"id":"` + catalog.NewID() + `","description":"Кириллица","blocks":[],"legacyNumber":9007199254740993123.125}]`), CreatedAt: now, UpdatedAt: now}}
 	return d
+}
+
+func TestLegacyResourceVariableDefaultsCompareWithoutRewriting(t *testing.T) {
+	old := ResourceVersion{Config: JSON(`{"baseUrl":"http://localhost","tls":{"mode":"plaintext"},"headers":[]}`)}
+	current := old
+	current.Config = JSON(`{"baseUrl":"http://localhost","tls":{"mode":"plaintext"},"headers":[],"variables":{}}`)
+	if !equivalent(reflect.ValueOf(old), reflect.ValueOf(current)) {
+		t.Fatal("missing/empty resource variables conflict")
+	}
+	if strings.Contains(string(old.Config), "variables") {
+		t.Fatal("historical JSON rewritten")
+	}
+	current.Config = JSON(`{"baseUrl":"http://localhost","tls":{"mode":"plaintext"},"headers":[],"variables":{"V":{"mode":"literal","value":"x"}}}`)
+	if equivalent(reflect.ValueOf(old), reflect.ValueOf(current)) {
+		t.Fatal("real variable change ignored")
+	}
 }
 
 func TestPortableRoundTripAndStrictInput(t *testing.T) {
@@ -36,7 +54,7 @@ func TestPortableRoundTripAndStrictInput(t *testing.T) {
 	if err != nil || !bytes.Equal(b, again) {
 		t.Fatal("encoding is not stable", err)
 	}
-	for name, text := range map[string]string{"unknown": string(b) + "surprise: secret\n", "duplicate": "format: qag\nformat: qag\nversion: 1\ndata: {}\n", "alias": "format: qag\nversion: 1\ndata: &a {folders: *a}\n", "multiple": string(b) + "---\nformat: qag\nversion: 1\ndata: {}\n", "future": strings.Replace(string(b), "version: 1", "version: 999", 1), "tag": "format: !danger qag\nversion: 1\ndata: {}\n"} {
+	for name, text := range map[string]string{"unknown": string(b) + "surprise: secret\n", "duplicate": "format: qag\nformat: qag\nversion: 1\ndata: {}\n", "alias": "format: qag\nversion: 1\ndata: &a {folders: *a}\n", "multiple": string(b) + "---\nformat: qag\nversion: 1\ndata: {}\n", "future": strings.Replace(string(b), "version: "+strconv.Itoa(Version), "version: 999", 1), "tag": "format: !danger qag\nversion: 1\ndata: {}\n"} {
 		t.Run(name, func(t *testing.T) {
 			_, err := Decode(strings.NewReader(text))
 			if err == nil {

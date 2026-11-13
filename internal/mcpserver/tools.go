@@ -23,6 +23,21 @@ func page(p Page) (int, error) {
 }
 func (s *Server) registerTools() {
 	e := s.options.Engine
+	addTool(s, "qag_run_step_execute", "Выполнить только исходные блоки выбранного шага активного прогона; возвращает устойчивую очередь. Ручные статусы не меняются; повтор потерянного ответа — с тем же ключом.", false, true, true, func(ctx context.Context, in StepExecute) (runs.Batch, error) {
+		return e.StartStep(ctx, in.RunID, in.StepID, in.IdempotencyKey)
+	})
+	addTool(s, "qag_test_case_export", "Экспорт определения сохранённого кейса для Jira Wiki Style Renderer: ID/revision, format=jira-wiki, includeExpected default true. Без прогона, сети, раскрытия секретов или публикации в Jira; возвращает UTF-8 артефакт.", true, false, false, func(ctx context.Context, in CaseExportInput) (ExportResult, error) {
+		if in.Format != "jira-wiki" {
+			return ExportResult{}, problem.Invalid("format", "Выберите jira-wiki")
+		}
+		include := in.IncludeExpected == nil || *in.IncludeExpected
+		result, err := reporting.ExportCase(ctx, e.Catalog, in.ID, in.Revision, include)
+		if err != nil {
+			return ExportResult{}, err
+		}
+		files, err := s.Artifacts.PutGroup([]File{{Name: "test-case-" + in.ID + ".jira.txt", MIMEType: "text/plain; charset=utf-8", Data: []byte(result.Text)}})
+		return ExportResult{Files: files}, err
+	})
 	addTool(s, "qag_status", "Готовность qag, протоколы, пределы и доступность clipboard без приватной конфигурации.", true, false, false, func(ctx context.Context, _ Empty) (Status, error) {
 		if s.options.Ping != nil {
 			if err := s.options.Ping(ctx); err != nil {
@@ -102,7 +117,7 @@ func (s *Server) registerTools() {
 		}
 		return e.Resources.ListResources(ctx, in.EnvironmentID, limit, in.Cursor)
 	})
-	addTool(s, "qag_resource_get", "Публичные адреса, TLS/mTLS, headers/sources и proto bundle ресурса; только имена секретов.", true, false, false, func(ctx context.Context, in IDInput) (resources.Resource, error) {
+	addTool(s, "qag_resource_get", "Настройки ресурса: адрес, TLS/mTLS, общие заголовки/metadata, literal/http-переменные, HTTP-источники и proto bundle. Секреты выдаются только именами, полученные HTTP-значения не возвращаются.", true, false, false, func(ctx context.Context, in IDInput) (resources.Resource, error) {
 		return e.Resources.GetResource(ctx, in.ID)
 	})
 	addTool(s, "qag_resource_create", "Создать HTTP/gRPC/PostgreSQL-ресурс с TLS/mTLS и источниками заголовков; ключи/пароли передаются только через secrets.", false, false, false, func(ctx context.Context, in ResourceCreate) (resources.Resource, error) {
@@ -121,8 +136,8 @@ func (s *Server) registerTools() {
 		}
 		return e.Runs.List(ctx, in.TestCaseID, in.Retained, limit, in.Cursor, in.Active)
 	})
-	addTool(s, "qag_run_start", "Создать прогон снимка кейса и окружения; executeAll запускает очередь исходных вызовов. Для повтора используйте тот же UUID idempotencyKey.", false, true, true, func(ctx context.Context, in RunStart) (runs.Run, error) {
-		return e.StartRun(ctx, in.TestCaseID, in.EnvironmentID, in.Revision, in.IdempotencyKey, in.ExecuteAll)
+	addTool(s, "qag_run_start", "Создать устойчивый прогон снимка кейса/окружения. executeAll запускает все исходные вызовы; отдельный шаг запускается через qag_run_step_execute. historyPolicy: auto (default), retain (закреплять), unretained (сохранять попытки без закрепления). Статусы шагов ручные. Повтор потерянного ответа — с тем же UUID idempotencyKey.", false, true, true, func(ctx context.Context, in RunStart) (runs.Run, error) {
+		return e.StartRunWithPolicy(ctx, in.TestCaseID, in.EnvironmentID, in.Revision, in.IdempotencyKey, in.HistoryPolicy, in.ExecuteAll)
 	})
 	addTool(s, "qag_run_get", "Снимок, шаги, очередь, все варианты/версии/попытки и причины сохранения без повторной сети.", true, false, false, func(ctx context.Context, in IDInput) (runs.Run, error) { return e.GetRun(ctx, in.ID) })
 	addTool(s, "qag_run_step_update", "Записать ручной status not_run/passed/failed и комментарий по revision шага.", false, false, false, func(ctx context.Context, in RunStepUpdate) (runs.Run, error) {

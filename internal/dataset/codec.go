@@ -45,6 +45,7 @@ func Decode(r io.Reader) (Document, error) {
 	if err = Validate(doc); err != nil {
 		return Document{}, err
 	}
+	Canonicalize(&doc)
 	return doc, nil
 }
 
@@ -123,6 +124,12 @@ func key(v reflect.Value) string {
 func RecordKey(value any) string { return key(reflect.ValueOf(value)) }
 
 func Canonicalize(doc *Document) {
+	doc.Version = Version
+	for i := range doc.Data.Runs {
+		if doc.Data.Runs[i].HistoryPolicy == "" {
+			doc.Data.Runs[i].HistoryPolicy = "auto"
+		}
+	}
 	v := reflect.ValueOf(&doc.Data).Elem()
 	for i := 0; i < v.NumField(); i++ {
 		s := v.Field(i)

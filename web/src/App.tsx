@@ -18,6 +18,7 @@ import {
 } from './api'
 import { Field, Modal, Notice } from './ui'
 import CaseEditor from './CaseEditor'
+import JiraExport from './JiraExport'
 import Sidebar from './Sidebar'
 import ResourcesPanel from './ResourcesPanel'
 import RunView, { mergeRun } from './RunView'
@@ -37,6 +38,7 @@ const content = (c: TestCase | null) =>
   c ? JSON.stringify({ name: c.name, steps: c.steps }) : ''
 
 export default function App() {
+  const [jiraOpen, setJiraOpen] = useState(false)
   const [demo, setDemo] = useState<DemoInfo | null>(null)
   const demoRef = useRef<DemoInfo | null>(null),
     userEnvironment = useRef(readPreference('qag.environment') ?? '')
@@ -459,6 +461,7 @@ export default function App() {
     })
   return (
     <div className="app-shell">
+      {jiraOpen && saved && <JiraExport saved={saved} dirty={dirty} save={save} close={() => setJiraOpen(false)} />}
       <Sidebar
         view={view}
         navigate={(v) =>
@@ -594,6 +597,7 @@ export default function App() {
 
                   {tab === 'editor' && (
                     <>
+                      <button className="button secondary" disabled={busy} onClick={() => setJiraOpen(true)}>Сценарий для Jira</button>
                       <span className="muted small">
                         {dirty ? 'Есть изменения' : 'Сохранено'}
                       </span>

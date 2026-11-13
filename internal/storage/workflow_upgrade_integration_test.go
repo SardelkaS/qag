@@ -12,16 +12,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/SardelkaS/qag/internal/catalog"
 	"github.com/SardelkaS/qag/internal/dbscope"
 	"github.com/SardelkaS/qag/internal/resources"
 	"github.com/SardelkaS/qag/internal/runs"
 	"github.com/SardelkaS/qag/internal/storage"
 	"github.com/SardelkaS/qag/internal/testfixture"
+	"github.com/jackc/pgx/v5"
 )
 
-func TestUpgradePopulatedSixMigrationNamespace(t *testing.T) {
+func TestUpgradePopulatedSixMigrationNamespace(t *testing.T) { testUpgradePopulatedNamespace(t, "007") }
+func TestUpgradePopulatedEightMigrationNamespace(t *testing.T) {
+	testUpgradePopulatedNamespace(t, "009")
+}
+func testUpgradePopulatedNamespace(t *testing.T, cutoff string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	fixture := testfixture.ForTest(t, ctx)
@@ -38,7 +42,7 @@ func TestUpgradePopulatedSixMigrationNamespace(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, file := range files {
-		if file.Name() >= "007" {
+		if file.Name() >= cutoff {
 			continue
 		}
 		raw, err := os.ReadFile("migrations/" + file.Name())
@@ -93,7 +97,7 @@ func TestUpgradePopulatedSixMigrationNamespace(t *testing.T) {
 	}
 	fingerprint := func() string {
 		var value string
-		if err := store.Pool.QueryRow(ctx, dbscope.Render(store.Pool, `SELECT md5(jsonb_build_object('cases',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM qag.test_cases t),'env',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM qag.environment_versions t),'secrets',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM qag.resource_versions t),'runs',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM qag.runs t),'steps',(SELECT jsonb_agg(to_jsonb(t) ORDER BY step_id) FROM qag.run_steps t),'migrations',(SELECT jsonb_agg(to_jsonb(t) ORDER BY name) FROM qag.schema_migrations t WHERE name<'migrations/007'))::text)`)).Scan(&value); err != nil {
+		if err := store.Pool.QueryRow(ctx, dbscope.Render(store.Pool, `SELECT md5(jsonb_build_object('cases',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM qag.test_cases t),'env',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM qag.environment_versions t),'secrets',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM qag.resource_versions t),'runs',(SELECT jsonb_agg(to_jsonb(t)-'history_policy' ORDER BY id) FROM qag.runs t),'steps',(SELECT jsonb_agg(to_jsonb(t) ORDER BY step_id) FROM qag.run_steps t),'migrations',(SELECT jsonb_agg(to_jsonb(t) ORDER BY name) FROM qag.schema_migrations t WHERE name<'migrations/`+cutoff+`'))::text)`)).Scan(&value); err != nil {
 			t.Fatal(err)
 		}
 		return value
@@ -111,8 +115,14 @@ func TestUpgradePopulatedSixMigrationNamespace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if run.Status != "blocked" || len(run.RetentionReasons) != 1 || len(run.Variants) != 0 || len(run.Batches) != 0 {
+	if run.HistoryPolicy != "auto" || run.Status != "blocked" || len(run.RetentionReasons) != 1 || len(run.Variants) != 0 || len(run.Batches) != 0 {
 		t.Fatal("old run changed")
+	}
+	if _, err = store.Pool.Exec(ctx, dbscope.Render(store.Pool, `UPDATE qag.runs SET history_policy='unknown' WHERE id=$1`), id); err == nil {
+		t.Fatal("invalid history policy accepted")
+	}
+	if _, err = store.Pool.Exec(ctx, dbscope.Render(store.Pool, `INSERT INTO qag.run_batches(id,run_id,idempotency_key,request_hash,state,step_id) VALUES($1,$2,$3,'foreign-step','completed',$4)`), catalog.NewID(), id, catalog.NewID(), catalog.NewID()); err == nil {
+		t.Fatal("foreign batch step accepted")
 	}
 	for i, state := range run.StepStates {
 		if state.Status != "not_run" || state.LegacyStatus != []string{"blocked", "skipped"}[i] {

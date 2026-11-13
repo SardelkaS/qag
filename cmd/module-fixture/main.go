@@ -141,7 +141,7 @@ func run(output string) error {
 				return fmt.Errorf("module source must not contain links")
 			}
 			ext := filepath.Ext(name)
-			include := ext == ".go" || ext == ".proto" || ext == ".sql" || name == "cmd/qag/icon_windows_amd64.syso" || name == "cmd/qag/icon_windows_arm64.syso" || strings.HasPrefix(name, "web/bundle/")
+			include := name == "internal/mcpserver/guide.md" || ext == ".go" || ext == ".proto" || ext == ".sql" || name == "cmd/qag/icon_windows_amd64.syso" || name == "cmd/qag/icon_windows_arm64.syso" || strings.HasPrefix(name, "web/bundle/")
 			if include {
 				return add(name)
 			}

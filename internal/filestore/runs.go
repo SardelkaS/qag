@@ -71,7 +71,7 @@ func getRun(d *dataset.Data, id string) (runs.Run, error) {
 	if reasons == nil {
 		reasons = []string{}
 	}
-	r := runs.Run{ID: v.ID, TestCaseID: v.TestCaseID, Status: v.Status, Snapshot: c, EnvironmentID: env.EnvironmentID, EnvironmentName: env.EnvironmentName, Resources: rs, RetentionReasons: reasons, StartedAt: v.StartedAt, FinishedAt: v.FinishedAt, StepStates: []runs.StepState{}, Attempts: []execution.Attempt{}, Variants: []runs.Variant{}, Batches: []runs.Batch{}}
+	r := runs.Run{HistoryPolicy: runs.NormalizeHistoryPolicy(v.HistoryPolicy), ID: v.ID, TestCaseID: v.TestCaseID, Status: v.Status, Snapshot: c, EnvironmentID: env.EnvironmentID, EnvironmentName: env.EnvironmentName, Resources: rs, RetentionReasons: reasons, StartedAt: v.StartedAt, FinishedAt: v.FinishedAt, StepStates: []runs.StepState{}, Attempts: []execution.Attempt{}, Variants: []runs.Variant{}, Batches: []runs.Batch{}}
 	for _, s := range c.Steps {
 		for _, state := range d.RunSteps {
 			if state.RunID == id && state.StepID == s.ID {
@@ -128,7 +128,7 @@ func getRun(d *dataset.Data, id string) (runs.Run, error) {
 	})
 	for _, b := range d.Batches {
 		if b.RunID == id {
-			cb := runs.Batch{ID: b.ID, RunID: id, State: b.State, StartedAt: b.StartedAt, FinishedAt: b.FinishedAt, Items: []runs.BatchItem{}}
+			cb := runs.Batch{StepID: b.StepID, ID: b.ID, RunID: id, State: b.State, StartedAt: b.StartedAt, FinishedAt: b.FinishedAt, Items: []runs.BatchItem{}}
 			for _, item := range d.BatchItems {
 				if item.BatchID == b.ID {
 					cb.Items = append(cb.Items, runs.BatchItem{Position: item.Position, BlockID: item.BlockID, State: item.State, AttemptID: item.AttemptID})
@@ -193,6 +193,13 @@ func (r *Runs) LookupRun(ctx context.Context, key, hash string) (runs.Run, bool,
 	return runs.Run{}, false, nil
 }
 func (r *Runs) Start(ctx context.Context, snapshot catalog.TestCase, env resources.Snapshot, key, hash string, executeAll ...bool) (runs.Run, error) {
+	return r.StartWithOptions(ctx, snapshot, env, key, hash, runs.StartOptions{ExecuteAll: len(executeAll) > 0 && executeAll[0]})
+}
+func (r *Runs) StartWithOptions(ctx context.Context, snapshot catalog.TestCase, env resources.Snapshot, key, hash string, options runs.StartOptions) (runs.Run, error) {
+	if !runs.ValidHistoryPolicy(options.HistoryPolicy) {
+		return runs.Run{}, problem.Invalid("historyPolicy", "Выберите auto, retain или unretained")
+	}
+	options.HistoryPolicy = runs.NormalizeHistoryPolicy(options.HistoryPolicy)
 	id := ""
 	e := r.Store.Update(ctx, func(d *dataset.Data) error {
 		for _, v := range d.Runs {
@@ -216,19 +223,22 @@ func (r *Runs) Start(ctx context.Context, snapshot catalog.TestCase, env resourc
 		}
 		for _, v := range d.Runs {
 			if v.TestCaseID == snapshot.ID && v.Status == "running" {
+				if runs.NormalizeHistoryPolicy(v.HistoryPolicy) != options.HistoryPolicy {
+					return problem.Conflict("Активный прогон использует другую политику закрепления")
+				}
 				id = v.ID
 				return nil
 			}
 		}
 		id = catalog.NewID()
-		d.Runs = append(d.Runs, dataset.Run{ID: id, TestCaseID: snapshot.ID, EnvironmentVersionID: env.EnvironmentVersionID, Snapshot: dataset.Raw(snapshot), Context: dataset.Raw(env), Status: "running", RetentionReasons: []string{}, IdempotencyKey: key, RequestHash: hash, StartedAt: now()})
+		d.Runs = append(d.Runs, dataset.Run{HistoryPolicy: options.HistoryPolicy, ID: id, TestCaseID: snapshot.ID, EnvironmentVersionID: env.EnvironmentVersionID, Snapshot: dataset.Raw(snapshot), Context: dataset.Raw(env), Status: "running", RetentionReasons: []string{}, IdempotencyKey: key, RequestHash: hash, StartedAt: now()})
 		for _, s := range snapshot.Steps {
 			d.RunSteps = append(d.RunSteps, dataset.RunStep{RunID: id, StepID: s.ID, Status: "not_run", Revision: 1})
 		}
 		for name, v := range env.ResourceVersions {
 			d.RunResourceVersions = append(d.RunResourceVersions, dataset.RunResourceVersion{RunID: id, ResourceName: name, ResourceVersionID: v})
 		}
-		if len(executeAll) > 0 && executeAll[0] {
+		if options.ExecuteAll {
 			insertBatch(d, id, key, hash, snapshot)
 		}
 		return nil
@@ -396,7 +406,7 @@ func finish(d *dataset.Data, id, forced string) error {
 	v.Status = status
 	t := now()
 	v.FinishedAt = &t
-	v.RetentionReasons = runs.RetentionReasons(status, first, success)
+	v.RetentionReasons = runs.PolicyReasons(v.HistoryPolicy, status, first, success)
 	return nil
 }
 func (r *Runs) Finish(ctx context.Context, id string) (runs.Run, error) { return r.finish(ctx, id, "") }

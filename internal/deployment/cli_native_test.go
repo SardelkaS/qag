@@ -179,11 +179,38 @@ func TestInstalledCLIFullYAMLLifecycle(t *testing.T) {
 	}
 	defer session.Close()
 	tools, e := session.ListTools(ctx, nil)
-	if e != nil || len(tools.Tools) != 43 {
+	if e != nil || len(tools.Tools) != 45 {
 		t.Fatal("MCP discovery", e)
+	}
+	if !strings.Contains(session.InitializeResult().Instructions, mcpserver.GuideURI) {
+		t.Fatal("installed instructions missing")
+	}
+	guide, guideErr := session.ReadResource(ctx, &mcp.ReadResourceParams{URI: mcpserver.GuideURI})
+	if guideErr != nil || len(guide.Contents) != 1 || !strings.Contains(guide.Contents[0].Text, "qag_run_step_execute") {
+		t.Fatal("installed embedded guide", guideErr)
 	}
 	info := nativeCall[builtin.Info](t, ctx, session, "qag_demo_get", map[string]any{})
 	tc := nativeCall[catalog.TestCase](t, ctx, session, "qag_test_case_get", map[string]any{"id": info.TestCaseID})
+	jira := nativeCall[mcpserver.ExportResult](t, ctx, session, "qag_test_case_export", map[string]any{"id": tc.ID, "revision": tc.Revision, "format": "jira-wiki"})
+	if len(jira.Files) != 1 || !bytes.Contains(nativeArtifact(t, ctx, session, jira.Files[0]), []byte("h1.")) {
+		t.Fatal("installed Jira export")
+	}
+	selected := nativeCall[runs.Run](t, ctx, session, "qag_run_start", map[string]any{"testCaseId": tc.ID, "environmentId": info.EnvironmentID, "revision": tc.Revision, "historyPolicy": "unretained", "idempotencyKey": catalog.NewID()})
+	nativeCall[runs.Batch](t, ctx, session, "qag_run_step_execute", map[string]any{"runId": selected.ID, "stepId": tc.Steps[0].ID, "idempotencyKey": catalog.NewID()})
+	for i := 0; i < 100; i++ {
+		selected = nativeCall[runs.Run](t, ctx, session, "qag_run_get", map[string]any{"id": selected.ID})
+		if selected.Batches[0].State == "completed" {
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	if len(selected.Attempts) != 1 || selected.Attempts[0].Result == nil || selected.Attempts[0].Result.Comparison.Status != "match" {
+		t.Fatal("installed selected HTTP step")
+	}
+	selected = nativeCall[runs.Run](t, ctx, session, "qag_run_cancel", map[string]any{"id": selected.ID})
+	if len(selected.RetentionReasons) != 0 || len(selected.Batches) != 1 || selected.Batches[0].StepID == "" {
+		t.Fatal("installed selected-step policy")
+	}
 	run := nativeCall[runs.Run](t, ctx, session, "qag_run_start", map[string]any{"testCaseId": tc.ID, "environmentId": info.EnvironmentID, "revision": tc.Revision, "executeAll": true, "idempotencyKey": catalog.NewID()})
 	done := false
 	for i := 0; i < 100; i++ {
@@ -268,6 +295,10 @@ func TestInstalledCLIFullYAMLLifecycle(t *testing.T) {
 	}
 	defer session.Close()
 	old := nativeCall[runs.Run](t, ctx, session, "qag_run_get", map[string]any{"id": run.ID})
+	unretained := nativeCall[runs.Run](t, ctx, session, "qag_run_get", map[string]any{"id": selected.ID})
+	if unretained.HistoryPolicy != "unretained" || len(unretained.RetentionReasons) != 0 || len(unretained.Attempts) != 1 || unretained.Batches[0].StepID != tc.Steps[0].ID {
+		t.Fatal("unretained lost after import/restart")
+	}
 	newInfo := nativeCall[builtin.Info](t, ctx, session, "qag_demo_get", map[string]any{})
 	if old.Status != run.Status || len(old.Attempts) != 5 || newInfo.TestCaseID != info.TestCaseID {
 		t.Fatal("restart/import changed history")

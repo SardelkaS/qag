@@ -13,9 +13,9 @@ import (
 
 	"time"
 
+	"github.com/SardelkaS/qag/internal/testfixture"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/SardelkaS/qag/internal/testfixture"
 )
 
 func main() {
@@ -81,6 +81,13 @@ func run() error {
 	go server.Serve(l)
 	defer server.Close()
 	config := map[string]any{"databaseUrl": f.AppURL, "http": plain.HTTP.URL, "grpc": plain.GRPC, "mtlsHttp": secure.HTTP.URL, "mtlsGrpc": secure.GRPC, "ca": cert.CA, "certificate": cert.Client, "privateKey": cert.Key, "shutdown": "http://" + l.Addr().String() + "/shutdown", "target": map[string]string{"address": targetURL.Host, "database": "qag", "username": targetURL.User.Username(), "password": func() string { p, _ := targetURL.User.Password(); return p }()}}
+	if dir := os.Getenv("QAG_TEST_PKI_DIR"); dir != "" {
+		role, sqlCert, err := f.EnableMTLS(ctx, dir)
+		if err != nil {
+			return err
+		}
+		config["mtlsSQL"] = map[string]string{"username": role, "ca": sqlCert.CA, "certificate": sqlCert.Client, "privateKey": sqlCert.Key}
+	}
 	config["demoDatabaseUrl"] = f.ReaderURL
 	config["appSchema"] = f.Namespace.App
 	config["demoSchema"] = f.Namespace.Demo

@@ -241,6 +241,9 @@
               "interrupted"
             ],
             "type": "string"
+          },
+          "stepId": {
+            "type": "string"
           }
         },
         "required": [
@@ -367,6 +370,38 @@
           "kind",
           "resource",
           "timeoutSeconds"
+        ],
+        "type": "object"
+      },
+      "CaseExport": {
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "enum": [
+              "jira-wiki"
+            ],
+            "type": "string"
+          },
+          "revision": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "testCaseId": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "testCaseId",
+          "revision",
+          "format",
+          "text",
+          "sha256"
         ],
         "type": "object"
       },
@@ -674,6 +709,12 @@
           },
           "truncated": {
             "type": "boolean"
+          },
+          "variableSources": {
+            "items": {
+              "$ref": "#/components/schemas/VariableSourceResult"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -1619,6 +1660,61 @@
           },
           "username": {
             "type": "string"
+          },
+          "variables": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/VariableDefinition"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "headers",
+          "tls"
+        ],
+        "type": "object"
+      },
+      "ResourceConfigWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "baseUrl": {
+            "type": "string"
+          },
+          "database": {
+            "type": "string"
+          },
+          "headers": {
+            "items": {
+              "$ref": "#/components/schemas/RequestHeader"
+            },
+            "type": "array"
+          },
+          "protoFiles": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "tls": {
+            "$ref": "#/components/schemas/TLSConfig"
+          },
+          "unavailableReason": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "variables": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/VariableDefinition"
+            },
+            "patternProperties": {
+              "^\\s*$": {}
+            },
+            "type": "object"
           }
         },
         "required": [
@@ -1649,7 +1745,7 @@
         "additionalProperties": false,
         "properties": {
           "config": {
-            "$ref": "#/components/schemas/ResourceConfig"
+            "$ref": "#/components/schemas/ResourceConfigWrite"
           },
           "kind": {
             "enum": [
@@ -1667,7 +1763,7 @@
             "type": "integer"
           },
           "secrets": {
-            "$ref": "#/components/schemas/SecretChanges"
+            "$ref": "#/components/schemas/SecretChangesWrite"
           }
         },
         "required": [
@@ -1702,6 +1798,14 @@
           },
           "finishedAt": {
             "format": "date-time",
+            "type": "string"
+          },
+          "historyPolicy": {
+            "enum": [
+              "auto",
+              "retain",
+              "unretained"
+            ],
             "type": "string"
           },
           "id": {
@@ -1754,6 +1858,7 @@
           }
         },
         "required": [
+          "historyPolicy",
           "variants",
           "batches",
           "id",
@@ -1796,6 +1901,14 @@
           },
           "executeAll": {
             "type": "boolean"
+          },
+          "historyPolicy": {
+            "enum": [
+              "auto",
+              "retain",
+              "unretained"
+            ],
+            "type": "string"
           },
           "revision": {
             "format": "int64",
@@ -1856,6 +1969,38 @@
           "clear"
         ],
         "type": "object"
+      },
+      "SecretChangesWrite": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/SecretChanges"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "clear": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "replace": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "patternProperties": {
+                  "^\\s*$": {}
+                },
+                "type": "object"
+              }
+            },
+            "required": [
+              "replace",
+              "clear"
+            ],
+            "type": "object"
+          }
+        ]
       },
       "Session": {
         "properties": {
@@ -2186,6 +2331,60 @@
         ],
         "type": "object"
       },
+      "VariableDefinition": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "enum": [
+              "literal",
+              "http"
+            ],
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/HTTPHeaderSource"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "type": "object"
+      },
+      "VariableSourceResult": {
+        "additionalProperties": false,
+        "properties": {
+          "durationMs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "errorCode": {
+            "type": "string"
+          },
+          "fetchMode": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "statusCode": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "fetchMode",
+          "state",
+          "durationMs"
+        ],
+        "type": "object"
+      },
       "VariablesWrite": {
         "additionalProperties": false,
         "properties": {
@@ -2194,11 +2393,14 @@
             "type": "integer"
           },
           "secrets": {
-            "$ref": "#/components/schemas/SecretChanges"
+            "$ref": "#/components/schemas/SecretChangesWrite"
           },
           "variables": {
             "additionalProperties": {
               "type": "string"
+            },
+            "patternProperties": {
+              "^\\s*$": {}
             },
             "type": "object"
           }
@@ -4295,6 +4497,82 @@
           }
         },
         "summary": "Проверить блок из редактора",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/test-cases/{id}/export": {
+      "get": {
+        "operationId": "exportTestCase",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "revision",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "default": "jira-wiki",
+              "enum": [
+                "jira-wiki"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "includeExpected",
+            "schema": {
+              "default": true,
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseExport"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "security": [],
+        "summary": "Экспорт сценария для Jira",
         "tags": [
           "qag"
         ]

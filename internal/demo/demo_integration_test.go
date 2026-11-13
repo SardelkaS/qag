@@ -365,7 +365,7 @@ func TestUpgradePreservesUserCaseAndHistory(t *testing.T) {
 	}
 	rawHistory := func() string {
 		var raw string
-		if err := f.store.Pool.QueryRow(f.ctx, dbscope.Render(f.store.Pool, `SELECT jsonb_build_object('run',(SELECT to_jsonb(r) FROM qag.runs r WHERE id=$1),'steps',(SELECT jsonb_agg(to_jsonb(s)) FROM qag.run_steps s WHERE run_id=$1))::text`), runID).Scan(&raw); err != nil {
+		if err := f.store.Pool.QueryRow(f.ctx, dbscope.Render(f.store.Pool, `SELECT jsonb_build_object('run',(SELECT to_jsonb(r)-'history_policy' FROM qag.runs r WHERE id=$1),'steps',(SELECT jsonb_agg(to_jsonb(s)) FROM qag.run_steps s WHERE run_id=$1))::text`), runID).Scan(&raw); err != nil {
 			t.Fatal(err)
 		}
 		return raw

@@ -7,14 +7,14 @@ const manifest = JSON.parse(await readFile('api/mcp-tools.json', 'utf8'));
 const specification = JSON.parse(await readFile('api/openapi.json', 'utf8'));
 const documentation = await readFile('docs/mcp.md', 'utf8');
 const names = manifest.tools.map(tool => tool.name);
-assert.equal(names.length, 43);
-assert.equal(new Set(names).size, 43);
+assert.equal(names.length, 45);
+assert.equal(new Set(names).size, 45);
 assert.deepEqual(names, [...names].sort());
 assert.deepEqual(manifest.protocols, ['2026-07-28', '2025-11-25']);
 const documented = [...documentation.matchAll(/^\| `(qag_[a-z_]+)` \|/gm)].map(match => match[1]).sort();
 assert.deepEqual(documented, names, 'documentation/registry drift');
 const mapping = {
-  getHealth: 'qag_status', getDemo: 'qag_demo_get',
+  exportTestCase: 'qag_test_case_export', getHealth: 'qag_status', getDemo: 'qag_demo_get',
   listFolders: 'qag_folders_list', createFolder: 'qag_folder_create', updateFolder: 'qag_folder_update',
   listTestCases: 'qag_test_cases_list', createTestCase: 'qag_test_case_create', getTestCase: 'qag_test_case_get', saveTestCase: 'qag_test_case_save', archiveTestCase: 'qag_test_case_update',
   uploadExpectedImage: 'qag_image_upload', readExpectedImage: 'qag_image_get',
@@ -39,6 +39,10 @@ for (const tool of manifest.tools) {
   assert.equal(tool.inputSchema.additionalProperties, false, `${tool.name} root must be strict`);
 }
 assert(!validators.get('qag_status')({ unexpected: 'sentinel' }));
+const resourceWrite = {environmentId:'00000000-0000-0000-0000-000000000001',name:'TARGET',kind:'http',config:{baseUrl:'http://localhost',headers:[],tls:{mode:'plaintext'},variables:{' ':{mode:'invalid',source:123},GOOD:{mode:'literal',value:''}}}};
+assert(validators.get('qag_resource_create')(resourceWrite), 'unnamed values must be ignored before validation');
+resourceWrite.config.variables.GOOD.mode='invalid';
+assert(!validators.get('qag_resource_create')(resourceWrite), 'named variable mode must be strict');
 assert(validators.get('qag_variables_set')({ id: '00000000-0000-0000-0000-000000000001', revision: 1, variables: {}, secrets: { clear: ['TOKEN'] } }));
 assert(!validators.get('qag_variant_update')({ runId: '00000000-0000-0000-0000-000000000001', variantId: '00000000-0000-0000-0000-000000000002', revision: 1, request: { expected: {} } }));
-console.log(`MCP: ${names.length} tools, 86 schemas, documentation and ${operations.length} UI domain operations verified.`);
+console.log(`MCP: ${names.length} tools, ${names.length * 2} schemas, documentation and ${operations.length} UI domain operations verified.`);

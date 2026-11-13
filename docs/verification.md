@@ -1,5 +1,39 @@
 # Проверки реализации
 
+## Архивирование ресурсов и MCP-процессов — 13.11.2026
+
+Изменение `enhance-resource-automation-and-mcp-workflows` (`spec-driven`, 38/38 задач) перенесено в [архив](../openspec/changes/archive/2026-11-13-enhance-resource-automation-and-mcp-workflows/tasks.md). Восемь разделов синхронизированы с `openspec/specs`: добавлены 18 требований и обновлены 16. Сверены все 34 требования и 107 сценариев delta; 41 незатронутое требование и прежние Purpose сохранены. Для двух новых спецификаций Purpose перенесены из delta.
+
+SHA-256 всех 12 файлов изменения после переноса совпадают, включая `.openspec.yaml`. Активных изменений не осталось. Все 22 основные спецификации прошли строгую проверку.
+
+## Ресурсы, Jira и MCP-процессы — 13.11.2026
+
+Реализовано изменение `enhance-resource-automation-and-mcp-workflows`. Проверки выполнялись на отдельных схемах/ролях существующей PostgreSQL и отдельных YAML-файлах. Рабочие контейнеры не обновлялись.
+
+| Проверка | Фактический результат |
+|---|---|
+| `go test ./...`, `go vet ./...` | Успешно. Проверены чистая подготовка, точность чисел, строка/boolean/пустое значение, ошибки JSON и лимиты, кеш и повтор после ошибки подстановки, маскирование JSON/URL-форм |
+| `scripts/contracts.ps1` | Двойная генерация стабильна: 45 MCP-инструментов, 90 схем, 40 предметных UI-операций. OpenAPI проходит без предупреждений; непустые определения строго типизированы, пустые строки удаляются до проверки значений |
+| `npm --prefix web run typecheck`, `npm --prefix web test`, `npm --prefix web run bundle:check` | TypeScript без ошибок, 18 тестов в 8 файлах, manifest всех 12 встроенных файлов совпадает со сборкой |
+| `scripts/test-integration.ps1` | Полный PostgreSQL-набор прошёл: HTTP/gRPC/SQL, mTLS, HTTP-переменные в gRPC JSON/metadata и связанном SQL-параметре, политики, очереди шагов, API/MCP, upgrade и backup/restore |
+| `scripts/test-yaml.ps1` | Общий набор UI/MCP прошёл на YAML для обоих протоколов. Проверены прежние операции, новые команды, пустые значения до wire validation, ручные статусы, отказы записи, отмена источника и отсутствие replay |
+| `TestResourceVariableDurabilityCancelAndRecovery` | На PostgreSQL и YAML: сеть не начинается при отказе регистрации; после отказа записи результата повторяется только запись; отмена во время источника не вызывает основной запрос/следующий блок; восстановление выбранной очереди не запускает сеть |
+| `TestHistoryPolicyTerminalOutcomes`, `TestHistoryPoliciesAndSelectedStep` | `auto`/`retain`/`unretained`, passed/failed/cancelled/interrupted, совместимый default/idempotency, первые закрепления, ручное сохранение и конкурентное подтверждение завершения. Шаговая очередь продолжает после ошибки, не меняет ручные оценки и не исполняет другие шаги |
+| `TestFullGraphCrossKeyRoundTrip`, `TestLegacyYAMLReadAndNoOpDoNotUpgradeFile` | Полный граф с HTTP-определениями, unretained и stepId переносится с разными ключами. Проверен настоящий v1 → v2 → PostgreSQL с историей. Чтение/export/no-op не переписывают v1; реальные различия политики/выборки при том же ID отклоняют весь импорт |
+| `TestUpgradePopulatedEightMigrationNamespace` | Заполненная схема 008 обновляется до 009 без изменения прежних JSON и checksum; неизвестная политика и чужой stepId отклоняются. Повторная миграция безопасна |
+| Jira renderer/API/MCP | UTF-8 golden для трёх протоколов, Unicode, точные числа, NULL/пустая строка, изображения и wiki-макросы. API и MCP выдают одинаковые байты для обоих includeExpected. Экспорт не вызывает источники/целевые сервисы и не меняет определение кейса |
+| `scripts/test-e2e.ps1 -BinaryPath .local/verify/qag-resource.exe` | Все 13 Chromium-тестов прошли за 1,4 минуты. PEM-файлы реально используются в HTTP/gRPC/PostgreSQL mTLS; проверены несовместимая пара, повреждённый DER/UTF-8, размер, пустой файл, отмена выбора и сохранность draft. Проверены пустые строки/дубликаты, общие заголовки, HTTP-переменная, MCP-прогон в UI, Jira preview/copy, прежние readonly/темы/история/Word/экспорт и YAML |
+| Browser clipboard | Отказ проверен frontend-тестом: доступный текст без ложного успеха. В Chromium проверено реальное копирование Jira-текста; при чтении Windows clipboard нормализуется только CRLF → LF |
+| MCP instructions и guide | `initialize`, `resources/list/read` работают на `2026-07-28` и `2025-11-25`; постоянный `qag://guide/workflows` описывает все 45 инструментов и остаётся после истечения TTL артефактов |
+| `scripts/test-cli.ps1` | Реальный Go-install из локального module proxy, пустые кеши/GOBIN вне checkout; установленный бинарник работает без Node/Docker в PATH. Доступны embedded guide, Jira-артефакт и выполнение HTTP-шага примера. Unretained-попытки и stepId сохраняются после export/import/restart |
+| `scripts/test-container.ps1` | Финальный Linux runtime прошёл: UID 10001, PostgreSQL и отдельный YAML-том, 45 инструментов на обоих MCP-протоколах, весь пример, Chromium/экспорт, SIGTERM/recreate. Рабочий контейнер остаётся на прежнем image ID |
+| Рабочие данные и конфигурация | Совпали число строк и канонический MD5 всех 18 таблиц `qag`/`qag_demo`, SHA-256 installation JSON и исходные SHA-256 миграций 001–008. Рабочие master key/данные/контейнеры не заменялись |
+| OpenSpec | `openspec validate enhance-resource-automation-and-mcp-workflows --strict` и общий strict-набор: 21/21, ошибок нет. Сверены восемь delta-разделов |
+
+Проверки, использующие общий PostgreSQL, завершались последовательно: параллельные стенды могут столкнуться при удалении тестовых ролей. Оставшиеся после ранних запусков стенды этой сессии очищены только по подтверждённым ID/nonce/OID/owner; старые тестовые объекты сохранены. Рабочие схемы не очищались и не восстанавливались.
+
+После блокировки переключателя ожиданий на время подготовки/копирования Jira повторены 18 frontend-тестов, два связанных Chromium-сценария и Linux runtime. Выбранный includeExpected больше нельзя изменить посреди подготовки preview; текст и подтверждение копирования остаются согласованными.
+
 ## CLI, установка через Go и YAML — 04.11.2026
 
 Изменение [add-cli-and-yaml-storage](../openspec/changes/archive/2026-11-04-add-cli-and-yaml-storage/tasks.md), `spec-driven`. Модуль переименован в `github.com/SardelkaS/qag`; самостоятельный бинарник содержит UI, favicon, Windows PE-иконку и шрифты. Добавлены `serve`, `data export`, `data import`, `--help`, `--version`, совместимый `healthcheck`, выбор PostgreSQL/YAML и запуск с переданным файлом. Общие Engine, Runner, API, MCP и reporting работают через репозиторные интерфейсы; PostgreSQL остаётся прежним backend.

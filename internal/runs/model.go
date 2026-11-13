@@ -16,6 +16,7 @@ type StepState struct {
 }
 
 type Run struct {
+	HistoryPolicy    string               `json:"historyPolicy"`
 	Variants         []Variant            `json:"variants"`
 	Batches          []Batch              `json:"batches"`
 	ID               string               `json:"id"`
@@ -55,6 +56,7 @@ type BatchItem struct {
 	AttemptID string `json:"attemptId,omitempty"`
 }
 type Batch struct {
+	StepID     string      `json:"stepId,omitempty"`
 	ID         string      `json:"id"`
 	RunID      string      `json:"runId"`
 	State      string      `json:"state"`

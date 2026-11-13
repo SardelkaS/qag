@@ -191,6 +191,10 @@ func BuildDocument(report runs.Report) []runs.ReportNode {
 		} else {
 			add("text", "Исследовательский вызов — без сравнения", 0, "")
 		}
+		for _, trace := range r.VariableSources {
+			raw, _ := json.Marshal(trace)
+			code("Источник переменной: " + string(raw))
+		}
 		for _, trace := range r.HeaderSources {
 			raw, _ := json.Marshal(trace)
 			code("Источник заголовка: " + string(raw))

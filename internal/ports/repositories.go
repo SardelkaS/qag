@@ -53,12 +53,13 @@ type Runs interface {
 	CheckAttemptRunnable(ctx context.Context, id string) error
 	CompleteAttempt(ctx context.Context, id, state string, result execution.Result, duration time.Duration) error
 	CancelAttempt(ctx context.Context, id string) (execution.Attempt, error)
-	StartBatch(ctx context.Context, runID, key, hash string) (runs.Batch, error)
+	StartBatch(ctx context.Context, runID, key, hash string, stepID ...string) (runs.Batch, error)
 	AdvanceBatch(ctx context.Context, runID, batchID string) error
 	PassAll(ctx context.Context, id string, steps []runs.StepRevision) (runs.Run, error)
 	ReportSnapshot(ctx context.Context, id string, includeExpected bool) (runs.Report, error)
 	LookupRun(ctx context.Context, key, hash string) (runs.Run, bool, error)
 	Start(ctx context.Context, snapshot catalog.TestCase, environment resources.Snapshot, key, hash string, executeAll ...bool) (runs.Run, error)
+	StartWithOptions(ctx context.Context, snapshot catalog.TestCase, environment resources.Snapshot, key, hash string, options runs.StartOptions) (runs.Run, error)
 	Get(ctx context.Context, id string) (runs.Run, error)
 	Context(ctx context.Context, id string) (resources.Snapshot, error)
 	List(ctx context.Context, caseID string, retained *bool, limit int, cursor string, active ...bool) (catalog.Page[runs.Run], error)

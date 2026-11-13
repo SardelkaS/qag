@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/SardelkaS/qag/internal/mcpserver"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func TestTransportMethodsAndRequestBounds(t *testing.T) {
@@ -84,11 +84,18 @@ func TestBothProtocolsAndStrictPublicToolContracts(t *testing.T) {
 			if got := session.InitializeResult().ProtocolVersion; got != version {
 				t.Fatalf("protocol %s", got)
 			}
+			if !strings.Contains(session.InitializeResult().Instructions, mcpserver.GuideURI) {
+				t.Fatal("missing workflow instructions")
+			}
+			guide, guideErr := session.ReadResource(ctx, &mcp.ReadResourceParams{URI: mcpserver.GuideURI})
+			if guideErr != nil || len(guide.Contents) != 1 || !strings.Contains(guide.Contents[0].Text, "qag_run_step_execute") || !strings.Contains(guide.Contents[0].Text, "qag_test_case_export") {
+				t.Fatal("missing workflow guide", guideErr)
+			}
 			tools, err := session.ListTools(ctx, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(tools.Tools) != 43 {
+			if len(tools.Tools) != 45 {
 				t.Fatalf("tools: %d", len(tools.Tools))
 			}
 			if version == "2026-07-28" && (tools.CacheScope != "private" || tools.TTLMs != 0) {

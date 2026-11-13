@@ -18,10 +18,27 @@ func (res Resolved) Expand(value string, secretAllowed bool, escape func(string)
 	var failure error
 	var expand func(string) string
 	expand = func(input string) string {
+		if strings.Contains(substitution.ReplaceAllString(input, ""), "${") {
+			failure = problem.Invalid("variables", "Некорректная подстановка")
+		}
 		return substitution.ReplaceAllStringFunc(input, func(token string) string {
 			name := token[2 : len(token)-1]
 			if visiting[name] {
 				failure = problem.Invalid("variables", "Циклическая переменная "+name)
+				return token
+			}
+			if _, ok := res.DynamicVariable(name); ok {
+				if res.forbidDynamic {
+					failure = problem.Invalid("variables", "HTTP-переменная "+name+" недопустима в источнике или ожидании")
+					return token
+				}
+				if res.planning {
+					return token
+				}
+				if v, ok := res.DynamicValues[name]; ok {
+					return v
+				}
+				failure = problem.Invalid("variables", "HTTP-переменная "+name+" ещё не получена")
 				return token
 			}
 			if secret, ok := res.Secrets[name]; ok {
@@ -29,47 +46,29 @@ func (res Resolved) Expand(value string, secretAllowed bool, escape func(string)
 					failure = problem.Invalid("variables", "Секрет "+name+" допустим только в заголовках, метаданных и подключении")
 					return token
 				}
-				if escape != nil {
-					return escape(secret)
-				}
 				return secret
 			}
-			value, ok := res.Variables[name]
+			v, ok := res.Variables[name]
 			if !ok {
 				failure = problem.Invalid("variables", "Неизвестная переменная "+name)
 				return token
 			}
 			visiting[name] = true
-			value = expand(value)
+			v = expand(v)
 			delete(visiting, name)
-			if escape != nil {
-				return escape(value)
-			}
-			return value
+			return v
 		})
 	}
-	// Nested values are expanded before the outer field's URL encoding.
-	if escape != nil {
-		plain, err := res.Expand(value, secretAllowed, nil)
-		if err != nil {
-			return "", err
-		}
-		return substitution.ReplaceAllStringFunc(value, func(token string) string {
-			resolved, _ := res.Expand(token, secretAllowed, nil)
-			return escape(resolved)
-		}), checkExpansion(plain, nil)
-	}
+	// Only placeholders in the input are interpreted. Values returned by HTTP
+	// (and saved secrets) are opaque data even when they contain template syntax.
 	result := expand(value)
-	return result, checkExpansion(result, failure)
-}
-func checkExpansion(value string, err error) error {
-	if err != nil {
-		return err
+	if failure != nil {
+		return "", failure
 	}
-	if strings.Contains(value, "${") {
-		return problem.Invalid("variables", "Некорректная или неизвестная подстановка")
+	if escape != nil {
+		return substitution.ReplaceAllStringFunc(value, func(token string) string { v, _ := res.Expand(token, secretAllowed, nil); return escape(v) }), nil
 	}
-	return nil
+	return result, nil
 }
 
 func (res Resolved) Prepare(original catalog.Block) (catalog.Block, Resolved, error) {
@@ -82,6 +81,11 @@ func (res Resolved) PrepareRequest(original catalog.Block) (catalog.Block, Resol
 }
 
 func (res Resolved) prepare(original catalog.Block, research bool) (catalog.Block, Resolved, error) {
+	var bindErr error
+	res, bindErr = res.withVariables()
+	if bindErr != nil {
+		return original, res, bindErr
+	}
 	data, _ := json.Marshal(original)
 	var b catalog.Block
 	_ = json.Unmarshal(data, &b)
@@ -142,21 +146,27 @@ func (res Resolved) prepare(original catalog.Block, research bool) (catalog.Bloc
 			if err != nil {
 				return fail(err)
 			}
+			if res.planning && strings.Contains(value.Value, "${") {
+				continue
+			}
 			if err = catalog.ValidateValue(*value); err != nil {
 				return fail(problem.Invalid("sql.parameters", err.Error()))
 			}
 		}
 	}
+	res.Prepared = !res.planning
 	if research {
 		if err = catalog.ValidateRequest(&b, "block"); err != nil {
 			return fail(err)
 		}
 		return b, res, nil
 	}
+	expectRes := res
+	expectRes.forbidDynamic = true
 	if b.Expected.BodyMode == "json" {
-		b.Expected.Body, err = res.expandJSON(b.Expected.Body)
+		b.Expected.Body, err = expectRes.expandJSON(b.Expected.Body)
 	} else {
-		b.Expected.Body, err = res.Expand(b.Expected.Body, false, nil)
+		b.Expected.Body, err = expectRes.Expand(b.Expected.Body, false, nil)
 	}
 	if err != nil {
 		return fail(err)

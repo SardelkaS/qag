@@ -26,6 +26,7 @@ import (
 	"github.com/SardelkaS/qag/internal/storage"
 	"github.com/SardelkaS/qag/internal/testfixture"
 	"google.golang.org/grpc"
+	"gopkg.in/yaml.v3"
 )
 
 func TestFullGraphCrossKeyRoundTrip(t *testing.T) {
@@ -67,7 +68,7 @@ func TestFullGraphCrossKeyRoundTrip(t *testing.T) {
 		w.Write([]byte(`{"n":9007199254740993123.125,"token":"new-private-sentinel"}`))
 	}))
 	defer target.Close()
-	resource, err := res.SaveResource(ctx, "", env.ID, "TARGET", "http", 0, resources.Config{BaseURL: target.URL, Headers: []catalog.RequestHeader{{Name: "Authorization", Value: "${TOKEN}"}}, TLS: resources.TLSConfig{Mode: "plaintext"}}, resources.SecretChanges{})
+	resource, err := res.SaveResource(ctx, "", env.ID, "TARGET", "http", 0, resources.Config{BaseURL: target.URL, Variables: map[string]resources.VariableDefinition{"LOCAL": {Mode: "literal", Value: "${N}"}, "FROM_HTTP": {Mode: "http", Source: &catalog.HTTPHeaderSource{Method: "GET", URL: target.URL, BodyMode: "none", TLS: catalog.TLSConfig{Mode: "plaintext"}, JSONPointer: "/token", FetchMode: "per_run"}}}, Headers: []catalog.RequestHeader{{Name: "Authorization", Value: "${TOKEN}"}}, TLS: resources.TLSConfig{Mode: "plaintext"}}, resources.SecretChanges{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,8 +89,11 @@ func TestFullGraphCrossKeyRoundTrip(t *testing.T) {
 	rr := &filestore.Runs{Store: s}
 	engine := service.New(ctx, c, res, rr)
 	defer engine.Close()
-	run, err := engine.StartRun(ctx, tc.ID, env.ID, tc.Revision, catalog.NewID(), true)
+	run, err := engine.StartRunWithPolicy(ctx, tc.ID, env.ID, tc.Revision, catalog.NewID(), "unretained", false)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = engine.StartStep(ctx, run.ID, step.ID, catalog.NewID()); err != nil {
 		t.Fatal(err)
 	}
 	for n := 0; n < 100; n++ {
@@ -177,7 +181,36 @@ func TestFullGraphCrossKeyRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 2; i++ {
+	for i := 0; i < 3; i++ {
+		if i == 2 {
+			// Reconstruct a real v1 document, including history, then exercise the
+			// supported v1 reader before importing it into a third PostgreSQL key.
+			doc.Version = 1
+			for j := range doc.Data.Runs {
+				doc.Data.Runs[j].HistoryPolicy = ""
+				context, _ := dataset.Value[resources.Snapshot](doc.Data.Runs[j].Context)
+				for k := range context.Resources {
+					context.Resources[k].Config.Variables = nil
+				}
+				doc.Data.Runs[j].Context = dataset.Raw(context)
+			}
+			for j := range doc.Data.Batches {
+				doc.Data.Batches[j].StepID = ""
+			}
+			for j := range doc.Data.ResourceVersions {
+				config, _ := dataset.Value[resources.Config](doc.Data.ResourceVersions[j].Config)
+				config.Variables = nil
+				doc.Data.ResourceVersions[j].Config = dataset.Raw(config)
+			}
+			legacy, err := yaml.Marshal(doc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			doc, err = dataset.Decode(bytes.NewReader(legacy))
+			if err != nil || doc.Version != 2 {
+				t.Fatal("v1-to-v2", err)
+			}
+		}
 		f := testfixture.ForTest(t, ctx)
 		store, err := storage.Open(ctx, f.AppURL)
 		if err != nil {
@@ -231,11 +264,37 @@ func TestFullGraphCrossKeyRoundTrip(t *testing.T) {
 			t.Fatal("historical image", err)
 		}
 		oldRun, err := pgRuns.Get(ctx, run.ID)
-		if err != nil || oldRun.StepStates[0].LegacyStatus != "skipped" || oldRun.Variants[0].Versions[0].Request.Expected != nil {
+		policy, selected, variableCount := "unretained", step.ID, 2
+		if i == 2 {
+			policy, selected, variableCount = "auto", "", 0
+		}
+		if err != nil || oldRun.HistoryPolicy != policy || oldRun.Batches[0].StepID != selected || len(oldRun.RetentionReasons) != 0 || len(oldRun.Resources[0].Config.Variables) != variableCount || oldRun.StepStates[0].LegacyStatus != "skipped" || oldRun.Variants[0].Versions[0].Request.Expected != nil {
 			t.Fatal("legacy projection", err)
 		}
 		if _, err = pg.Import(ctx, doc, false); err != nil {
 			t.Fatal("repeat import", err)
+		}
+		for _, changed := range []string{"policy", "step"} {
+			if i == 2 {
+				continue
+			}
+			conflict, _ := dataset.Clone(doc)
+			if changed == "policy" {
+				for j := range conflict.Data.Runs {
+					if conflict.Data.Runs[j].ID == run.ID {
+						conflict.Data.Runs[j].HistoryPolicy = "auto"
+					}
+				}
+			} else {
+				for j := range conflict.Data.Batches {
+					if conflict.Data.Batches[j].RunID == run.ID {
+						conflict.Data.Batches[j].StepID = ""
+					}
+				}
+			}
+			if _, err = pg.Import(ctx, conflict, false); err == nil {
+				t.Fatal("different " + changed + " accepted")
+			}
 		}
 		copy, _ := dataset.Clone(doc)
 		copy.Data.TestCases[len(copy.Data.TestCases)-1].Revision++

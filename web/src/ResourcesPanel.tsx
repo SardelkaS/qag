@@ -9,6 +9,8 @@ import type {
 import { fieldErrors, message, protocolLabel, request } from './api'
 import { Field, Modal, Notice, Pairs } from './ui'
 import { HeaderEditor, TLSFields } from './HeaderEditor'
+import { PemUpload } from './PemUpload'
+import { ResourceVariables, variableMap, type VariableRow } from './ResourceVariables'
 import { ReadOnlyNotice } from './ReadOnlyNotice'
 
 type SecretRow = {
@@ -37,8 +39,9 @@ function secretChanges(rows: SecretRow[]): SecretChanges {
     clear: string[] = []
   const names = new Set<string>()
   for (const row of rows) {
-    if (!row.name || names.has(row.name))
-      throw new Error('Имена секретов должны быть непустыми и уникальными')
+    if (!row.name.trim()) continue
+    if (names.has(row.name))
+      throw new Error('Имена секретов должны быть уникальными')
     names.add(row.name)
     if (row.originalName && row.originalName !== row.name) {
       if (row.mode !== 'replace')
@@ -102,6 +105,7 @@ function Secrets({
               </select>
             </Field>
           </div>
+          {row.name === 'PRIVATE_KEY' && <PemUpload label="Загрузить приватный ключ из файла" kind="key" change={(value) => update(i, { mode: 'replace', value })} />}
           {row.mode === 'replace' && (
             <Field
               label={`Новое значение: ${row.name}`}
@@ -430,7 +434,8 @@ function VariablesForm({
     setError('')
     setFields({})
     try {
-      if (new Set(variables.map((v) => v.name)).size !== variables.length)
+      const named = variables.filter((v) => v.name.trim())
+      if (new Set(named.map((v) => v.name)).size !== named.length)
         throw new Error('Имена переменных должны быть уникальными')
       const env = await request<Environment>(
         `/environments/${initial!.id}/variables`,
@@ -438,7 +443,7 @@ function VariablesForm({
         {
           revision: initial?.revision ?? 0,
           variables: Object.fromEntries(
-            variables.map((v) => [v.name, v.value]),
+            named.map((v) => [v.name, v.value]),
           ),
           secrets: secretChanges(secrets),
         },
@@ -517,6 +522,7 @@ function ResourceForm({
           protoFiles: {},
         },
   )
+  const [resourceVariables, setResourceVariables] = useState<VariableRow[]>(Object.entries(initial?.config.variables ?? {}).map(([name, definition]) => ({ ...definition, name, id: crypto.randomUUID() })))
   const presets =
     kind === 'postgresql'
       ? ['PASSWORD', 'PRIVATE_KEY']
@@ -546,7 +552,7 @@ function ResourceForm({
           name,
           kind,
           revision: initial?.revision ?? 0,
-          config,
+          config: { ...config, variables: variableMap(resourceVariables) },
           secrets: secretChanges(secrets),
         },
       )
@@ -684,6 +690,7 @@ function ResourceForm({
             </Field>
           </div>
         )}
+        {kind !== 'postgresql' && <p className="muted small">Общие заголовки или метаданные добавляются ко всем запросам этого ресурса. Значение в отдельном вызове перекрывает общее имя без учёта регистра.</p>}
         {kind !== 'postgresql' && (
           <HeaderEditor
             secrets={[
@@ -695,6 +702,7 @@ function ResourceForm({
             onChange={(v) => change({ headers: v })}
           />
         )}
+        <ResourceVariables rows={resourceVariables} change={setResourceVariables} secrets={[...(environmentsSecretNames ?? []), ...secrets.map(s => s.name).filter(Boolean)]} />
         <TLSFields config={config.tls} change={tls} />
         <Secrets rows={secrets} change={setSecrets} presets={presets} />
         {kind === 'grpc' && (

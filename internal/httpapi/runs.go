@@ -1,10 +1,10 @@
 package httpapi
 
 import (
-	"net/http"
 	"github.com/SardelkaS/qag/internal/problem"
 	"github.com/SardelkaS/qag/internal/reporting"
 	"github.com/SardelkaS/qag/internal/service"
+	"net/http"
 	"strconv"
 )
 
@@ -15,7 +15,7 @@ func (s *Server) RegisterRuns(engine *service.Engine, reports ...*reporting.Serv
 		if err := readJSON(r, &body); err != nil {
 			return nil, err
 		}
-		return engine.StartRun(r.Context(), r.PathValue("id"), body.EnvironmentID, body.Revision, r.Header.Get("Idempotency-Key"), body.ExecuteAll)
+		return engine.StartRunWithPolicy(r.Context(), r.PathValue("id"), body.EnvironmentID, body.Revision, r.Header.Get("Idempotency-Key"), body.HistoryPolicy, body.ExecuteAll)
 	})
 	s.register("GET /api/v1/test-cases/{id}/runs", func(r *http.Request) (any, error) {
 		limit, cursor, err := pageOptions(r)

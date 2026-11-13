@@ -18,10 +18,19 @@ func (e *Engine) fence(runID string) *sync.Mutex {
 	return v.(*sync.Mutex)
 }
 func (e *Engine) StartBatch(ctx context.Context, runID, key string) (runs.Batch, error) {
+	return e.startSelectedBatch(ctx, runID, key, "")
+}
+func (e *Engine) StartStep(ctx context.Context, runID, stepID, key string) (runs.Batch, error) {
+	if !catalog.ValidID(stepID) {
+		return runs.Batch{}, problem.Invalid("stepId", "Нужен идентификатор шага")
+	}
+	return e.startSelectedBatch(ctx, runID, key, stepID)
+}
+func (e *Engine) startSelectedBatch(ctx context.Context, runID, key, stepID string) (runs.Batch, error) {
 	if err := commandKey(key); err != nil {
 		return runs.Batch{}, err
 	}
-	batch, err := e.Runs.StartBatch(ctx, runID, key, requestHash("batch", runID))
+	batch, err := e.Runs.StartBatch(ctx, runID, key, selectedBatchHash(runID, stepID), stepID)
 	if err == nil {
 		if run, readErr := e.Runs.Get(ctx, runID); readErr == nil {
 			e.ensureBatches(run)
@@ -147,4 +156,11 @@ func (e *Engine) VariantAttempt(ctx context.Context, runID, variantID string, re
 		}
 	}
 	return execution.Attempt{}, problem.NotFound()
+}
+
+func selectedBatchHash(runID, stepID string) string {
+	if stepID == "" {
+		return requestHash("batch", runID)
+	}
+	return requestHash("step", runID, stepID)
 }

@@ -108,6 +108,7 @@ type RunsList struct {
 	Active     bool   `json:"active,omitempty"`
 }
 type RunStart struct {
+	HistoryPolicy  string `json:"historyPolicy,omitempty"`
 	TestCaseID     string `json:"testCaseId"`
 	EnvironmentID  string `json:"environmentId"`
 	Revision       int64  `json:"revision"`
@@ -128,6 +129,19 @@ type RunPassAll struct {
 type BatchStart struct {
 	RunID          string `json:"runId"`
 	IdempotencyKey string `json:"idempotencyKey"`
+}
+
+type StepExecute struct {
+	RunID          string `json:"runId"`
+	StepID         string `json:"stepId"`
+	IdempotencyKey string `json:"idempotencyKey"`
+}
+
+type CaseExportInput struct {
+	ID              string `json:"id"`
+	Revision        int64  `json:"revision"`
+	Format          string `json:"format"`
+	IncludeExpected *bool  `json:"includeExpected,omitempty"`
 }
 type RunAttemptStart struct {
 	RunID          string `json:"runId"`

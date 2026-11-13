@@ -1,5 +1,6 @@
 import { useId } from 'react'
 import type { HTTPHeaderSource, RequestHeader, ResourceConfig } from './api'
+import { PemUpload } from './PemUpload'
 import { Field, Pairs } from './ui'
 
 type TLS = ResourceConfig['tls']
@@ -61,6 +62,7 @@ export function TLSFields({
               onChange={(e) => change({ ca: e.target.value })}
             />
           </Field>
+          <PemUpload label={`${prefix}Загрузить CA из файла`} kind="certificate" change={(ca) => change({ ca })} />
         </>
       )}
       {config.mode === 'mtls' && (
@@ -80,6 +82,7 @@ export function TLSFields({
               onChange={(e) => change({ certificate: e.target.value })}
             />
           </Field>
+          <PemUpload label={`${prefix}Загрузить клиентский сертификат из файла`} kind="certificate" change={(certificate) => change({ certificate })} />
           {keyChange && (
             <Field label={`${prefix}Секрет приватного ключа`}>
               <input
@@ -101,7 +104,7 @@ export function TLSFields({
   )
 }
 
-const source = (): HTTPHeaderSource => ({
+export const newHTTPSource = (): HTTPHeaderSource => ({
   method: 'GET',
   url: '',
   query: [],
@@ -152,7 +155,7 @@ export function HeaderEditor({
                     ? {
                         id: h.id ?? crypto.randomUUID(),
                         value: undefined,
-                        source: source(),
+                        source: newHTTPSource(),
                       }
                     : { source: undefined, value: '' },
                 )
@@ -178,14 +181,30 @@ export function HeaderEditor({
               onChange={(e) => update(i, { value: e.target.value })}
             />
           ) : (
-            <div className="header-source">
+            <HTTPSourceFields value={h.source} change={(patch) => updateSource(i, patch)} secrets={secrets} />
+          )}
+        </article>
+      ))}
+      <button
+        type="button"
+        className="text-button"
+        onClick={() => onChange([...value, { name: '', value: '' }])}
+      >
+        + Добавить
+      </button>
+    </fieldset>
+  )
+}
+
+export function HTTPSourceFields({ value, change, secrets = [] }: { value: HTTPHeaderSource; change: (patch: Partial<HTTPHeaderSource>) => void; secrets?: string[] }) {
+  return (            <div className="header-source">
               <h5>HTTP-источник значения</h5>
               <div className="form-grid http-line">
                 <Field label="Источник: метод">
                   <select
-                    value={h.source.method}
+                    value={value.method}
                     onChange={(e) =>
-                      updateSource(i, { method: e.target.value })
+                      change({ method: e.target.value })
                     }
                   >
                     {[
@@ -207,27 +226,27 @@ export function HeaderEditor({
                 >
                   <input
                     className="mono"
-                    value={h.source.url}
+                    value={value.url}
                     placeholder="https://auth.local/token"
-                    onChange={(e) => updateSource(i, { url: e.target.value })}
+                    onChange={(e) => change({ url: e.target.value })}
                   />
                 </Field>
               </div>
               <Pairs
                 label="Источник: query-параметры"
-                value={h.source.query}
-                onChange={(query) => updateSource(i, { query })}
+                value={value.query}
+                onChange={(query) => change({ query })}
               />
               <Pairs
                 label="Источник: заголовки"
-                value={h.source.headers}
-                onChange={(headers) => updateSource(i, { headers })}
+                value={value.headers}
+                onChange={(headers) => change({ headers })}
               />
               <Field label="Источник: формат тела">
                 <select
-                  value={h.source.bodyMode}
+                  value={value.bodyMode}
                   onChange={(e) =>
-                    updateSource(i, {
+                    change({
                       bodyMode: e.target.value as HTTPHeaderSource['bodyMode'],
                     })
                   }
@@ -237,7 +256,7 @@ export function HeaderEditor({
                   <option value="text">Текст</option>
                 </select>
               </Field>
-              {h.source.bodyMode !== 'none' && (
+              {value.bodyMode !== 'none' && (
                 <Field
                   label="Источник: тело запроса"
                   hint="Секреты указываются ссылками, например ${CLIENT_SECRET}"
@@ -245,20 +264,20 @@ export function HeaderEditor({
                   <textarea
                     className="mono"
                     rows={4}
-                    value={h.source.body}
-                    onChange={(e) => updateSource(i, { body: e.target.value })}
+                    value={value.body}
+                    onChange={(e) => change({ body: e.target.value })}
                   />
                 </Field>
               )}
               <TLSFields
-                config={h.source.tls}
+                config={value.tls}
                 change={(patch) =>
-                  updateSource(i, { tls: { ...h.source!.tls, ...patch } })
+                  change({ tls: { ...value.tls, ...patch } })
                 }
                 prefix="Источник: "
-                keyReference={h.source.privateKeySecret}
+                keyReference={value.privateKeySecret}
                 keyChange={(privateKeySecret) =>
-                  updateSource(i, { privateKeySecret })
+                  change({ privateKeySecret })
                 }
                 secrets={secrets}
               />
@@ -269,10 +288,10 @@ export function HeaderEditor({
                 >
                   <input
                     className="mono"
-                    value={h.source.jsonPointer}
+                    value={value.jsonPointer}
                     placeholder="/access_token"
                     onChange={(e) =>
-                      updateSource(i, { jsonPointer: e.target.value })
+                      change({ jsonPointer: e.target.value })
                     }
                   />
                 </Field>
@@ -281,9 +300,9 @@ export function HeaderEditor({
                   hint="Например Bearer с пробелом в конце"
                 >
                   <input
-                    value={h.source.prefix ?? ''}
+                    value={value.prefix ?? ''}
                     onChange={(e) =>
-                      updateSource(i, { prefix: e.target.value })
+                      change({ prefix: e.target.value })
                     }
                   />
                 </Field>
@@ -293,9 +312,9 @@ export function HeaderEditor({
                 hint="Пробный вызов редактора всегда получает новое значение"
               >
                 <select
-                  value={h.source.fetchMode}
+                  value={value.fetchMode}
                   onChange={(e) =>
-                    updateSource(i, {
+                    change({
                       fetchMode: e.target
                         .value as HTTPHeaderSource['fetchMode'],
                     })
@@ -306,16 +325,5 @@ export function HeaderEditor({
                 </select>
               </Field>
             </div>
-          )}
-        </article>
-      ))}
-      <button
-        type="button"
-        className="text-button"
-        onClick={() => onChange([...value, { name: '', value: '' }])}
-      >
-        + Добавить
-      </button>
-    </fieldset>
-  )
+)
 }

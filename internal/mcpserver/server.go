@@ -14,13 +14,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/jsonschema-go/jsonschema"
-	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/SardelkaS/qag/internal/catalog"
 	"github.com/SardelkaS/qag/internal/problem"
 	"github.com/SardelkaS/qag/internal/reporting"
+	"github.com/SardelkaS/qag/internal/resources"
 	"github.com/SardelkaS/qag/internal/service"
+	"github.com/google/jsonschema-go/jsonschema"
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 type Options struct {
@@ -58,7 +59,7 @@ type Envelope[T any] struct {
 
 func New(options Options) *Server {
 	server := &Server{options: options, Artifacts: NewArtifactStore(), registered: map[string]bool{}}
-	server.SDK = mcp.NewServer(&mcp.Implementation{Name: "qag", Version: "1.0.0"}, &mcp.ServerOptions{SupportedProtocolVersions: []string{"2026-07-28", "2025-11-25"}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), Capabilities: &mcp.ServerCapabilities{Tools: &mcp.ToolCapabilities{}, Resources: &mcp.ResourceCapabilities{}}, SetCacheable: func(_ context.Context, _ mcp.Request, c *mcp.Cacheable) { c.TTLMs = 0; c.CacheScope = "private" }})
+	server.SDK = mcp.NewServer(&mcp.Implementation{Name: "qag", Version: "1.0.0"}, &mcp.ServerOptions{Instructions: serverInstructions, SupportedProtocolVersions: []string{"2026-07-28", "2025-11-25"}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), Capabilities: &mcp.ServerCapabilities{Tools: &mcp.ToolCapabilities{}, Resources: &mcp.ResourceCapabilities{}}, SetCacheable: func(_ context.Context, _ mcp.Request, c *mcp.Cacheable) { c.TTLMs = 0; c.CacheScope = "private" }})
 	server.SDK.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 			if method == "resources/list" || method == "resources/read" {
@@ -68,6 +69,7 @@ func New(options Options) *Server {
 		}
 	})
 	server.registerTools()
+	server.registerGuide()
 	return server
 }
 func (s *Server) Handler() http.Handler {
@@ -136,7 +138,11 @@ func addTool[I, O any](s *Server, name, description string, readOnly, external, 
 		if len(raw) == 0 {
 			raw = json.RawMessage(`{}`)
 		}
-		// Validation is isolated from decoding: the original JSON remains intact.
+		if name == "qag_variables_set" || name == "qag_resource_create" || name == "qag_resource_update" {
+			raw = resources.NormalizeVariableWriteJSON(raw)
+		}
+		// Validate shape separately; normalization preserves authored strings and
+		// numeric tokens for the typed decoder.
 		var shape any
 		if json.Unmarshal(raw, &shape) != nil || resolved.Validate(shape) != nil {
 			return nil, &jsonrpc.Error{Code: -32602, Message: "Некорректные параметры инструмента; проверьте его JSON-схему"}
@@ -207,6 +213,25 @@ func addTool[I, O any](s *Server, name, description string, readOnly, external, 
 }
 
 func configureInput(schema *jsonschema.Schema, name string) {
+	allowUnnamed := func(values *jsonschema.Schema) {
+		if values != nil {
+			values.PatternProperties = map[string]*jsonschema.Schema{`^\s*$`: {}}
+		}
+	}
+	if name == "qag_variables_set" {
+		allowUnnamed(schema.Properties["variables"])
+	}
+	if secrets := schema.Properties["secrets"]; secrets != nil {
+		allowUnnamed(secrets.Properties["replace"])
+	}
+	if config := schema.Properties["config"]; config != nil {
+		if variables := config.Properties["variables"]; variables != nil && variables.AdditionalProperties != nil {
+			allowUnnamed(variables)
+			if mode := variables.AdditionalProperties.Properties["mode"]; mode != nil {
+				mode.Enum = []any{"literal", "http"}
+			}
+		}
+	}
 	for key, value := range schema.Properties {
 		if key == "id" || strings.HasSuffix(key, "Id") || key == "idempotencyKey" {
 			value.Pattern = `^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`
@@ -223,8 +248,14 @@ func configureInput(schema *jsonschema.Schema, name string) {
 		if key == "status" {
 			value.Enum = []any{"not_run", "passed", "failed"}
 		}
+		if key == "historyPolicy" {
+			value.Enum = []any{"auto", "retain", "unretained"}
+		}
 		if key == "format" {
 			value.Enum = []any{"text", "markdown", "rich"}
+			if name == "qag_test_case_export" {
+				value.Enum = []any{"jira-wiki"}
+			}
 			if name == "qag_report_export" {
 				value.Enum = append(value.Enum, "pdf")
 			}

@@ -63,6 +63,13 @@ func (r *Repository) LookupRun(ctx context.Context, key, hash string) (Run, bool
 }
 
 func (r *Repository) Start(ctx context.Context, snapshot catalog.TestCase, environment resources.Snapshot, key, hash string, executeAll ...bool) (Run, error) {
+	return r.StartWithOptions(ctx, snapshot, environment, key, hash, StartOptions{ExecuteAll: len(executeAll) > 0 && executeAll[0]})
+}
+func (r *Repository) StartWithOptions(ctx context.Context, snapshot catalog.TestCase, environment resources.Snapshot, key, hash string, options StartOptions) (Run, error) {
+	if !ValidHistoryPolicy(options.HistoryPolicy) {
+		return Run{}, problem.Invalid("historyPolicy", "Выберите auto, retain или unretained")
+	}
+	options.HistoryPolicy = NormalizeHistoryPolicy(options.HistoryPolicy)
 	var id string
 	err := r.transaction(ctx, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, dbscope.Render(tx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`), key); err != nil {
@@ -92,13 +99,20 @@ func (r *Repository) Start(ctx context.Context, snapshot catalog.TestCase, envir
 		}
 		err = tx.QueryRow(ctx, dbscope.Render(tx, `SELECT id::text FROM qag.runs WHERE test_case_id=$1 AND status='running'`), snapshot.ID).Scan(&id)
 		if err == nil {
+			existing, _, e := getRun(ctx, tx, id, false)
+			if e != nil {
+				return e
+			}
+			if existing.HistoryPolicy != options.HistoryPolicy {
+				return problem.Conflict("Активный прогон использует другую политику закрепления")
+			}
 			return nil
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return problem.Database(err)
 		}
 		id = catalog.NewID()
-		if _, err = tx.Exec(ctx, dbscope.Render(tx, `INSERT INTO qag.runs(id,test_case_id,environment_version_id,snapshot,context,idempotency_key,request_hash) VALUES($1,$2,$3,$4,$5,$6,$7)`), id, snapshot.ID, environment.EnvironmentVersionID, snapshot, environment, key, hash); err != nil {
+		if _, err = tx.Exec(ctx, dbscope.Render(tx, `INSERT INTO qag.runs(id,test_case_id,environment_version_id,snapshot,context,idempotency_key,request_hash,history_policy) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`), id, snapshot.ID, environment.EnvironmentVersionID, snapshot, environment, key, hash, options.HistoryPolicy); err != nil {
 			return problem.Database(err)
 		}
 		for _, step := range snapshot.Steps {
@@ -111,7 +125,7 @@ func (r *Repository) Start(ctx context.Context, snapshot catalog.TestCase, envir
 				return problem.Database(err)
 			}
 		}
-		if len(executeAll) > 0 && executeAll[0] {
+		if options.ExecuteAll {
 			_, err = insertBatch(ctx, tx, id, key, hash, snapshot)
 			return err
 		}
@@ -142,11 +156,11 @@ func getRun(ctx context.Context, d db, id string, lock bool) (Run, resources.Sna
 	if err := validID(id); err != nil {
 		return run, environment, err
 	}
-	sql := `SELECT id::text,test_case_id::text,status,snapshot,context,retention_reasons,started_at,finished_at FROM qag.runs WHERE id=$1`
+	sql := `SELECT id::text,test_case_id::text,status,snapshot,context,retention_reasons,started_at,finished_at,history_policy FROM qag.runs WHERE id=$1`
 	if lock {
 		sql += ` FOR UPDATE`
 	}
-	err := d.QueryRow(ctx, dbscope.Render(d, sql), id).Scan(&run.ID, &run.TestCaseID, &run.Status, &run.Snapshot, &environment, &run.RetentionReasons, &run.StartedAt, &run.FinishedAt)
+	err := d.QueryRow(ctx, dbscope.Render(d, sql), id).Scan(&run.ID, &run.TestCaseID, &run.Status, &run.Snapshot, &environment, &run.RetentionReasons, &run.StartedAt, &run.FinishedAt, &run.HistoryPolicy)
 	if err != nil {
 		return run, environment, problem.Database(err)
 	}
@@ -323,7 +337,7 @@ func (r *Repository) finish(ctx context.Context, id, forced string) (Run, error)
 		if err = tx.QueryRow(ctx, dbscope.Render(tx, `SELECT EXISTS(SELECT 1 FROM qag.runs WHERE test_case_id=$1 AND 'first_run'=ANY(retention_reasons)),EXISTS(SELECT 1 FROM qag.runs WHERE test_case_id=$1 AND 'first_success'=ANY(retention_reasons))`), caseID).Scan(&first, &success); err != nil {
 			return problem.Database(err)
 		}
-		reasons := RetentionReasons(status, first, success)
+		reasons := PolicyReasons(run.HistoryPolicy, status, first, success)
 		_, err = tx.Exec(ctx, dbscope.Render(tx, `UPDATE qag.runs SET status=$2,retention_reasons=$3,finished_at=clock_timestamp() WHERE id=$1`), id, status, reasons)
 		return problem.Database(err)
 	})

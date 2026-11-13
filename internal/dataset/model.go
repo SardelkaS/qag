@@ -11,7 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const Version = 1
+const Version = 2
 const MaxBytes = 256 << 20
 const MaxRecords = 100000
 const MaxDepth = 64
@@ -127,6 +127,7 @@ type ResourceVersion struct {
 	CreatedAt   time.Time         `yaml:"createdAt"`
 }
 type Run struct {
+	HistoryPolicy        string     `yaml:"historyPolicy,omitempty"`
 	ID                   string     `yaml:"id"`
 	TestCaseID           string     `yaml:"testCaseId"`
 	EnvironmentVersionID string     `yaml:"environmentVersionId"`
@@ -204,6 +205,7 @@ type VariantVersion struct {
 	CreatedAt time.Time `yaml:"createdAt"`
 }
 type Batch struct {
+	StepID         string     `yaml:"stepId,omitempty"`
 	ID             string     `yaml:"id"`
 	RunID          string     `yaml:"runId"`
 	IdempotencyKey string     `yaml:"idempotencyKey"`

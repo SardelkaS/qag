@@ -16,15 +16,16 @@ import (
 )
 
 type Store struct {
-	mu     sync.RWMutex
-	path   string
-	lock   *os.File
-	doc    dataset.Document
-	hash   [32]byte
-	exists bool
-	fault  bool
-	closed bool
-	lost   chan struct{}
+	mu       sync.RWMutex
+	path     string
+	lock     *os.File
+	doc      dataset.Document
+	semantic [32]byte
+	hash     [32]byte
+	exists   bool
+	fault    bool
+	closed   bool
+	lost     chan struct{}
 	// Failpoint is a fault injection hook, set only before using the store.
 	Failpoint func(string) error
 }
@@ -61,6 +62,12 @@ func Open(path string, allowMissing bool) (*Store, error) {
 		s.Close()
 		return nil, err
 	}
+	encoded, e := dataset.Encode(doc)
+	if e != nil {
+		s.Close()
+		return nil, e
+	}
+	s.semantic = sha256.Sum256(encoded)
 	s.doc = doc
 	s.hash = sha256.Sum256(b)
 	s.exists = true
@@ -143,7 +150,7 @@ func (s *Store) Update(ctx context.Context, apply func(*dataset.Data) error) err
 	if err = ctx.Err(); err != nil {
 		return err
 	}
-	if s.exists && sha256.Sum256(b) == s.hash {
+	if s.exists && sha256.Sum256(b) == s.semantic {
 		return nil
 	}
 	changed, err := privatefile.Atomic(s.path, b, !s.exists, s.Failpoint)
@@ -156,6 +163,7 @@ func (s *Store) Update(ctx context.Context, apply func(*dataset.Data) error) err
 	}
 	s.doc = candidate
 	s.hash = sha256.Sum256(b)
+	s.semantic = s.hash
 	s.exists = true
 	return nil
 }

@@ -86,7 +86,7 @@ func request(name string) object {
 
 func main() {
 	for name, value := range map[string]any{
-		"CallRequest": catalog.CallRequest{}, "StepRevision": runs.StepRevision{}, "StepsPassAll": httpapi.StepsPassAll{},
+		"CaseExport": reporting.CaseExport{}, "VariableDefinition": resources.VariableDefinition{}, "VariableSourceResult": execution.VariableSourceResult{}, "CallRequest": catalog.CallRequest{}, "StepRevision": runs.StepRevision{}, "StepsPassAll": httpapi.StepsPassAll{},
 		"ClipboardWrite": reporting.ClipboardWrite{}, "PNGPart": reporting.PNGPart{}, "ClipboardResult": reporting.ClipboardResult{},
 		"ReportNode": runs.ReportNode{},
 		"Variant":    runs.Variant{}, "VariantVersion": runs.VariantVersion{}, "Batch": runs.Batch{}, "BatchItem": runs.BatchItem{}, "VariantWrite": httpapi.VariantWrite{}, "Report": runs.Report{}, "ReportStep": runs.ReportStep{}, "ReportCall": runs.ReportCall{}, "ReportRequest": runs.ReportRequest{}, "ReportVariant": runs.ReportVariant{}, "ReportVariantVersion": runs.ReportVariantVersion{}, "ReportAttempt": runs.ReportAttempt{}, "ReportImage": runs.ReportImage{},
@@ -104,6 +104,10 @@ func main() {
 	}
 	schemas["Health"] = object{"type": "object", "required": []string{"status"}, "properties": object{"status": object{"type": "string", "enum": []string{"ready"}}}}
 	schemas["Session"] = object{"type": "object", "required": []string{"csrfToken"}, "properties": object{"csrfToken": object{"type": "string"}}}
+	setEnum("VariableDefinition", "mode", "literal", "http")
+	setEnum("Run", "historyPolicy", "auto", "retain", "unretained")
+	setEnum("RunStart", "historyPolicy", "auto", "retain", "unretained")
+	setEnum("CaseExport", "format", "jira-wiki")
 	setEnum("Block", "kind", "http", "grpc", "postgresql")
 	setEnum("CallRequest", "kind", "http", "grpc", "postgresql")
 	setEnum("Resource", "kind", "http", "grpc", "postgresql")
@@ -125,6 +129,25 @@ func main() {
 	setEnum("ReportNode", "kind", "heading", "text", "code", "table", "image")
 	setEnum("Attempt", "state", "queued", "running", "completed", "error", "timed_out", "cancelled", "interrupted")
 	setEnum("ComparisonResult", "status", "match", "mismatch", "not_compared")
+	// Only write schemas accept unnamed rows with arbitrary draft values. Public
+	// read models stay fully typed: persisted maps never contain those rows.
+	for _, copy := range [][2]string{{"ResourceConfig", "ResourceConfigWrite"}, {"SecretChanges", "SecretChangesWrite"}} {
+		raw, _ := json.Marshal(schemas[copy[0]])
+		var value object
+		if err := json.Unmarshal(raw, &value); err != nil {
+			panic(err)
+		}
+		schemas[copy[1]] = value
+	}
+	schemas["ResourceWrite"].(object)["properties"].(object)["config"] = ref("ResourceConfigWrite")
+	for _, name := range []string{"ResourceWrite", "VariablesWrite"} {
+		schemas[name].(object)["properties"].(object)["secrets"] = ref("SecretChangesWrite")
+	}
+	for _, field := range [][2]string{{"ResourceConfigWrite", "variables"}, {"VariablesWrite", "variables"}, {"SecretChangesWrite", "replace"}} {
+		properties := schemas[field[0]].(object)["properties"].(object)
+		properties[field[1]].(object)["patternProperties"] = object{`^\s*$`: object{}}
+	}
+	schemas["SecretChangesWrite"] = object{"anyOf": []object{ref("SecretChanges"), schemas["SecretChangesWrite"].(object)}}
 	paths := object{}
 	add := func(method, path, id, summary, body, result string) {
 		operation := object{"operationId": id, "summary": summary, "tags": []string{"qag"}, "responses": object{"200": response(result), "400": object{"$ref": "#/components/responses/BadRequest"}, "403": object{"$ref": "#/components/responses/Forbidden"}, "404": object{"$ref": "#/components/responses/NotFound"}, "409": object{"$ref": "#/components/responses/Conflict"}, "503": object{"$ref": "#/components/responses/Unavailable"}}}
@@ -137,6 +160,9 @@ func main() {
 		}
 		if id == "listFolders" {
 			parameters = append(parameters, object{"name": "archived", "in": "query", "schema": object{"type": "boolean", "default": false}})
+		}
+		if id == "exportTestCase" {
+			parameters = append(parameters, object{"name": "revision", "in": "query", "required": true, "schema": object{"type": "integer", "minimum": 1}}, object{"name": "format", "in": "query", "schema": object{"type": "string", "enum": []string{"jira-wiki"}, "default": "jira-wiki"}}, object{"name": "includeExpected", "in": "query", "schema": object{"type": "boolean", "default": true}})
 		}
 		if id == "getRunReport" {
 			parameters = append(parameters, object{"name": "includeExpected", "in": "query", "schema": object{"type": "boolean", "default": true}})
@@ -175,6 +201,7 @@ func main() {
 		{"get", "/folders", "listFolders", "Список папок", "", "FolderPage"}, {"post", "/folders", "createFolder", "Создать папку", "CreateName", "Folder"}, {"patch", "/folders/{id}", "updateFolder", "Переименовать или архивировать папку", "ArchivePatch", "Folder"},
 		{"get", "/folders/{id}/test-cases", "listTestCases", "Тест-кейсы папки", "", "TestCasePage"}, {"post", "/folders/{id}/test-cases", "createTestCase", "Создать тест-кейс", "TestCaseCreate", "TestCase"},
 		{"get", "/test-cases/{id}", "getTestCase", "Прочитать сценарий", "", "TestCase"}, {"put", "/test-cases/{id}", "saveTestCase", "Сохранить версию сценария", "TestCaseWrite", "TestCase"}, {"patch", "/test-cases/{id}", "archiveTestCase", "Изменить имя или архив тест-кейса", "ArchivePatch", "TestCase"},
+		{"get", "/test-cases/{id}/export", "exportTestCase", "Экспорт сценария для Jira", "", "CaseExport"},
 		{"post", "/test-cases/{id}/images", "uploadExpectedImage", "Загрузить эталон", "ImageUpload", "ExpectedImage"},
 		{"get", "/test-cases/{id}/images/{imageId}", "readExpectedImage", "Прочитать эталон", "", "ExpectedImage"},
 		{"put", "/environments/{id}/variables", "saveVariables", "Сохранить переменные", "VariablesWrite", "Environment"},

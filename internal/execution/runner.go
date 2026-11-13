@@ -47,7 +47,34 @@ func (r *Runner) execute(ctx context.Context, scope string, block catalog.Block,
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(seconds)*time.Second)
 	defer cancel()
 	var result Result
-	block, res, traces, err := r.resolveHeaders(ctx, scope, block, res)
+	var err error
+	var variables []VariableSourceResult
+	if len(res.Resource.Config.Variables) > 0 && !res.Prepared {
+		if !res.Deferred {
+			if research {
+				block, res, err = res.PlanRequest(block)
+			} else {
+				block, res, err = res.Plan(block)
+			}
+		}
+		if err == nil && !res.Prepared {
+			block, res, variables, err = r.resolveVariables(ctx, scope, block, res)
+		}
+		if err == nil && !res.Prepared {
+			if research {
+				block, res, err = res.PrepareRequest(block)
+			} else {
+				block, res, err = res.Prepare(block)
+			}
+			if err != nil {
+				r.invalidateVariableCache(scope, res, variables)
+			}
+		}
+	}
+	var traces []HeaderSourceResult
+	if err == nil {
+		block, res, traces, err = r.resolveHeaders(ctx, scope, block, res)
+	}
 	sourceFailed := err != nil
 	if err == nil {
 		switch block.Kind {
@@ -62,7 +89,11 @@ func (r *Runner) execute(ctx context.Context, scope string, block catalog.Block,
 		}
 	}
 	result.HeaderSources = traces
-	if len(traces) > 0 {
+	result.VariableSources = variables
+	if sourceFailed && len(variables) > 0 {
+		result.ErrorCode = "variable_source_failed"
+	}
+	if len(traces) > 0 || len(variables) > 0 {
 		started := !sourceFailed
 		result.MainRequestStarted = &started
 	}

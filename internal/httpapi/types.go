@@ -43,6 +43,7 @@ type ProtoBundle struct {
 	Revision int64             `json:"revision"`
 }
 type RunStart struct {
+	HistoryPolicy string `json:"historyPolicy,omitempty"`
 	ExecuteAll    bool   `json:"executeAll,omitempty"`
 	EnvironmentID string `json:"environmentId"`
 	Revision      int64  `json:"revision"`

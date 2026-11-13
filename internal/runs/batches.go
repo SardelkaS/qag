@@ -3,21 +3,21 @@ package runs
 import (
 	"context"
 	"errors"
-	"github.com/jackc/pgx/v5"
 	"github.com/SardelkaS/qag/internal/catalog"
 	"github.com/SardelkaS/qag/internal/dbscope"
 	"github.com/SardelkaS/qag/internal/problem"
+	"github.com/jackc/pgx/v5"
 )
 
 func loadBatches(ctx context.Context, d db, runID string) ([]Batch, error) {
-	rows, err := d.Query(ctx, dbscope.Render(d, `SELECT id::text,run_id::text,state,started_at,finished_at FROM qag.run_batches WHERE run_id=$1 ORDER BY started_at,id`), runID)
+	rows, err := d.Query(ctx, dbscope.Render(d, `SELECT id::text,run_id::text,state,started_at,finished_at,coalesce(step_id::text,'') FROM qag.run_batches WHERE run_id=$1 ORDER BY started_at,id`), runID)
 	if err != nil {
 		return nil, problem.Database(err)
 	}
 	result := []Batch{}
 	for rows.Next() {
 		var b Batch
-		if err = rows.Scan(&b.ID, &b.RunID, &b.State, &b.StartedAt, &b.FinishedAt); err != nil {
+		if err = rows.Scan(&b.ID, &b.RunID, &b.State, &b.StartedAt, &b.FinishedAt, &b.StepID); err != nil {
 			rows.Close()
 			return nil, problem.Database(err)
 		}
@@ -57,13 +57,20 @@ func loadBatches(ctx context.Context, d db, runID string) ([]Batch, error) {
 	}
 	return result, nil
 }
-func insertBatch(ctx context.Context, tx pgx.Tx, runID, key, hash string, doc catalog.TestCase) (string, error) {
+func insertBatch(ctx context.Context, tx pgx.Tx, runID, key, hash string, doc catalog.TestCase, selected ...string) (string, error) {
+	step := ""
+	if len(selected) > 0 {
+		step = selected[0]
+	}
 	id := catalog.NewID()
-	if _, err := tx.Exec(ctx, dbscope.Render(tx, `INSERT INTO qag.run_batches(id,run_id,idempotency_key,request_hash,state) VALUES($1,$2,$3,$4,'running')`), id, runID, key, hash); err != nil {
+	if _, err := tx.Exec(ctx, dbscope.Render(tx, `INSERT INTO qag.run_batches(id,run_id,idempotency_key,request_hash,state,step_id) VALUES($1,$2,$3,$4,'running',nullif($5,'')::uuid)`), id, runID, key, hash, step); err != nil {
 		return "", problem.Database(err)
 	}
 	position := 0
 	for _, s := range doc.Steps {
+		if step != "" && s.ID != step {
+			continue
+		}
 		for _, b := range s.Blocks {
 			position++
 			if _, err := tx.Exec(ctx, dbscope.Render(tx, `INSERT INTO qag.run_batch_items(batch_id,run_id,position,block_id) VALUES($1,$2,$3,$4)`), id, runID, position, b.ID); err != nil {
@@ -77,7 +84,7 @@ func insertBatch(ctx context.Context, tx pgx.Tx, runID, key, hash string, doc ca
 	}
 	return id, nil
 }
-func (r *Repository) StartBatch(ctx context.Context, runID, key, hash string) (Batch, error) {
+func (r *Repository) StartBatch(ctx context.Context, runID, key, hash string, stepID ...string) (Batch, error) {
 	var id string
 	err := r.transaction(ctx, func(tx pgx.Tx) error {
 		run, _, err := getRun(ctx, tx, runID, true)
@@ -108,7 +115,14 @@ func (r *Repository) StartBatch(ctx context.Context, runID, key, hash string) (B
 				return problem.Conflict("Дождитесь текущего вызова")
 			}
 		}
-		id, err = insertBatch(ctx, tx, runID, key, hash, run.Snapshot)
+		step := ""
+		if len(stepID) > 0 {
+			step = stepID[0]
+		}
+		if _, err = SelectStep(run.Snapshot, step); err != nil {
+			return err
+		}
+		id, err = insertBatch(ctx, tx, runID, key, hash, run.Snapshot, step)
 		return err
 	})
 	if err != nil {

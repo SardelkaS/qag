@@ -71,6 +71,16 @@ async function api(path: string, method = 'GET', body?: unknown, key?: string) {
   if (!r.ok) throw new Error(`${r.status}: ${value.message}`)
   return value
 }
+
+async function mcpTool(name: string, args: unknown) {
+  const response = await fetch(base + '/mcp', { method: 'POST', headers: {
+    'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', 'MCP-Protocol-Version': '2025-11-25',
+  }, body: JSON.stringify({ jsonrpc:'2.0', id:randomUUID(), method:'tools/call', params:{ name, arguments:args } }) })
+  const wire = await response.text()
+  const payload = JSON.parse(wire.startsWith('event:') || wire.startsWith('data:') ? wire.split('\n').find(line => line.startsWith('data:'))!.slice(5) : wire)
+  if (payload.error || payload.result.isError) throw new Error('MCP command failed: ' + name)
+  return payload.result.structuredContent.data
+}
 test.beforeAll(async () => {
   const path = resolve(root, `.local/e2e-${randomUUID()}.json`)
   fixture = spawn(resolve(root, 'dist/testfixture.exe'), ['-config', path], {
@@ -1357,6 +1367,126 @@ test('тема работает без localStorage и до загрузки и�
     " script-src 'self'",
   )
   await context.close()
+})
+
+test('PEM-файлы, переменные ресурса, MCP-шаг и Jira-сценарий', async ({ page, context }) => {
+  let env = await api('/environments', 'POST', { name: 'PEM workflows', description: '' })
+  env = await api(`/environments/${env.id}/variables`, 'PUT', { revision:env.revision, variables:{}, secrets:{ replace:{ KEEP_SECRET:'preserved-fixture-value' } } })
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Окружения и ресурсы', exact: false }).click()
+  await page.getByLabel('Текущее окружение', { exact: true }).selectOption(env.id)
+  await page.getByRole('button', { name:'Настроить переменные', exact:true }).click()
+  const dialog = page.getByRole('dialog', { name:'Переменные окружения', exact:true })
+  const openVars = dialog.getByRole('group', { name:'Открытые переменные', exact:true })
+  for (let i=0;i<4;i++) await openVars.getByRole('button', { name:'+ Добавить', exact:true }).click()
+  await openVars.getByLabel('Открытые переменные: имя 1', { exact:true }).fill('STATIC_VALUE')
+  await openVars.getByLabel('Открытые переменные: имя 2', { exact:true }).fill('STATIC_VALUE')
+  await dialog.getByRole('button', { name:'Сохранить переменные', exact:true }).click()
+  await expect(dialog.getByRole('alert')).toContainText('уникальными')
+  await openVars.getByLabel('Открытые переменные: имя 2', { exact:true }).fill('  ')
+  await dialog.getByLabel('Действие: KEEP_SECRET', { exact:true }).selectOption('clear')
+  await dialog.getByLabel('Имя секрета', { exact:true }).fill(' ')
+  await dialog.getByRole('button', { name:'+ Секретная переменная', exact:true }).click()
+  await dialog.getByRole('button', { name:'+ Секретная переменная', exact:true }).click()
+  await dialog.getByRole('button', { name:'Сохранить переменные', exact:true }).click()
+  await expect(dialog).toHaveCount(0)
+  env = (await api('/environments')).items.find((e:any) => e.id===env.id)
+  expect(Object.keys(env.variables)).toEqual(['STATIC_VALUE'])
+  expect(env.secretNames).toEqual(['KEEP_SECRET'])
+  const upload = async (label: string, value: string) => {
+    await page.getByLabel(label, { exact: true }).setInputFiles({ name: 'fixture.pem', mimeType: 'application/x-pem-file', buffer: Buffer.from(value) })
+  }
+  for (const [name, kind] of [['FILE_HTTP','http'], ['FILE_GRPC','grpc'], ['FILE_SQL','postgresql']]) {
+    await page.locator('.resource-list').getByRole('button', { name: '+ Добавить', exact: true }).click()
+    const form = page.locator('.resource-form')
+    await form.getByLabel('Имя ресурса', { exact: true }).fill(name)
+    await form.getByLabel('Тип ресурса', { exact: true }).selectOption(kind)
+    if (kind === 'http') await form.getByLabel('Базовый URL', { exact: false }).fill(config.mtlsHttp + '/api')
+    else await form.getByLabel('Адрес сервера', { exact: true }).fill(kind === 'grpc' ? config.mtlsGrpc : config.target.address)
+    if (kind === 'postgresql') {
+      await form.getByLabel('База данных', { exact: true }).fill(config.target.database)
+      await form.getByLabel('Пользователь PostgreSQL', { exact: true }).fill(config.mtlsSQL.username)
+      await expect(form.getByRole('group', { name: 'Общие заголовки', exact: true })).toHaveCount(0)
+    }
+    await form.getByLabel('Защита подключения', { exact: true }).selectOption('mtls')
+    const cert = kind === 'postgresql' ? config.mtlsSQL : config
+    await upload('Загрузить CA из файла', cert.ca)
+    await upload('Загрузить клиентский сертификат из файла', cert.certificate)
+    if (kind === 'http') {
+      for (const buffer of [Buffer.from('broken'), Buffer.alloc(0), Buffer.alloc(1024 * 1024 + 1), Buffer.from([0xff, 0xfe]), Buffer.from('-----BEGIN CERTIFICATE-----\n' + Buffer.alloc(40, 0x30).toString('base64') + '\n-----END CERTIFICATE-----')]) {
+        await form.getByLabel('Загрузить CA из файла', { exact: true }).setInputFiles({ name:'bad.pem', mimeType:'application/x-pem-file', buffer })
+        await expect(form.locator('.pem-upload [role="alert"]')).toBeVisible()
+        await expect(form.getByLabel('CA-сертификат PEM', { exact: true })).toHaveValue(cert.ca)
+      }
+      await form.getByLabel('Загрузить CA из файла', { exact: true }).setInputFiles([])
+      await expect(form.getByLabel('CA-сертификат PEM', { exact: true })).toHaveValue(cert.ca)
+      await upload('Загрузить CA из файла', cert.ca)
+      await upload('Загрузить приватный ключ из файла', config.mtlsSQL.privateKey)
+      await form.getByRole('button', { name:'Сохранить ресурс', exact:true }).click()
+      await expect(form.getByRole('alert').filter({ hasText:'несовместимая' })).toBeVisible()
+      await expect(form.getByLabel('Имя ресурса', { exact:true })).toHaveValue(name)
+      const vars = form.getByRole('group', { name:'Переменные ресурса', exact:true })
+      for (let i=0;i<3;i++) await vars.getByRole('button',{ name:'+ Переменная ресурса', exact:true }).click()
+      await vars.getByLabel('Переменная ресурса: имя 1', { exact:true }).fill('AUTH_VALUE')
+      await vars.getByLabel('Переменная ресурса: способ 1', { exact:true }).selectOption('http')
+      await vars.getByLabel('Источник: URL', { exact:true }).fill(config.http + '/token')
+      await vars.getByLabel('Источник: Защита подключения', { exact:true }).selectOption('plaintext')
+      await vars.getByLabel('Источник: поле JSON', { exact:true }).fill('/tokens/0/value')
+      await vars.getByLabel('Источник: когда получать', { exact:true }).selectOption('per_run')
+      await vars.getByLabel('Переменная ресурса: имя 2', { exact:true }).fill('   ')
+      await vars.getByLabel('Переменная ресурса: способ 2', { exact:true }).selectOption('http')
+      await form.getByRole('button', { name:'+ Секретная переменная', exact:true }).click()
+      await form.getByRole('button', { name:'+ Секретная переменная', exact:true }).click()
+      const headers = form.getByRole('group', { name:'Общие заголовки', exact:true })
+      await headers.getByRole('button', { name:'+ Добавить', exact:true }).click()
+      await headers.getByLabel('Общие заголовки: имя 1', { exact:true }).fill('Authorization')
+      await headers.getByLabel('Общие заголовки: значение 1', { exact:true }).fill('Bearer ${AUTH_VALUE}')
+    }
+    await upload('Загрузить приватный ключ из файла', cert.privateKey)
+    await form.getByRole('button', { name:'Сохранить ресурс', exact:true }).click()
+    await expect(page.locator('.resource-item').filter({ hasText:name })).toBeVisible()
+    await expect(form.getByLabel('Новое значение: PRIVATE_KEY', { exact:false })).toHaveCount(0)
+  }
+  const resources = (await api(`/environments/${env.id}/resources`)).items
+  expect(Object.keys(resources.find((r:any) => r.name==='FILE_HTTP').config.variables)).toEqual(['AUTH_VALUE'])
+  expect(JSON.stringify(resources)).not.toContain(config.privateKey)
+  const folder = await api('/folders', 'POST', { name:'Resource workflows' })
+  let c = await api(`/folders/${folder.id}/test-cases`, 'POST', { name:'Сценарий для Jira и MCP' })
+  const step = randomUUID()
+  c = await api(`/test-cases/${c.id}`, 'PUT', { name:c.name, revision:c.revision, steps:[{ id:step, description:'Три защищённых вызова', blocks:[
+    { id:randomUUID(), kind:'http', resource:'FILE_HTTP', http:{ method:'GET', path:'/task', query:[], headers:[], bodyMode:'none', body:'' }, expected:{ statusCode:200, bodyMode:'none' } },
+    { id:randomUUID(), kind:'grpc', resource:'FILE_GRPC', grpc:{ service:'grpc.health.v1.Health', method:'Check', body:'{}', metadata:[] }, expected:{ grpcCode:'OK', bodyMode:'json', body:'{"status":"SERVING"}' } },
+    { id:randomUUID(), kind:'postgresql', resource:'FILE_SQL', sql:{ query:'SELECT 1::int AS n', parameters:[], mode:'rows' }, expected:{ bodyMode:'rows', columns:[{name:'n',type:'int4'}], rows:[[{type:'integer',value:'1'}]] } },
+  ]}] })
+  // gRPC target deliberately has no reflection; provide its descriptors explicitly.
+  let grpc = resources.find((r:any) => r.name==='FILE_GRPC')
+  await api(`/resources/${grpc.id}/proto-bundles`, 'POST', { revision:grpc.revision, files:{ 'health.proto':'syntax="proto3";package grpc.health.v1;service Health{rpc Check(Request) returns(Response);}message Request{string service=1;}message Response{enum Status{UNKNOWN=0;SERVING=1;}Status status=1;}' } })
+  const run = await mcpTool('qag_run_start', { testCaseId:c.id, environmentId:env.id, revision:c.revision, historyPolicy:'unretained', idempotencyKey:randomUUID() })
+  await mcpTool('qag_run_step_execute', { runId:run.id, stepId:step, idempotencyKey:randomUUID() })
+  await eventually(async () => (await api(`/runs/${run.id}`)).batches[0].state==='completed')
+  const result = await api(`/runs/${run.id}`)
+  expect(result.attempts).toHaveLength(3)
+  expect(result.attempts.map((a:any) => a.result.comparison.status)).toEqual(['match','match','match'])
+  expect(JSON.stringify(result)).not.toContain('fixture-secret-token-')
+  await page.reload()
+  await page.getByRole('button', { name:'Папка Resource workflows', exact:true }).click()
+  await page.getByRole('button', { name:'Открыть тест-кейс Сценарий для Jira и MCP', exact:true }).click()
+  await page.getByRole('button', { name:'Прогон', exact:true }).click()
+  await expect(page.locator('.run-view .call-block')).toHaveCount(3)
+  await page.getByRole('button', { name:/^Редактор/ }).click()
+  await page.getByLabel('Описание шага 1', { exact:true }).fill('Несохранённая правка')
+  await page.getByRole('button', { name:'Сценарий для Jira', exact:true }).click()
+  await expect(page.getByText(/Есть несохранённые изменения. Выберите/)).toBeVisible()
+  await page.getByRole('button', { name:`Версия ${c.revision}: предпросмотр`, exact:true }).click()
+  const preview = page.getByLabel('Jira wiki markup', { exact:true })
+  await expect(preview).toHaveValue(/Три защищённых вызова/)
+  expect(await preview.inputValue()).not.toContain('Несохранённая правка')
+  await context.grantPermissions(['clipboard-read','clipboard-write'])
+  await page.getByRole('button', { name:'Скопировать для Jira', exact:true }).click()
+  await expect(page.getByText('Сценарий скопирован', { exact:true })).toBeVisible()
+  expect((await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g, '\n')).toBe(await preview.inputValue())
+  await mcpTool('qag_run_finish', { id:run.id })
+  expect((await api(`/runs/${run.id}`)).retentionReasons).toEqual([])
 })
 
 test('mTLS в форме ресурса и отдельного источника, сохранённый ключ не раскрывается', async ({

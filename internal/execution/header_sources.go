@@ -6,14 +6,15 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/url"
 	"github.com/SardelkaS/qag/internal/catalog"
 	"github.com/SardelkaS/qag/internal/resources"
+	"io"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 type HeaderSourceResult struct {
@@ -177,6 +178,9 @@ func (r *Runner) fetchHeader(ctx context.Context, s catalog.HTTPHeaderSource, re
 func extractHeaderValue(body, pointer string) (string, error) {
 	fail := func() (string, error) {
 		return "", fmt.Errorf("Не удалось извлечь скалярное поле JSON источника заголовка")
+	}
+	if !utf8.ValidString(body) {
+		return fail()
 	}
 	d := json.NewDecoder(strings.NewReader(body))
 	d.UseNumber()

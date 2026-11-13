@@ -504,6 +504,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/test-cases/{id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Экспорт сценария для Jira */
+        get: operations["exportTestCase"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/test-cases/{id}/images": {
         parameters: {
             query?: never;
@@ -620,6 +637,7 @@ export interface components {
             startedAt: string;
             /** @enum {string} */
             state: "running" | "completed" | "cancelled" | "interrupted";
+            stepId?: string;
         };
         BatchItem: {
             attemptId?: string;
@@ -652,6 +670,15 @@ export interface components {
             sql?: components["schemas"]["SQLRequest"];
             /** Format: int64 */
             timeoutSeconds: number;
+        };
+        CaseExport: {
+            /** @enum {string} */
+            format: "jira-wiki";
+            /** Format: int64 */
+            revision: number;
+            sha256: string;
+            testCaseId: string;
+            text: string;
         };
         ClipboardResult: {
             copied: boolean;
@@ -730,6 +757,7 @@ export interface components {
             statusMessage?: string;
             trailers?: components["schemas"]["KeyValue"][];
             truncated: boolean;
+            variableSources?: components["schemas"]["VariableSourceResult"][];
         };
         Expectation: {
             body?: string;
@@ -978,19 +1006,37 @@ export interface components {
             tls: components["schemas"]["TLSConfig"];
             unavailableReason?: string;
             username?: string;
+            variables?: {
+                [key: string]: components["schemas"]["VariableDefinition"];
+            };
+        };
+        ResourceConfigWrite: {
+            address?: string;
+            baseUrl?: string;
+            database?: string;
+            headers: components["schemas"]["RequestHeader"][];
+            protoFiles?: {
+                [key: string]: string;
+            };
+            tls: components["schemas"]["TLSConfig"];
+            unavailableReason?: string;
+            username?: string;
+            variables?: {
+                [key: string]: components["schemas"]["VariableDefinition"] | unknown;
+            };
         };
         ResourcePage: {
             items: components["schemas"]["Resource"][];
             nextCursor?: string;
         };
         ResourceWrite: {
-            config: components["schemas"]["ResourceConfig"];
+            config: components["schemas"]["ResourceConfigWrite"];
             /** @enum {string} */
             kind: "http" | "grpc" | "postgresql";
             name: string;
             /** Format: int64 */
             revision: number;
-            secrets: components["schemas"]["SecretChanges"];
+            secrets: components["schemas"]["SecretChangesWrite"];
         };
         Run: {
             attempts: components["schemas"]["Attempt"][];
@@ -999,6 +1045,8 @@ export interface components {
             environmentName: string;
             /** Format: date-time */
             finishedAt?: string;
+            /** @enum {string} */
+            historyPolicy: "auto" | "retain" | "unretained";
             id: string;
             resources: components["schemas"]["Resource"][];
             retentionReasons: string[];
@@ -1018,6 +1066,8 @@ export interface components {
         RunStart: {
             environmentId: string;
             executeAll?: boolean;
+            /** @enum {string} */
+            historyPolicy?: "auto" | "retain" | "unretained";
             /** Format: int64 */
             revision: number;
         };
@@ -1031,6 +1081,12 @@ export interface components {
             clear: string[];
             replace: {
                 [key: string]: string;
+            };
+        };
+        SecretChangesWrite: components["schemas"]["SecretChanges"] | {
+            clear: string[];
+            replace: {
+                [key: string]: string | unknown;
             };
         };
         Session: {
@@ -1117,12 +1173,28 @@ export interface components {
             message: string;
             path: string;
         };
+        VariableDefinition: {
+            /** @enum {string} */
+            mode: "literal" | "http";
+            source?: components["schemas"]["HTTPHeaderSource"];
+            value?: string;
+        };
+        VariableSourceResult: {
+            /** Format: int64 */
+            durationMs: number;
+            errorCode?: string;
+            fetchMode: string;
+            name: string;
+            state: string;
+            /** Format: int64 */
+            statusCode?: number;
+        };
         VariablesWrite: {
             /** Format: int64 */
             revision: number;
-            secrets: components["schemas"]["SecretChanges"];
+            secrets: components["schemas"]["SecretChangesWrite"];
             variables: {
-                [key: string]: string;
+                [key: string]: string | unknown;
             };
         };
         Variant: {
@@ -2258,6 +2330,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Attempt"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    exportTestCase: {
+        parameters: {
+            query: {
+                revision: number;
+                format?: "jira-wiki";
+                includeExpected?: boolean;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Успешный ответ */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseExport"];
                 };
             };
             400: components["responses"]["BadRequest"];

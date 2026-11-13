@@ -82,6 +82,7 @@ func (r *Repository) SaveVariables(ctx context.Context, id string, revision int6
 	return r.SaveEnvironment(ctx, id, e.Name, revision, variables, changes)
 }
 func (r *Repository) saveEnvironment(ctx context.Context, id, value string, revision int64, variables map[string]string, changes SecretChanges, description *string) (Environment, error) {
+	variables = NormalizeNewVariables(variables)
 	name, normalized, err := catalog.Name(value)
 	if err != nil {
 		return Environment{}, err
@@ -272,28 +273,24 @@ func (r *Repository) SaveResource(ctx context.Context, id, environmentID, name, 
 			return err
 		}
 		sourceValues := map[string]string{}
+		var envVersion string
+		var envSealed []byte
+		var envVariables map[string]string
+		if err := tx.QueryRow(ctx, dbscope.Render(tx, `SELECT v.id::text,v.encrypted_secrets,v.variables FROM qag.environments e JOIN qag.environment_versions v ON v.id=e.current_version_id WHERE e.id=$1`), environmentID).Scan(&envVersion, &envSealed, &envVariables); err != nil {
+			return problem.Database(err)
+		}
+		envValues, err := r.vault.Open(environmentID+":"+envVersion, envSealed)
+		if err != nil {
+			return err
+		}
+		for k, v := range envValues {
+			sourceValues[k] = v
+		}
 		for k, v := range values {
 			sourceValues[k] = v
 		}
-		for _, h := range config.Headers {
-			if h.Source != nil {
-				var envVersion string
-				var envSealed []byte
-				if err := tx.QueryRow(ctx, dbscope.Render(tx, `SELECT v.id::text,v.encrypted_secrets FROM qag.environments e JOIN qag.environment_versions v ON v.id=e.current_version_id WHERE e.id=$1`), environmentID).Scan(&envVersion, &envSealed); err != nil {
-					return problem.Database(err)
-				}
-				envValues, err := r.vault.Open(environmentID+":"+envVersion, envSealed)
-				if err != nil {
-					return err
-				}
-				for k, v := range envValues {
-					sourceValues[k] = v
-				}
-				for k, v := range values {
-					sourceValues[k] = v
-				}
-				break
-			}
+		if err := VariableContext(config, envVariables, sourceValues); err != nil {
+			return err
 		}
 		if err = ValidateConfig(kind, config, values, sourceValues); err != nil {
 			return err

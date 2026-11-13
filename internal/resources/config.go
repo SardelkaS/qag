@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/SardelkaS/qag/internal/catalog"
 	"github.com/SardelkaS/qag/internal/problem"
@@ -16,6 +17,11 @@ import (
 var variableName = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
 
 func ValidateConfig(kind string, c Config, secrets map[string]string, sourceSecrets ...map[string]string) error {
+	for _, value := range []string{c.BaseURL, c.Address, c.Database, c.Username} {
+		if strings.Contains(value, "${") {
+			return problem.Invalid("config", "Параметры подключения задаются явно; переменные используются в запросах")
+		}
+	}
 	if c.UnavailableReason != "" {
 		return problem.Invalid("config", "Недоступность ресурса задаётся только встроенным примером")
 	}
@@ -50,6 +56,9 @@ func ValidateConfig(kind string, c Config, secrets map[string]string, sourceSecr
 	if len(sourceSecrets) > 0 {
 		sourceValues = sourceSecrets[0]
 	}
+	if err := ValidateVariableDefinitions(c, sourceValues, true); err != nil {
+		return err
+	}
 	for _, h := range c.Headers {
 		if h.Source != nil {
 			if kind == "postgresql" {
@@ -78,6 +87,14 @@ func ValidateConfig(kind string, c Config, secrets map[string]string, sourceSecr
 }
 
 func TLS(c Config, secrets map[string]string) (*tls.Config, error) {
+	if strings.Contains(c.TLS.ServerName, "${") {
+		return nil, problem.Invalid("config.tls.serverName", "Имя TLS-сервера задаётся явно")
+	}
+	for _, value := range []string{c.TLS.CA, c.TLS.Certificate, secrets["PRIVATE_KEY"]} {
+		if len(value) > 1<<20 || !utf8.ValidString(value) {
+			return nil, problem.Invalid("config.tls", "Сертификат или ключ должен быть UTF-8 PEM размером до 1 MiB")
+		}
+	}
 	if c.TLS.Mode == "plaintext" {
 		if c.TLS.CA != "" || c.TLS.Certificate != "" {
 			return nil, problem.Invalid("config.tls", "Сертификаты требуют режима TLS")
@@ -111,9 +128,15 @@ type Snapshot struct {
 	Resources            []Resource        `json:"resources"`
 }
 type Resolved struct {
-	Resource  Resource
-	Variables map[string]string
-	Secrets   map[string]string
+	Prepared       bool
+	Deferred       bool
+	DynamicValues  map[string]string
+	planning       bool
+	forbidDynamic  bool
+	variablesReady bool
+	Resource       Resource
+	Variables      map[string]string
+	Secrets        map[string]string
 }
 
 func ValidateVariables(values map[string]string, secrets map[string]string) error {
@@ -129,6 +152,7 @@ func ValidateVariables(values map[string]string, secrets map[string]string) erro
 }
 
 func normalizeConfig(c *Config) {
+	c.Variables = NormalizeResourceVariables(c.Variables)
 	if c.Headers == nil {
 		c.Headers = []catalog.RequestHeader{}
 	}

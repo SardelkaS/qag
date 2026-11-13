@@ -18,6 +18,7 @@ type Environment struct {
 type TLSConfig = catalog.TLSConfig
 
 type Config struct {
+	Variables map[string]VariableDefinition `json:"variables,omitempty"`
 	// UnavailableReason is set only by bootstrap for a version of built-in SQL.
 	UnavailableReason string                  `json:"unavailableReason,omitempty"`
 	BaseURL           string                  `json:"baseUrl,omitempty"`
@@ -27,6 +28,12 @@ type Config struct {
 	Headers           []catalog.RequestHeader `json:"headers"`
 	TLS               TLSConfig               `json:"tls"`
 	ProtoFiles        map[string]string       `json:"protoFiles,omitempty"`
+}
+
+type VariableDefinition struct {
+	Mode   string                    `json:"mode"`
+	Value  string                    `json:"value,omitempty"`
+	Source *catalog.HTTPHeaderSource `json:"source,omitempty"`
 }
 
 // Resource is the public representation. Secret values are never returned.

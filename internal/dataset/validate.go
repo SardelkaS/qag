@@ -10,10 +10,11 @@ import (
 
 	"github.com/SardelkaS/qag/internal/catalog"
 	"github.com/SardelkaS/qag/internal/resources"
+	"github.com/SardelkaS/qag/internal/runs"
 )
 
 func Validate(doc Document) error {
-	if doc.Format != "qag" || doc.Version != Version {
+	if doc.Format != "qag" || doc.Version != Version && doc.Version != 1 {
 		return invalid("формат", "", "неподдерживаемая версия")
 	}
 	d := doc.Data
@@ -37,7 +38,7 @@ func Validate(doc Document) error {
 				name := r.Type().Field(f).Name
 				if strings.HasSuffix(name, "ID") && field.Kind() == reflect.String {
 					id := field.String()
-					optional := name == "RunID" && group == "callAttempts" || name == "VariantID" || name == "VariantVersionID" || name == "BatchID" && group == "callAttempts" || name == "AttemptID"
+					optional := name == "RunID" && group == "callAttempts" || name == "VariantID" || name == "VariantVersionID" || name == "BatchID" && group == "callAttempts" || name == "AttemptID" || name == "StepID" && group == "runBatches"
 					if id == "" && optional {
 						continue
 					}
@@ -176,6 +177,9 @@ func Validate(doc Document) error {
 		if e != nil {
 			return invalid("resourceVersions", r.ID, "config")
 		}
+		if err := resources.ValidateVariableDefinitions(config, r.Secrets, false); err != nil {
+			return invalid("resourceVersions", r.ID, "переменные")
+		}
 		// Historical sources may reference secrets of their frozen environment;
 		// transport validation below does not fetch them or contact any endpoint.
 		if config.UnavailableReason != "" {
@@ -248,6 +252,14 @@ func Validate(doc Document) error {
 	runSteps := map[string]map[string]bool{}
 	runBlocks := map[string]map[string]bool{}
 	for _, r := range d.Runs {
+		if !runs.ValidHistoryPolicy(r.HistoryPolicy) {
+			return invalid("runs", r.ID, "historyPolicy")
+		}
+		for _, reason := range r.RetentionReasons {
+			if r.HistoryPolicy == "unretained" && reason != "manual" {
+				return invalid("runs", r.ID, "historyPolicy/retention")
+			}
+		}
 		if _, ok := cases[r.TestCaseID]; !ok {
 			return invalid("runs", r.ID, "кейс")
 		}
@@ -379,6 +391,9 @@ func Validate(doc Document) error {
 		}
 	}
 	for _, b := range d.Batches {
+		if b.StepID != "" && !runSteps[b.RunID][b.StepID] {
+			return invalid("runBatches", b.ID, "шаг")
+		}
 		if _, ok := rr[b.RunID]; !ok || !oneOf(b.State, "running", "completed", "cancelled", "interrupted") || (b.State == "running") != (b.FinishedAt == nil) || !catalog.ValidID(b.IdempotencyKey) || b.RequestHash == "" {
 			return invalid("runBatches", b.ID, "состояние")
 		}
@@ -453,6 +468,21 @@ func Validate(doc Document) error {
 		attempts[a.ID] = a
 	}
 	for _, i := range d.BatchItems {
+		if batch, ok := batches[i.BatchID]; ok && batch.StepID != "" {
+			doc, _ := Value[catalog.TestCase](rr[i.RunID].Snapshot)
+			selected, e := runs.SelectStep(doc, batch.StepID)
+			found := false
+			if e == nil {
+				for _, st := range selected.Steps {
+					for _, bl := range st.Blocks {
+						found = found || bl.ID == i.BlockID
+					}
+				}
+			}
+			if !found {
+				return invalid("batchItems", i.RunID, "блок другого шага")
+			}
+		}
 		b, ok := batches[i.BatchID]
 		if !ok || b.RunID != i.RunID || !runBlocks[i.RunID][i.BlockID] || i.Position < 1 || !oneOf(i.State, "pending", "running", "completed", "cancelled", "interrupted") {
 			return invalid("batchItems", i.RunID, "элемент")

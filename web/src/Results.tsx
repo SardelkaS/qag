@@ -141,6 +141,13 @@ export function Results({
       </div>
       {!research && <ImageGallery caseId={attempt.testCaseId} images={expected.images} />}
       {research && <p className="muted small">Исследовательский вызов — без сравнения</p>}
+      {result?.variableSources?.map((source, i) => (
+        <div className={`source-result ${source.state}`} key={`variable-${i}`}>
+          <strong>Переменная {source.name}</strong>
+          <span>{source.state === 'reused' ? 'Значение из текущего прогона' : source.state === 'error' ? 'Ошибка HTTP-источника' : 'Значение получено из HTTP-источника'}</span>
+          {source.statusCode && <span>HTTP {source.statusCode}</span>}<span>{source.durationMs} ??</span>
+        </div>
+      ))}
       {result?.headerSources?.map((source, i) => (
         <div className={`source-result ${source.state}`} key={i}>
           <strong>Заголовок {source.headerName}</strong>
