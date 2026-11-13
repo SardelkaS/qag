@@ -18,6 +18,7 @@ import (
 )
 
 type HeaderSourceResult struct {
+	LogID      string `json:"logId,omitempty"`
 	HeaderID   string `json:"headerId"`
 	HeaderName string `json:"headerName"`
 	FetchMode  string `json:"fetchMode"`
@@ -30,6 +31,7 @@ type headerScope struct {
 	mu     sync.Mutex
 	cache  map[string]string
 	values map[string]bool
+	logIDs map[string]string
 }
 
 func (r *Runner) scopeHeaders(id string) *headerScope {
@@ -40,7 +42,7 @@ func (r *Runner) scopeHeaders(id string) *headerScope {
 	}
 	state := r.headers[id]
 	if state == nil {
-		state = &headerScope{cache: map[string]string{}, values: map[string]bool{}}
+		state = &headerScope{cache: map[string]string{}, values: map[string]bool{}, logIDs: map[string]string{}}
 		r.headers[id] = state
 	}
 	return state
@@ -56,6 +58,11 @@ func (r *Runner) resolveHeaders(ctx context.Context, scope string, block catalog
 	state := r.scopeHeaders(scope)
 	state.mu.Lock()
 	defer state.mu.Unlock()
+	knownMasks := map[string]string{}
+	for value := range state.values {
+		knownMasks[value] = value
+	}
+	addTraceSecrets(ctx, knownMasks)
 	secrets := map[string]string{}
 	for k, v := range res.Secrets {
 		secrets[k] = v
@@ -99,10 +106,13 @@ func (r *Runner) resolveHeaders(ctx context.Context, scope string, block catalog
 		value, found := state.cache[key]
 		if s.FetchMode == "per_run" && found {
 			trace.State = "reused"
+			trace.LogID = state.logIDs[key]
 		} else {
 			started := time.Now()
 			var status *int
-			value, status, failure = r.fetchHeader(ctx, s, res)
+			entry := &SourceTrace{Stage: "header_source", Name: h.Name, Source: &s}
+			value, status, failure = r.fetchHeader(WithSourceTrace(ctx, entry), s, res)
+			trace.LogID = entry.LogID
 			trace.StatusCode = status
 			trace.DurationMS = time.Since(started).Milliseconds()
 		}
@@ -130,6 +140,7 @@ func (r *Runner) resolveHeaders(ctx context.Context, scope string, block catalog
 		}
 		if s.FetchMode == "per_run" {
 			state.cache[key] = value
+			state.logIDs[key] = trace.LogID
 		}
 		h.Value = full
 		h.Source = nil
@@ -154,6 +165,9 @@ func (r *Runner) fetchHeader(ctx context.Context, s catalog.HTTPHeaderSource, re
 	}
 	cfg := resources.Config{BaseURL: u.Scheme + "://" + u.Host, TLS: s.TLS, Headers: []catalog.RequestHeader{}}
 	keys := map[string]string{}
+	for name, value := range res.Secrets {
+		keys[name] = value
+	}
 	if s.TLS.Mode == "mtls" {
 		keys["PRIVATE_KEY"] = res.Secrets[s.PrivateKeySecret]
 	}
@@ -191,12 +205,27 @@ func (r *Runner) fetchHeader(ctx context.Context, s catalog.HTTPHeaderSource, re
 	if actual.StatusCode == nil || *actual.StatusCode < 200 || *actual.StatusCode >= 300 {
 		return "", actual.StatusCode, fmt.Errorf("Источник заголовка вернул HTTP-статус вне 2xx")
 	}
-	value, err := extractHeaderValue(actual.Body, s.JSONPointer)
+	value, kind, err := extractSourceScalar(actual.Body, s.JSONPointer)
+	if entry, _ := ctx.Value(sourceTraceKey{}).(*SourceTrace); entry != nil {
+		entry.ValueType = kind
+	}
+	if err == nil && len(value) > 64<<10 {
+		err = fmt.Errorf("Значение источника превышает 64 KiB")
+	}
 	return value, actual.StatusCode, err
 }
+
+// FetchVariableSource shares the exact source transport/extraction pipeline.
+func (r *Runner) FetchVariableSource(ctx context.Context, s catalog.HTTPHeaderSource, res resources.Resolved) (string, *int, error) {
+	return r.fetchHeader(ctx, s, res)
+}
 func extractHeaderValue(body, pointer string) (string, error) {
-	fail := func() (string, error) {
-		return "", fmt.Errorf("Не удалось извлечь скалярное поле JSON источника заголовка")
+	value, _, err := extractSourceScalar(body, pointer)
+	return value, err
+}
+func extractSourceScalar(body, pointer string) (string, string, error) {
+	fail := func() (string, string, error) {
+		return "", "", fmt.Errorf("Не удалось извлечь скалярное поле JSON источника заголовка")
 	}
 	if !utf8.ValidString(body) {
 		return fail()
@@ -239,11 +268,11 @@ func extractHeaderValue(body, pointer string) (string, error) {
 	}
 	switch v := value.(type) {
 	case string:
-		return v, nil
+		return v, "string", nil
 	case json.Number:
-		return string(v), nil
+		return string(v), "number", nil
 	case bool:
-		return strconv.FormatBool(v), nil
+		return strconv.FormatBool(v), "boolean", nil
 	default:
 		return fail()
 	}

@@ -79,7 +79,7 @@ func smokeMCP(t *testing.T, ctx context.Context, base string, linux bool) string
 			t.Fatal("protocol negotiation")
 		}
 		tools, err := s.ListTools(ctx, nil)
-		if err != nil || len(tools.Tools) != 45 {
+		if err != nil || len(tools.Tools) != 50 {
 			t.Fatal("runtime tools", err)
 		}
 		info := smokeCall[builtin.Info](t, ctx, s, "qag_demo_get", map[string]any{})

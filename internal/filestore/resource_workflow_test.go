@@ -162,7 +162,7 @@ func TestLegacyYAMLReadAndNoOpDoNotUpgradeFile(t *testing.T) {
 	seed.Close()
 	originalJSON := doc.Data.Runs[0].Snapshot
 	b, _ := dataset.Encode(doc)
-	b = bytes.Replace(b, []byte("version: 3"), []byte("version: 1"), 1)
+	b = bytes.Replace(b, []byte("version: 4"), []byte("version: 1"), 1)
 	b = regexp.MustCompile(`(?m)^\s+historyPolicy: auto\n`).ReplaceAll(b, nil)
 	if err := os.WriteFile(p, b, 0600); err != nil {
 		t.Fatal(err)
@@ -200,7 +200,7 @@ func TestLegacyYAMLReadAndNoOpDoNotUpgradeFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	after, _ = os.ReadFile(p)
-	if !bytes.Contains(after, []byte("version: 3")) {
+	if !bytes.Contains(after, []byte("version: 4")) {
 		t.Fatal("mutation did not upgrade")
 	}
 }

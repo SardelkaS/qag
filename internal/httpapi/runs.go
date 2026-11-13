@@ -9,6 +9,7 @@ import (
 )
 
 func (s *Server) RegisterRuns(engine *service.Engine, reports ...*reporting.Service) {
+	s.registerDiagnostics(engine)
 	s.registerReports(engine, reports...)
 	s.register("POST /api/v1/test-cases/{id}/runs", func(r *http.Request) (any, error) {
 		var body RunStart

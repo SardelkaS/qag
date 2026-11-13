@@ -26,6 +26,7 @@ import { ReadOnlyNotice } from './ReadOnlyNotice'
 import History from './History'
 import { ThemeSwitch } from './ThemeSwitch'
 import { readPreference, writePreference } from './preferences'
+import CallLogs, { CallLogsProvider } from './CallLogs'
 
 type NameDialog = {
   allowEmpty?: boolean
@@ -42,7 +43,7 @@ export default function App() {
   const [demo, setDemo] = useState<DemoInfo | null>(null)
   const demoRef = useRef<DemoInfo | null>(null),
     userEnvironment = useRef(readPreference('qag.environment') ?? '')
-  const [view, setView] = useState<'cases' | 'resources'>('cases'),
+  const [view, setView] = useState<'cases' | 'resources' | 'logs'>('cases'),
     [archive, setArchive] = useState(false)
   const [folders, setFolders] = useState<Folder[]>([]),
     [cases, setCases] = useState<Record<string, TestCase[]>>({}),
@@ -460,6 +461,7 @@ export default function App() {
         setAttempts((old) => ({ ...old, [a.blockId]: a }))
     })
   return (
+    <CallLogsProvider>
     <div className="app-shell">
       {jiraOpen && saved && <JiraExport saved={saved} dirty={dirty} save={save} close={() => setJiraOpen(false)} />}
       <Sidebar
@@ -495,6 +497,7 @@ export default function App() {
             <span className="breadcrumb">
               {view === 'resources'
                 ? 'Настройки подключений'
+                : view === 'logs' ? 'Журнал вызовов'
                 : document?.name || 'Тест-кейсы'}
             </span>
             {dirty && view === 'cases' && (
@@ -540,7 +543,7 @@ export default function App() {
             </Notice>
           </div>
         )}
-        {view === 'resources' ? (
+        {view === 'logs' ? <CallLogs /> : view === 'resources' ? (
           <ResourcesPanel
             key={environmentId}
             environments={environments}
@@ -812,6 +815,7 @@ export default function App() {
         </Modal>
       )}
     </div>
+    </CallLogsProvider>
   )
 }
 

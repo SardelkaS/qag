@@ -9,9 +9,40 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SardelkaS/qag/internal/execution"
 	"github.com/SardelkaS/qag/internal/resources"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+func TestGuideProbeExampleMatchesContract(t *testing.T) {
+	schema := schemaFor[execution.ProbeInput]()
+	configureInput(schema, "qag_http_variable_probe_start")
+	resolved, err := schema.Resolve(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, m := range regexp.MustCompile("(?s)```json\\s*(.*?)```").FindAllStringSubmatch(agentGuide, -1) {
+		var value map[string]any
+		if json.Unmarshal([]byte(m[1]), &value) != nil || value["scope"] == nil {
+			continue
+		}
+		found = true
+		if err = resolved.Validate(value); err != nil {
+			t.Fatal("probe example/schema drift", err)
+		}
+		var input execution.ProbeInput
+		if json.Unmarshal([]byte(m[1]), &input) != nil || input.Source == nil {
+			t.Fatal("invalid probe example")
+		}
+		if _, err = resources.ProbeSource(resources.Resolved{Secrets: map[string]string{"CLIENT_SECRET": "fixture"}}, *input.Source); err != nil {
+			t.Fatal("probe example/domain drift", err)
+		}
+	}
+	if !found {
+		t.Fatal("probe example missing")
+	}
+}
 
 func TestGuideEnvironmentFormExampleMatchesCurrentContract(t *testing.T) {
 	schema := schemaFor[VariablesSet]()

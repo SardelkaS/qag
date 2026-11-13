@@ -1,5 +1,11 @@
 import type { components } from './generated/api'
 
+export type CallLog = components['schemas']['CallLog']
+export type LogSummary = components['schemas']['LogSummary']
+export type ProbeInput = components['schemas']['ProbeInput']
+export type HTTPVariableProbe = components['schemas']['HTTPVariableProbe']
+export type ProbeView = components['schemas']['ProbeView']
+
 export type VariableDefinition = components['schemas']['VariableDefinition']
 export type CaseExport = components['schemas']['CaseExport']
 export type Folder = components['schemas']['Folder']

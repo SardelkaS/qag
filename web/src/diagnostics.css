@@ -1,0 +1,26 @@
+.call-logs-page {padding:30px 38px;min-width:0}
+.call-logs-page.compact {padding:0}
+.log-filters {border:1px solid var(--border);padding:16px;margin-bottom:20px;border-radius:6px;background:var(--surface)}
+.log-filters details {margin:0 0 16px}
+.call-log-table {background:var(--surface);margin:16px 0}
+.call-log-table small {display:block;color:var(--muted);font-size:10px;margin-top:5px}
+.call-log-table .text-button {text-align:left;white-space:normal;line-height:1.6}
+.log-details {border:1px solid var(--border);border-radius:6px;padding:20px;margin-top:24px;min-width:0}
+.log-request-response {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+.log-request-response > section {min-width:0}
+.log-request-response .protocol-summary {overflow-wrap:anywhere}
+.call-log-overlay .modal-backdrop {z-index:160}
+.call-log-overlay .modal {width:1200px}
+.variable-probe {border-top:1px solid var(--border);margin-top:16px;padding-top:14px}
+.probe-result {padding-top:14px;min-width:0}
+.form-error-banner {position:sticky;z-index:30;margin-bottom:16px;flex-shrink:0;background:var(--surface);border-radius:5px;max-height:35vh;overflow:auto}
+.form-error-banner .notice {margin:0;border-color:var(--danger)}
+.form-error-banner .notice > div {display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0}
+.form-modal {display:flex;flex-direction:column;overflow:hidden}
+.form-modal > header {flex-shrink:0}
+.form-modal .form-error-banner {position:static;max-height:24vh}
+.form-modal > form {display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.modal-form-scroll {overflow:auto;min-height:0;padding:0 5px}
+.form-modal .modal-actions {flex-shrink:0;margin-top:0;padding-top:16px;border-top:1px solid var(--border);flex-wrap:wrap}
+@media(max-width:1100px){.log-request-response{grid-template-columns:1fr}.call-logs-page{padding:24px}.call-log-overlay .modal{padding:18px}}
+@media(max-width:600px){.call-logs-page{padding:16px}.call-log-overlay .modal-backdrop{padding:8px}.form-modal{padding:16px}.log-details{padding:12px}.form-error-banner{max-height:30vh}}

@@ -24,25 +24,36 @@ type job struct {
 	persistencePending bool
 }
 type Engine struct {
-	Catalog   ports.Catalog
-	Resources ports.Resources
-	Runs      ports.Runs
-	Runner    *execution.Runner
-	ctx       context.Context
-	stop      context.CancelFunc
-	mu        sync.Mutex
-	jobs      map[string]job
-	batches   map[string]bool
-	fences    sync.Map
-	slots     chan struct{}
-	wg        sync.WaitGroup
+	Catalog      ports.Catalog
+	Resources    ports.Resources
+	Runs         ports.Runs
+	Runner       *execution.Runner
+	ctx          context.Context
+	stop         context.CancelFunc
+	mu           sync.Mutex
+	jobs         map[string]job
+	pendingLogs  map[string]execution.CallLog
+	probeValues  map[string]probeValue
+	probePending map[string]execution.HTTPVariableProbe
+	probeNow     func() time.Time
+	batches      map[string]bool
+	fences       sync.Map
+	slots        chan struct{}
+	wg           sync.WaitGroup
 }
 
 func New(ctx context.Context, c ports.Catalog, res ports.Resources, r ports.Runs) *Engine {
 	root, stop := context.WithCancel(ctx)
-	return &Engine{Catalog: c, Resources: res, Runs: r, Runner: execution.NewRunner(), ctx: root, stop: stop, jobs: map[string]job{}, batches: map[string]bool{}, slots: make(chan struct{}, 4)}
+	return &Engine{Catalog: c, Resources: res, Runs: r, Runner: execution.NewRunner(), ctx: root, stop: stop, jobs: map[string]job{}, pendingLogs: map[string]execution.CallLog{}, probeValues: map[string]probeValue{}, probePending: map[string]execution.HTTPVariableProbe{}, probeNow: time.Now, batches: map[string]bool{}, slots: make(chan struct{}, 4)}
 }
-func (e *Engine) Close() { e.stop(); e.wg.Wait(); e.Runner.ClearHeaderScopes() }
+func (e *Engine) Close() {
+	e.stop()
+	e.wg.Wait()
+	e.Runner.ClearHeaderScopes()
+	e.mu.Lock()
+	clear(e.probeValues)
+	e.mu.Unlock()
+}
 func requestHash(values ...any) string {
 	data, _ := json.Marshal(values)
 	sum := sha256.Sum256(data)
@@ -285,6 +296,7 @@ func (e *Engine) execute(ctx context.Context, cancel context.CancelFunc, attempt
 		}
 		return e.Runs.CheckAttemptRunnable(ctx, attempt.ID)
 	})
+	ctx = execution.WithTraceRecorder(ctx, e.attemptJournal(attempt, res))
 	execute := e.Runner.Execute
 	if attempt.VariantID != "" {
 		execute = e.Runner.ExecuteResearch

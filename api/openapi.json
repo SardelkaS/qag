@@ -331,6 +331,49 @@
         ],
         "type": "object"
       },
+      "CallLog": {
+        "additionalProperties": false,
+        "properties": {
+          "bodyOmittedReason": {
+            "type": "string"
+          },
+          "incompleteReason": {
+            "type": "string"
+          },
+          "request": {
+            "$ref": "#/components/schemas/LogRequest"
+          },
+          "response": {
+            "$ref": "#/components/schemas/ExecutionResult"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/LogSummary"
+          }
+        },
+        "required": [
+          "summary",
+          "request"
+        ],
+        "type": "object"
+      },
+      "CallLogPage": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LogSummary"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "CallRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1024,6 +1067,84 @@
         ],
         "type": "object"
       },
+      "HTTPVariableProbe": {
+        "additionalProperties": false,
+        "properties": {
+          "durationMs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "environmentId": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "errorCode": {
+            "type": "string"
+          },
+          "finishedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "logId": {
+            "type": "string"
+          },
+          "persistencePending": {
+            "type": "boolean"
+          },
+          "resourceId": {
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "environment",
+              "resource"
+            ],
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/HTTPHeaderSource"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "queued",
+              "running",
+              "completed",
+              "error",
+              "timed_out",
+              "cancelled",
+              "interrupted"
+            ],
+            "type": "string"
+          },
+          "statusCode": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "variableName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "scope",
+          "environmentId",
+          "source",
+          "state",
+          "startedAt",
+          "durationMs",
+          "persistencePending"
+        ],
+        "type": "object"
+      },
       "HeaderSourceResult": {
         "additionalProperties": false,
         "properties": {
@@ -1041,6 +1162,9 @@
             "type": "string"
           },
           "headerName": {
+            "type": "string"
+          },
+          "logId": {
             "type": "string"
           },
           "state": {
@@ -1121,6 +1245,177 @@
         ],
         "type": "object"
       },
+      "LogRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "headers": {
+            "items": {
+              "$ref": "#/components/schemas/KeyValue"
+            },
+            "type": "array"
+          },
+          "method": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "parameters": {
+            "items": {
+              "$ref": "#/components/schemas/TypedValue"
+            },
+            "type": "array"
+          },
+          "protocol": {
+            "enum": [
+              "http",
+              "grpc",
+              "postgresql"
+            ],
+            "type": "string"
+          },
+          "sql": {
+            "type": "string"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "protocol",
+          "headers",
+          "body",
+          "truncated"
+        ],
+        "type": "object"
+      },
+      "LogSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "attemptId": {
+            "type": "string"
+          },
+          "blockId": {
+            "type": "string"
+          },
+          "durationMs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "environmentId": {
+            "type": "string"
+          },
+          "environmentName": {
+            "type": "string"
+          },
+          "environmentVersionId": {
+            "type": "string"
+          },
+          "finishedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "legacy": {
+            "type": "boolean"
+          },
+          "origin": {
+            "type": "string"
+          },
+          "persistencePending": {
+            "type": "boolean"
+          },
+          "position": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "probeId": {
+            "type": "string"
+          },
+          "protocol": {
+            "enum": [
+              "http",
+              "grpc",
+              "postgresql"
+            ],
+            "type": "string"
+          },
+          "redacted": {
+            "type": "boolean"
+          },
+          "requestSent": {
+            "type": "boolean"
+          },
+          "resourceId": {
+            "type": "string"
+          },
+          "resourceName": {
+            "type": "string"
+          },
+          "resourceVersionId": {
+            "type": "string"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "sourceName": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "queued",
+              "running",
+              "completed",
+              "error",
+              "timed_out",
+              "cancelled",
+              "interrupted"
+            ],
+            "type": "string"
+          },
+          "testCaseId": {
+            "type": "string"
+          },
+          "variantId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "environmentId",
+          "environmentName",
+          "protocol",
+          "origin",
+          "stage",
+          "position",
+          "state",
+          "startedAt",
+          "durationMs",
+          "requestSent",
+          "legacy",
+          "redacted",
+          "persistencePending"
+        ],
+        "type": "object"
+      },
       "PNGPart": {
         "additionalProperties": false,
         "properties": {
@@ -1144,6 +1439,95 @@
           "part",
           "total",
           "dataBase64"
+        ],
+        "type": "object"
+      },
+      "ProbeInput": {
+        "additionalProperties": false,
+        "properties": {
+          "environmentId": {
+            "type": "string"
+          },
+          "environmentRevision": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "idempotencyKey": {
+            "type": "string"
+          },
+          "resourceId": {
+            "type": "string"
+          },
+          "resourceRevision": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "resourceVariables": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/VariableDefinition"
+            },
+            "type": "object"
+          },
+          "scope": {
+            "enum": [
+              "environment",
+              "resource"
+            ],
+            "type": "string"
+          },
+          "secrets": {
+            "$ref": "#/components/schemas/SecretChanges"
+          },
+          "source": {
+            "$ref": "#/components/schemas/HTTPHeaderSource"
+          },
+          "timeoutSeconds": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "variableName": {
+            "type": "string"
+          },
+          "variables": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "scope",
+          "environmentId",
+          "environmentRevision",
+          "idempotencyKey"
+        ],
+        "type": "object"
+      },
+      "ProbeView": {
+        "additionalProperties": false,
+        "properties": {
+          "extractedValue": {
+            "type": "string"
+          },
+          "formattedValue": {
+            "type": "string"
+          },
+          "probe": {
+            "$ref": "#/components/schemas/HTTPVariableProbe"
+          },
+          "valueAvailable": {
+            "type": "boolean"
+          },
+          "valueType": {
+            "type": "string"
+          },
+          "valueUnavailable": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "probe",
+          "valueAvailable"
         ],
         "type": "object"
       },
@@ -2382,6 +2766,9 @@
           "fetchMode": {
             "type": "string"
           },
+          "logId": {
+            "type": "string"
+          },
           "name": {
             "type": "string"
           },
@@ -2642,6 +3029,194 @@
           }
         },
         "summary": "Отменить попытку",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/call-logs": {
+      "get": {
+        "operationId": "listCallLogs",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "protocol",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "origin",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "stage",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "environmentId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "resourceId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "testCaseId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "runId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "attemptId",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "probeId",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallLogPage"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "security": [],
+        "summary": "Журнал всех вызовов",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/call-logs/{id}": {
+      "get": {
+        "operationId": "getCallLog",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "pattern": "^(legacy:)?[0-9a-fA-F-]{36}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallLog"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "security": [],
+        "summary": "Безопасные запрос и ответ",
         "tags": [
           "qag"
         ]
@@ -3335,6 +3910,147 @@
         },
         "security": [],
         "summary": "Проверить готовность",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/http-variable-probes": {
+      "post": {
+        "operationId": "startHTTPVariableProbe",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProbeInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPVariableProbe"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "summary": "Проверить HTTP-переменную без сохранения draft",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/http-variable-probes/{id}": {
+      "get": {
+        "operationId": "getHTTPVariableProbe",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProbeView"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "security": [],
+        "summary": "Состояние и временное значение проверки",
+        "tags": [
+          "qag"
+        ]
+      }
+    },
+    "/http-variable-probes/{id}/cancel": {
+      "post": {
+        "operationId": "cancelHTTPVariableProbe",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPVariableProbe"
+                }
+              }
+            },
+            "description": "Успешный ответ"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "summary": "Отменить проверку переменной",
         "tags": [
           "qag"
         ]

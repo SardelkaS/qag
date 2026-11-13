@@ -38,6 +38,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/call-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Журнал всех вызовов */
+        get: operations["listCallLogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/call-logs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Безопасные запрос и ответ */
+        get: operations["getCallLog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/demo": {
         parameters: {
             query?: never;
@@ -189,6 +223,57 @@ export interface paths {
         get: operations["getHealth"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/http-variable-probes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Проверить HTTP-переменную без сохранения draft */
+        post: operations["startHTTPVariableProbe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/http-variable-probes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Состояние и временное значение проверки */
+        get: operations["getHTTPVariableProbe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/http-variable-probes/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Отменить проверку переменной */
+        post: operations["cancelHTTPVariableProbe"];
         delete?: never;
         options?: never;
         head?: never;
@@ -659,6 +744,17 @@ export interface components {
             /** Format: int64 */
             timeoutSeconds: number;
         };
+        CallLog: {
+            bodyOmittedReason?: string;
+            incompleteReason?: string;
+            request: components["schemas"]["LogRequest"];
+            response?: components["schemas"]["ExecutionResult"];
+            summary: components["schemas"]["LogSummary"];
+        };
+        CallLogPage: {
+            items: components["schemas"]["LogSummary"][];
+            nextCursor?: string;
+        };
         CallRequest: {
             expected?: components["schemas"]["Expectation"];
             grpc?: components["schemas"]["GRPCRequest"];
@@ -832,6 +928,29 @@ export interface components {
             path: string;
             query: components["schemas"]["KeyValue"][];
         };
+        HTTPVariableProbe: {
+            /** Format: int64 */
+            durationMs: number;
+            environmentId: string;
+            error?: string;
+            errorCode?: string;
+            /** Format: date-time */
+            finishedAt?: string;
+            id: string;
+            logId?: string;
+            persistencePending: boolean;
+            resourceId?: string;
+            /** @enum {string} */
+            scope: "environment" | "resource";
+            source: components["schemas"]["HTTPHeaderSource"];
+            /** Format: date-time */
+            startedAt: string;
+            /** @enum {string} */
+            state: "queued" | "running" | "completed" | "error" | "timed_out" | "cancelled" | "interrupted";
+            /** Format: int64 */
+            statusCode?: number;
+            variableName?: string;
+        };
         HeaderSourceResult: {
             /** Format: int64 */
             durationMs: number;
@@ -839,6 +958,7 @@ export interface components {
             fetchMode: string;
             headerId: string;
             headerName: string;
+            logId?: string;
             state: string;
             /** Format: int64 */
             statusCode?: number;
@@ -859,6 +979,53 @@ export interface components {
             name: string;
             value: string;
         };
+        LogRequest: {
+            address?: string;
+            body: string;
+            headers: components["schemas"]["KeyValue"][];
+            method?: string;
+            mode?: string;
+            parameters?: components["schemas"]["TypedValue"][];
+            /** @enum {string} */
+            protocol: "http" | "grpc" | "postgresql";
+            sql?: string;
+            truncated: boolean;
+            url?: string;
+        };
+        LogSummary: {
+            attemptId?: string;
+            blockId?: string;
+            /** Format: int64 */
+            durationMs: number;
+            environmentId: string;
+            environmentName: string;
+            environmentVersionId?: string;
+            /** Format: date-time */
+            finishedAt?: string;
+            id: string;
+            legacy: boolean;
+            origin: string;
+            persistencePending: boolean;
+            /** Format: int64 */
+            position: number;
+            probeId?: string;
+            /** @enum {string} */
+            protocol: "http" | "grpc" | "postgresql";
+            redacted: boolean;
+            requestSent: boolean;
+            resourceId?: string;
+            resourceName?: string;
+            resourceVersionId?: string;
+            runId?: string;
+            sourceName?: string;
+            stage: string;
+            /** Format: date-time */
+            startedAt: string;
+            /** @enum {string} */
+            state: "queued" | "running" | "completed" | "error" | "timed_out" | "cancelled" | "interrupted";
+            testCaseId?: string;
+            variantId?: string;
+        };
         PNGPart: {
             dataBase64: string;
             groupId: string;
@@ -866,6 +1033,36 @@ export interface components {
             part: number;
             /** Format: int64 */
             total: number;
+        };
+        ProbeInput: {
+            environmentId: string;
+            /** Format: int64 */
+            environmentRevision: number;
+            idempotencyKey: string;
+            resourceId?: string;
+            /** Format: int64 */
+            resourceRevision?: number;
+            resourceVariables?: {
+                [key: string]: components["schemas"]["VariableDefinition"];
+            };
+            /** @enum {string} */
+            scope: "environment" | "resource";
+            secrets?: components["schemas"]["SecretChanges"];
+            source?: components["schemas"]["HTTPHeaderSource"];
+            /** Format: int64 */
+            timeoutSeconds?: number;
+            variableName?: string;
+            variables?: {
+                [key: string]: string;
+            };
+        };
+        ProbeView: {
+            extractedValue?: string;
+            formattedValue?: string;
+            probe: components["schemas"]["HTTPVariableProbe"];
+            valueAvailable: boolean;
+            valueType?: string;
+            valueUnavailable?: string;
         };
         ProtoBundle: {
             files: {
@@ -1189,6 +1386,7 @@ export interface components {
             durationMs: number;
             errorCode?: string;
             fetchMode: string;
+            logId?: string;
             name: string;
             scope?: string;
             state: string;
@@ -1332,6 +1530,73 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Attempt"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listCallLogs: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+                from?: string;
+                to?: string;
+                protocol?: string;
+                origin?: string;
+                stage?: string;
+                state?: string;
+                environmentId?: string;
+                resourceId?: string;
+                testCaseId?: string;
+                runId?: string;
+                attemptId?: string;
+                probeId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Успешный ответ */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CallLogPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getCallLog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Успешный ответ */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CallLog"];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -1712,6 +1977,89 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Health"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    startHTTPVariableProbe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProbeInput"];
+            };
+        };
+        responses: {
+            /** @description Успешный ответ */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPVariableProbe"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getHTTPVariableProbe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Успешный ответ */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProbeView"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    cancelHTTPVariableProbe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Успешный ответ */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPVariableProbe"];
                 };
             };
             400: components["responses"]["BadRequest"];

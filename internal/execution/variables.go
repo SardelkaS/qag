@@ -15,6 +15,7 @@ import (
 )
 
 type VariableSourceResult struct {
+	LogID      string `json:"logId,omitempty"`
 	Scope      string `json:"scope,omitempty"`
 	Name       string `json:"name"`
 	FetchMode  string `json:"fetchMode"`
@@ -50,6 +51,11 @@ func (r *Runner) resolveVariables(ctx context.Context, scope string, block catal
 	state.mu.Lock()
 	defer state.mu.Unlock()
 	masks := map[string]string{}
+	knownMasks := map[string]string{}
+	for value := range state.values {
+		knownMasks[value] = value
+	}
+	addTraceSecrets(ctx, knownMasks)
 	for k, v := range res.Secrets {
 		masks[k] = v
 	}
@@ -66,9 +72,16 @@ func (r *Runner) resolveVariables(ctx context.Context, scope string, block catal
 		value, found := state.cache[key]
 		if err == nil && source.FetchMode == "per_run" && found {
 			trace.State = "reused"
+			trace.LogID = state.logIDs[key]
 		} else if err == nil {
 			started := time.Now()
-			value, trace.StatusCode, err = r.fetchHeader(ctx, source, sourceContext)
+			stage := "resource_variable_source"
+			if owner == "environment" {
+				stage = "environment_variable_source"
+			}
+			entry := &SourceTrace{Stage: stage, Name: name, Source: &source}
+			value, trace.StatusCode, err = r.fetchHeader(WithSourceTrace(ctx, entry), source, sourceContext)
+			trace.LogID = entry.LogID
 			trace.DurationMS = time.Since(started).Milliseconds()
 			if err == nil {
 				state.values[value] = true
@@ -85,6 +98,7 @@ func (r *Runner) resolveVariables(ctx context.Context, scope string, block catal
 		}
 		if source.FetchMode == "per_run" {
 			state.cache[key] = value
+			state.logIDs[key] = trace.LogID
 		}
 		state.values[value] = true
 		values[name] = value

@@ -12,19 +12,31 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/SardelkaS/qag/internal/catalog"
+	"github.com/SardelkaS/qag/internal/resources"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/SardelkaS/qag/internal/catalog"
-	"github.com/SardelkaS/qag/internal/resources"
 )
 
-func (r *Runner) sql(ctx context.Context, b catalog.Block, res resources.Resolved) (Result, error) {
-	result := Result{Protocol: "postgresql", Columns: []catalog.Column{}, Rows: [][]catalog.TypedValue{}}
+func (r *Runner) sql(ctx context.Context, b catalog.Block, res resources.Resolved) (result Result, err error) {
+	result = Result{Protocol: "postgresql", Columns: []catalog.Column{}, Rows: [][]catalog.TypedValue{}}
 	if err := checkRequestGate(ctx); err != nil {
 		return result, err
 	}
 	c := res.Resource.Config
+	sent, finish, err := beginExchange(ctx, LogRequest{Protocol: "postgresql", Address: c.Address + "/" + c.Database, SQL: b.SQL.Query, Parameters: b.SQL.Parameters, Mode: b.SQL.Mode, Headers: []catalog.KeyValue{}}, res.Secrets)
+	if err != nil {
+		return result, err
+	}
+	defer func() {
+		if e := finish(result, err); e != nil {
+			err = e
+		}
+	}()
+	if err = checkRequestGate(ctx); err != nil {
+		return result, err
+	}
 	uri := url.URL{Scheme: "postgresql", Host: c.Address, Path: "/" + c.Database, User: url.UserPassword(c.Username, res.Secrets["PASSWORD"]), RawQuery: "sslmode=disable"}
 	config, err := pgx.ParseConfig(uri.String())
 	if err != nil {
@@ -57,6 +69,10 @@ func (r *Runner) sql(ctx context.Context, b catalog.Block, res resources.Resolve
 		args = append(args, arg)
 	}
 	// Explicit prepare rejects multiple statements even with zero parameters.
+	if err = checkRequestGate(ctx); err != nil {
+		return result, err
+	}
+	sent()
 	if _, err = conn.Prepare(ctx, "qag_call", b.SQL.Query); err != nil {
 		return sqlFailure(result, err)
 	}

@@ -23,6 +23,17 @@ func page(p Page) (int, error) {
 }
 func (s *Server) registerTools() {
 	e := s.options.Engine
+	addTool(s, "qag_call_logs_list", "Общий журнал HTTP/gRPC/SQL, пробных вызовов, вариантов и HTTP-источников. Фильтры и курсор; от новых к старым, без тел в списке и без сети.", true, false, false, func(ctx context.Context, in execution.LogFilter) (catalog.Page[execution.LogSummary], error) {
+		return e.ListLogs(ctx, in)
+	})
+	addTool(s, "qag_call_log_get", "Запрос и ответ записи журнала после маскирования. Legacy ID начинается с legacy:. Чтение не выполняет запрос заново.", true, false, false, func(ctx context.Context, in IDInput) (execution.CallLog, error) { return e.GetLog(ctx, in.ID) })
+	addTool(s, "qag_http_variable_probe_start", "Явно проверить сохранённую HTTP-переменную окружения/ресурса либо source draft. Укажите revisions, UUID idempotencyKey; секретные изменения временные. Возвращает probe ID без сохранения draft/прогона; для результата используйте probe_get.", false, true, true, func(ctx context.Context, in execution.ProbeInput) (execution.HTTPVariableProbe, error) {
+		return e.StartProbe(ctx, in)
+	})
+	addTool(s, "qag_http_variable_probe_get", "Состояние проверки и временные extractedValue/formattedValue (10 минут, до 128 результатов). Только здесь значение открыто; журнал маскирован. valueUnavailable после истечения/перезапуска; чтение не вызывает источник.", true, false, false, func(ctx context.Context, in IDInput) (execution.ProbeView, error) { return e.GetProbe(ctx, in.ID) })
+	addTool(s, "qag_http_variable_probe_cancel", "Явно отменить проверку HTTP-переменной; внешний эффект уже отправленного запроса не откатывается.", false, false, true, func(ctx context.Context, in IDInput) (execution.HTTPVariableProbe, error) {
+		return e.CancelProbe(ctx, in.ID)
+	})
 	addTool(s, "qag_run_step_execute", "Выполнить только исходные блоки выбранного шага активного прогона; возвращает устойчивую очередь. Ручные статусы не меняются; повтор потерянного ответа — с тем же ключом.", false, true, true, func(ctx context.Context, in StepExecute) (runs.Batch, error) {
 		return e.StartStep(ctx, in.RunID, in.StepID, in.IdempotencyKey)
 	})

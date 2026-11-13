@@ -456,6 +456,7 @@ func (r *Runs) Delete(ctx context.Context, id string) error {
 		d.RunSteps = filter(d.RunSteps, func(v dataset.RunStep) bool { return v.RunID != id })
 		d.RunResourceVersions = filter(d.RunResourceVersions, func(v dataset.RunResourceVersion) bool { return v.RunID != id })
 		d.CallAttempts = filter(d.CallAttempts, func(v dataset.CallAttempt) bool { return v.RunID != id })
+		d.CallLogs = filter(d.CallLogs, func(v dataset.CallLog) bool { return v.RunID != id })
 		d.Variants = filter(d.Variants, func(v dataset.Variant) bool { return v.RunID != id })
 		d.VariantVersions = filter(d.VariantVersions, func(v dataset.VariantVersion) bool { return v.RunID != id })
 		d.Batches = filter(d.Batches, func(v dataset.Batch) bool { return v.RunID != id })
@@ -500,6 +501,37 @@ func (r *Runs) Recover(ctx context.Context) error {
 				t := now()
 				a.FinishedAt = &t
 				a.Result = dataset.Raw(runs.InterruptedResult("interrupted"))
+			}
+		}
+		for i := range d.HTTPVariableProbes {
+			v := &d.HTTPVariableProbes[i]
+			if execution.ActiveState(v.State) {
+				p, e := dataset.Value[execution.HTTPVariableProbe](v.Payload)
+				if e != nil {
+					return e
+				}
+				t := now()
+				p.State = "interrupted"
+				p.FinishedAt = &t
+				p.ErrorCode = "interrupted"
+				p.Error = "Проверка прервана; запрос мог повлиять на внешний сервис"
+				v.State = p.State
+				v.FinishedAt = &t
+				v.Payload = dataset.Raw(p)
+			}
+		}
+		for i := range d.CallLogs {
+			v := &d.CallLogs[i]
+			if execution.ActiveState(v.State) {
+				l, e := dataset.Value[execution.CallLog](v.Payload)
+				if e != nil {
+					return e
+				}
+				t := now()
+				l.Summary.State = "interrupted"
+				l.Summary.FinishedAt = &t
+				l.IncompleteReason = "Выполнение прервано; внешний эффект неизвестен"
+				*v = logRow(l)
 			}
 		}
 		return nil

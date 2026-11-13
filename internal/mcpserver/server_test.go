@@ -95,7 +95,7 @@ func TestBothProtocolsAndStrictPublicToolContracts(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(tools.Tools) != 45 {
+			if len(tools.Tools) != 50 {
 				t.Fatalf("tools: %d", len(tools.Tools))
 			}
 			if version == "2026-07-28" && (tools.CacheScope != "private" || tools.TTLMs != 0) {

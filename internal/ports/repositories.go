@@ -30,6 +30,7 @@ type Catalog interface {
 var _ Catalog = (*catalog.Repository)(nil)
 
 type Resources interface {
+	ResolveProbe(context.Context, string, string) (resources.Resolved, error)
 	GetEnvironment(ctx context.Context, id string) (resources.Environment, error)
 	ListEnvironments(ctx context.Context, limit int, cursor string) (catalog.Page[resources.Environment], error)
 	SaveEnvironment(ctx context.Context, id, value string, revision int64, variables map[string]string, changes resources.SecretChanges) (resources.Environment, error)
@@ -46,6 +47,7 @@ type Resources interface {
 var _ Resources = (*resources.Repository)(nil)
 
 type Runs interface {
+	Diagnostics
 	GetAttempt(ctx context.Context, id string) (execution.Attempt, error)
 	LookupAttempt(ctx context.Context, key, hash string) (execution.Attempt, bool, error)
 	BeginAttempt(ctx context.Context, candidateID, caseID, runID string, revision int64, block catalog.Block, snapshot resources.Snapshot, safeBlock catalog.Block, key, hash string, options ...runs.AttemptOptions) (execution.Attempt, bool, error)
@@ -70,6 +72,19 @@ type Runs interface {
 	Delete(ctx context.Context, id string) error
 	Recover(ctx context.Context) error
 	SaveVariant(ctx context.Context, runID, blockID, id, name string, revision int64, request *catalog.CallRequest) (runs.Variant, error)
+}
+
+// Diagnostics only accepts durable safe projections; live probe values never
+// cross this boundary.
+type Diagnostics interface {
+	BeginLog(context.Context, execution.CallLog) error
+	CompleteLog(context.Context, execution.CallLog) error
+	GetLog(context.Context, string) (execution.CallLog, error)
+	ListLogs(context.Context, execution.LogFilter) (catalog.Page[execution.LogSummary], error)
+	BeginProbe(context.Context, execution.HTTPVariableProbe, string, string) (execution.HTTPVariableProbe, bool, error)
+	LookupProbe(context.Context, string, string) (execution.HTTPVariableProbe, bool, error)
+	GetProbe(context.Context, string) (execution.HTTPVariableProbe, error)
+	UpdateProbe(context.Context, execution.HTTPVariableProbe) (execution.HTTPVariableProbe, error)
 }
 
 var _ Runs = (*runs.Repository)(nil)

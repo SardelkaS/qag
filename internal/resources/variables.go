@@ -94,7 +94,7 @@ func CheckEnvironmentNames(config Config, secretNames []string, variables map[st
 
 // Environment sources never inherit a target resource's credentials or locals.
 func (res Resolved) EnvironmentSourceContext() Resolved {
-	return Resolved{Variables: res.EnvironmentVariables, Secrets: res.EnvironmentSecrets, EnvironmentHTTPVariables: res.EnvironmentHTTPVariables, EnvironmentVariables: res.EnvironmentVariables, EnvironmentSecrets: res.EnvironmentSecrets}
+	return Resolved{EnvironmentID: res.EnvironmentID, EnvironmentName: res.EnvironmentName, EnvironmentRevision: res.EnvironmentRevision, EnvironmentVersionID: res.EnvironmentVersionID, Variables: res.EnvironmentVariables, Secrets: res.EnvironmentSecrets, EnvironmentHTTPVariables: res.EnvironmentHTTPVariables, EnvironmentVariables: res.EnvironmentVariables, EnvironmentSecrets: res.EnvironmentSecrets}
 }
 
 func ValidateVariableDefinitions(config Config, secrets map[string]string, checkTLS bool) error {

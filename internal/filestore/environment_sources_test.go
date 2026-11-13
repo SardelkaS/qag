@@ -85,8 +85,8 @@ func TestEnvironmentSourcesAndFullResourceSurviveRestart(t *testing.T) {
 		t.Fatal("failed disk write published")
 	}
 	data, _ := os.ReadFile(p)
-	if !strings.Contains(string(data), "version: 3") || !strings.Contains(string(data), "jsonPointer:") {
-		t.Fatal("missing v3 or source fields")
+	if !strings.Contains(string(data), "version: 4") || !strings.Contains(string(data), "jsonPointer:") {
+		t.Fatal("missing v4 or source fields")
 	}
 	s.Close()
 	s, err = filestore.Open(p, false)

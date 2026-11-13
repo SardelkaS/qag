@@ -1,10 +1,10 @@
 # MCP API qag
 
-qag предоставляет 45 типизированных инструмента через stateless Streamable HTTP на точном пути `/mcp`. Используется официальный Go SDK v1.8.0, поддерживаются `2026-07-28` (discovery) и `2025-11-25` (initialize). Все операции используют существующие Engine, репозитории, миграции и shutdown. Подключение клиента не запускает второй экземпляр приложения и не повторяет вызовы.
+qag предоставляет 50 типизированных инструментов через stateless Streamable HTTP на точном пути `/mcp`. Используется официальный Go SDK v1.8.0, поддерживаются `2026-07-28` (discovery) и `2025-11-25` (initialize). Все операции используют существующие Engine, репозитории, миграции и shutdown. Подключение клиента не запускает второй экземпляр приложения и не повторяет вызовы.
 
 ## Подключение
 
-MCP включён при каждом запуске qag. В клиенте укажите **`http://127.0.0.1:8080/mcp`**, а при опубликованном порте 18088 — `http://127.0.0.1:18088/mcp`. Авторизация, токен и браузерная сессия не требуются. Все 45 инструмента и выданные артефакты доступны без отдельной настройки доступа.
+MCP включён при каждом запуске qag. В клиенте укажите **`http://127.0.0.1:8080/mcp`**, а при опубликованном порте 18088 — `http://127.0.0.1:18088/mcp`. Авторизация, токен и браузерная сессия не требуются. Все 50 инструментов и выданные артефакты доступны без отдельной настройки доступа.
 
 На точном пути `/mcp` не применяются проверки Host, Origin, cross-site и SDK localhost protection. CORS разрешает любой Origin; OPTIONS принимает запрошенные заголовки и возвращает 204. Браузерный API `/api` использует прежние Host/Origin/CSRF-проверки. Нативный listener и публикация порта Compose настраиваются как раньше — см. [README](../README.md#mcp).
 
@@ -24,10 +24,15 @@ SDK отправляет RPC через POST с `Content-Type: application/json`
 
 ## Каталог инструментов
 
-Знак `?` обозначает необязательный параметр; состав вложенных `config`, `steps`, `request` и результата указан в JSON Schema. Все 45 инструмента:
+Знак `?` обозначает необязательный параметр; состав вложенных `config`, `steps`, `request` и результата указан в JSON Schema. Все 50 инструментов:
 
 | Инструмент | Параметры | Результат / действие |
 |---|---|---|
+| `qag_call_logs_list` | `from?, to?, protocol?, origin?, stage?, state?, environmentId?, resourceId?, testCaseId?, runId?, attemptId?, probeId?, limit?, cursor?` | Общий журнал, новые записи первыми; без крупных тел |
+| `qag_call_log_get` | `id` | Маскированный запрос/ответ; legacy ID: `legacy:<attemptId>` |
+| `qag_http_variable_probe_start` | `scope, environmentId, environmentRevision, idempotencyKey, resourceId?, resourceRevision?, variableName?, source?, variables?, resourceVariables?, secrets?, timeoutSeconds?` | ID отдельной проверки источника, без сохранения draft/прогона |
+| `qag_http_variable_probe_get` | `id` | `probe`, временные `extractedValue`, `formattedValue`, `valueType`, `valueAvailable`/`valueUnavailable` |
+| `qag_http_variable_probe_cancel` | `id` | Явная отмена проверки без отката внешнего эффекта |
 | `qag_status` | `{}` | Readiness, протоколы, возможности clipboard и лимиты; без конфигурации/credentials |
 | `qag_demo_get` | `{}` | Стабильные ID встроенного кейса, окружения и трёх ресурсов |
 | `qag_folders_list` | `archived?, limit?, cursor?` | Страница папок выбранной вкладки |

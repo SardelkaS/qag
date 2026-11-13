@@ -60,10 +60,12 @@ export function Modal({
   title,
   children,
   onClose,
+  className = '',
 }: {
   title: string
   children: ReactNode
   onClose: () => void
+  className?: string
 }) {
   return (
     <div
@@ -72,7 +74,7 @@ export function Modal({
         if (e.target === e.currentTarget) onClose()
       }}
     >
-      <section className="modal" role="dialog" aria-modal="true" aria-label={title}>
+      <section className={`modal ${className}`} role="dialog" aria-modal="true" aria-label={title}>
         <header>
           <h2>{title}</h2>
           <button className="icon-button" onClick={onClose} aria-label="Закрыть">

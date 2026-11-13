@@ -1326,6 +1326,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "logId": {
+                          "type": "string"
+                        },
                         "scope": {
                           "type": "string"
                         },
@@ -1368,6 +1371,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "logId": {
+                          "type": "string"
+                        },
                         "headerId": {
                           "type": "string"
                         },
@@ -2839,6 +2845,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "logId": {
+                          "type": "string"
+                        },
                         "scope": {
                           "type": "string"
                         },
@@ -2881,6 +2890,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "logId": {
+                          "type": "string"
+                        },
                         "headerId": {
                           "type": "string"
                         },
@@ -3320,6 +3332,926 @@
               "completed",
               "problems",
               "startedAt"
+            ],
+            "additionalProperties": false
+          },
+          "artifact": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "uri": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "mimeType": {
+                "type": "string"
+              },
+              "size": {
+                "type": "integer"
+              },
+              "sha256": {
+                "type": "string"
+              },
+              "expiresAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "uri",
+              "name",
+              "mimeType",
+              "size",
+              "sha256",
+              "expiresAt"
+            ],
+            "additionalProperties": false
+          },
+          "summary": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "nextCursor": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "error": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "fieldErrors": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "requestId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "requestId"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Запрос и ответ записи журнала после маскирования. Legacy ID начинается с legacy:. Чтение не выполняет запрос заново.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^(legacy:)?[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      },
+      "name": "qag_call_log_get",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "summary": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "attemptId": {
+                    "type": "string"
+                  },
+                  "probeId": {
+                    "type": "string"
+                  },
+                  "runId": {
+                    "type": "string"
+                  },
+                  "testCaseId": {
+                    "type": "string"
+                  },
+                  "blockId": {
+                    "type": "string"
+                  },
+                  "variantId": {
+                    "type": "string"
+                  },
+                  "environmentId": {
+                    "type": "string"
+                  },
+                  "environmentName": {
+                    "type": "string"
+                  },
+                  "environmentVersionId": {
+                    "type": "string"
+                  },
+                  "resourceId": {
+                    "type": "string"
+                  },
+                  "resourceName": {
+                    "type": "string"
+                  },
+                  "resourceVersionId": {
+                    "type": "string"
+                  },
+                  "protocol": {
+                    "type": "string"
+                  },
+                  "origin": {
+                    "type": "string"
+                  },
+                  "stage": {
+                    "type": "string"
+                  },
+                  "sourceName": {
+                    "type": "string"
+                  },
+                  "position": {
+                    "type": "integer"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "startedAt": {
+                    "type": "string"
+                  },
+                  "finishedAt": {
+                    "type": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "durationMs": {
+                    "type": "integer"
+                  },
+                  "requestSent": {
+                    "type": "boolean"
+                  },
+                  "legacy": {
+                    "type": "boolean"
+                  },
+                  "redacted": {
+                    "type": "boolean"
+                  },
+                  "persistencePending": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "id",
+                  "environmentId",
+                  "environmentName",
+                  "protocol",
+                  "origin",
+                  "stage",
+                  "position",
+                  "state",
+                  "startedAt",
+                  "durationMs",
+                  "requestSent",
+                  "legacy",
+                  "redacted",
+                  "persistencePending"
+                ],
+                "additionalProperties": false
+              },
+              "request": {
+                "type": "object",
+                "properties": {
+                  "protocol": {
+                    "type": "string"
+                  },
+                  "address": {
+                    "type": "string"
+                  },
+                  "method": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  },
+                  "headers": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "body": {
+                    "type": "string"
+                  },
+                  "sql": {
+                    "type": "string"
+                  },
+                  "parameters": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "mode": {
+                    "type": "string"
+                  },
+                  "truncated": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "protocol",
+                  "headers",
+                  "body",
+                  "truncated"
+                ],
+                "additionalProperties": false
+              },
+              "response": {
+                "type": [
+                  "null",
+                  "object"
+                ],
+                "properties": {
+                  "variableSources": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "logId": {
+                          "type": "string"
+                        },
+                        "scope": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "fetchMode": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "statusCode": {
+                          "type": [
+                            "null",
+                            "integer"
+                          ]
+                        },
+                        "durationMs": {
+                          "type": "integer"
+                        },
+                        "errorCode": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "fetchMode",
+                        "state",
+                        "durationMs"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "headerSources": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "logId": {
+                          "type": "string"
+                        },
+                        "headerId": {
+                          "type": "string"
+                        },
+                        "headerName": {
+                          "type": "string"
+                        },
+                        "fetchMode": {
+                          "type": "string"
+                        },
+                        "state": {
+                          "type": "string"
+                        },
+                        "statusCode": {
+                          "type": [
+                            "null",
+                            "integer"
+                          ]
+                        },
+                        "durationMs": {
+                          "type": "integer"
+                        },
+                        "errorCode": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "headerId",
+                        "headerName",
+                        "fetchMode",
+                        "state",
+                        "durationMs"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "mainRequestStarted": {
+                    "type": [
+                      "null",
+                      "boolean"
+                    ]
+                  },
+                  "protocol": {
+                    "type": "string"
+                  },
+                  "statusCode": {
+                    "type": [
+                      "null",
+                      "integer"
+                    ]
+                  },
+                  "grpcCode": {
+                    "type": "string"
+                  },
+                  "statusMessage": {
+                    "type": "string"
+                  },
+                  "headers": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "trailers": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "body": {
+                    "type": "string"
+                  },
+                  "columns": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "type"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "rows": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": [
+                        "null",
+                        "array"
+                      ],
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string"
+                          },
+                          "value": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "rowsAffected": {
+                    "type": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "errorCode": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "truncated": {
+                    "type": "boolean"
+                  },
+                  "redacted": {
+                    "type": "boolean"
+                  },
+                  "comparison": {
+                    "type": "object",
+                    "properties": {
+                      "status": {
+                        "type": "string"
+                      },
+                      "reason": {
+                        "type": "string"
+                      },
+                      "differences": {
+                        "type": [
+                          "null",
+                          "array"
+                        ],
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "type": "string"
+                            },
+                            "expected": {
+                              "type": "string"
+                            },
+                            "actual": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "path",
+                            "expected",
+                            "actual"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "differencesTruncated": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "status",
+                      "differences",
+                      "differencesTruncated"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "protocol",
+                  "headers",
+                  "body",
+                  "truncated",
+                  "redacted",
+                  "comparison"
+                ],
+                "additionalProperties": false
+              },
+              "bodyOmittedReason": {
+                "type": "string"
+              },
+              "incompleteReason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "summary",
+              "request"
+            ],
+            "additionalProperties": false
+          },
+          "artifact": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "uri": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "mimeType": {
+                "type": "string"
+              },
+              "size": {
+                "type": "integer"
+              },
+              "sha256": {
+                "type": "string"
+              },
+              "expiresAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "uri",
+              "name",
+              "mimeType",
+              "size",
+              "sha256",
+              "expiresAt"
+            ],
+            "additionalProperties": false
+          },
+          "summary": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "nextCursor": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "error": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "fieldErrors": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "requestId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "requestId"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Общий журнал HTTP/gRPC/SQL, пробных вызовов, вариантов и HTTP-источников. Фильтры и курсор; от новых к старым, без тел в списке и без сети.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "http",
+              "grpc",
+              "postgresql"
+            ]
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "editor",
+              "run",
+              "variant",
+              "variable_probe"
+            ]
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "main",
+              "header_source",
+              "environment_variable_source",
+              "resource_variable_source",
+              "variable_probe"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "completed",
+              "error",
+              "timed_out",
+              "cancelled",
+              "interrupted"
+            ]
+          },
+          "environmentId": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "resourceId": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "testCaseId": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "runId": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "attemptId": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "probeId": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "cursor": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "name": "qag_call_logs_list",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "items": {
+                "type": [
+                  "null",
+                  "array"
+                ],
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "attemptId": {
+                      "type": "string"
+                    },
+                    "probeId": {
+                      "type": "string"
+                    },
+                    "runId": {
+                      "type": "string"
+                    },
+                    "testCaseId": {
+                      "type": "string"
+                    },
+                    "blockId": {
+                      "type": "string"
+                    },
+                    "variantId": {
+                      "type": "string"
+                    },
+                    "environmentId": {
+                      "type": "string"
+                    },
+                    "environmentName": {
+                      "type": "string"
+                    },
+                    "environmentVersionId": {
+                      "type": "string"
+                    },
+                    "resourceId": {
+                      "type": "string"
+                    },
+                    "resourceName": {
+                      "type": "string"
+                    },
+                    "resourceVersionId": {
+                      "type": "string"
+                    },
+                    "protocol": {
+                      "type": "string"
+                    },
+                    "origin": {
+                      "type": "string"
+                    },
+                    "stage": {
+                      "type": "string"
+                    },
+                    "sourceName": {
+                      "type": "string"
+                    },
+                    "position": {
+                      "type": "integer"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "startedAt": {
+                      "type": "string"
+                    },
+                    "finishedAt": {
+                      "type": [
+                        "null",
+                        "string"
+                      ]
+                    },
+                    "durationMs": {
+                      "type": "integer"
+                    },
+                    "requestSent": {
+                      "type": "boolean"
+                    },
+                    "legacy": {
+                      "type": "boolean"
+                    },
+                    "redacted": {
+                      "type": "boolean"
+                    },
+                    "persistencePending": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "environmentId",
+                    "environmentName",
+                    "protocol",
+                    "origin",
+                    "stage",
+                    "position",
+                    "state",
+                    "startedAt",
+                    "durationMs",
+                    "requestSent",
+                    "legacy",
+                    "redacted",
+                    "persistencePending"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "nextCursor": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "items"
             ],
             "additionalProperties": false
           },
@@ -4709,6 +5641,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "logId": {
+                          "type": "string"
+                        },
                         "scope": {
                           "type": "string"
                         },
@@ -4751,6 +5686,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "logId": {
+                          "type": "string"
+                        },
                         "headerId": {
                           "type": "string"
                         },
@@ -6746,6 +7684,1389 @@
             },
             "required": [
               "items"
+            ],
+            "additionalProperties": false
+          },
+          "artifact": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "uri": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "mimeType": {
+                "type": "string"
+              },
+              "size": {
+                "type": "integer"
+              },
+              "sha256": {
+                "type": "string"
+              },
+              "expiresAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "uri",
+              "name",
+              "mimeType",
+              "size",
+              "sha256",
+              "expiresAt"
+            ],
+            "additionalProperties": false
+          },
+          "summary": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "nextCursor": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "error": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "fieldErrors": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "requestId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "requestId"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Явно отменить проверку HTTP-переменной; внешний эффект уже отправленного запроса не откатывается.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      },
+      "name": "qag_http_variable_probe_cancel",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "scope": {
+                "type": "string"
+              },
+              "environmentId": {
+                "type": "string"
+              },
+              "resourceId": {
+                "type": "string"
+              },
+              "variableName": {
+                "type": "string"
+              },
+              "source": {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  },
+                  "query": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "headers": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "bodyMode": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "text",
+                      "json",
+                      "form"
+                    ]
+                  },
+                  "body": {
+                    "type": "string"
+                  },
+                  "form": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "tls": {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "type": "string"
+                      },
+                      "serverName": {
+                        "type": "string"
+                      },
+                      "ca": {
+                        "type": "string"
+                      },
+                      "certificate": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "mode"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "privateKeySecret": {
+                    "type": "string"
+                  },
+                  "jsonPointer": {
+                    "type": "string"
+                  },
+                  "prefix": {
+                    "type": "string"
+                  },
+                  "suffix": {
+                    "type": "string"
+                  },
+                  "fetchMode": {
+                    "type": "string",
+                    "enum": [
+                      "per_attempt",
+                      "per_run"
+                    ]
+                  }
+                },
+                "required": [
+                  "method",
+                  "url",
+                  "query",
+                  "headers",
+                  "bodyMode",
+                  "body",
+                  "tls",
+                  "jsonPointer",
+                  "fetchMode"
+                ],
+                "additionalProperties": false
+              },
+              "logId": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "startedAt": {
+                "type": "string"
+              },
+              "finishedAt": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "durationMs": {
+                "type": "integer"
+              },
+              "statusCode": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "errorCode": {
+                "type": "string"
+              },
+              "error": {
+                "type": "string"
+              },
+              "persistencePending": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "scope",
+              "environmentId",
+              "source",
+              "state",
+              "startedAt",
+              "durationMs",
+              "persistencePending"
+            ],
+            "additionalProperties": false
+          },
+          "artifact": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "uri": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "mimeType": {
+                "type": "string"
+              },
+              "size": {
+                "type": "integer"
+              },
+              "sha256": {
+                "type": "string"
+              },
+              "expiresAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "uri",
+              "name",
+              "mimeType",
+              "size",
+              "sha256",
+              "expiresAt"
+            ],
+            "additionalProperties": false
+          },
+          "summary": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "nextCursor": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "error": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "fieldErrors": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "requestId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "requestId"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Состояние проверки и временные extractedValue/formattedValue (10 минут, до 128 результатов). Только здесь значение открыто; журнал маскирован. valueUnavailable после истечения/перезапуска; чтение не вызывает источник.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      },
+      "name": "qag_http_variable_probe_get",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "probe": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "scope": {
+                    "type": "string"
+                  },
+                  "environmentId": {
+                    "type": "string"
+                  },
+                  "resourceId": {
+                    "type": "string"
+                  },
+                  "variableName": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "object",
+                    "properties": {
+                      "method": {
+                        "type": "string"
+                      },
+                      "url": {
+                        "type": "string"
+                      },
+                      "query": {
+                        "type": [
+                          "null",
+                          "array"
+                        ],
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "value": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "value"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "headers": {
+                        "type": [
+                          "null",
+                          "array"
+                        ],
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "value": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "value"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "bodyMode": {
+                        "type": "string",
+                        "enum": [
+                          "none",
+                          "text",
+                          "json",
+                          "form"
+                        ]
+                      },
+                      "body": {
+                        "type": "string"
+                      },
+                      "form": {
+                        "type": [
+                          "null",
+                          "array"
+                        ],
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "value": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "value"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "tls": {
+                        "type": "object",
+                        "properties": {
+                          "mode": {
+                            "type": "string"
+                          },
+                          "serverName": {
+                            "type": "string"
+                          },
+                          "ca": {
+                            "type": "string"
+                          },
+                          "certificate": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "mode"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "privateKeySecret": {
+                        "type": "string"
+                      },
+                      "jsonPointer": {
+                        "type": "string"
+                      },
+                      "prefix": {
+                        "type": "string"
+                      },
+                      "suffix": {
+                        "type": "string"
+                      },
+                      "fetchMode": {
+                        "type": "string",
+                        "enum": [
+                          "per_attempt",
+                          "per_run"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "method",
+                      "url",
+                      "query",
+                      "headers",
+                      "bodyMode",
+                      "body",
+                      "tls",
+                      "jsonPointer",
+                      "fetchMode"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "logId": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "startedAt": {
+                    "type": "string"
+                  },
+                  "finishedAt": {
+                    "type": [
+                      "null",
+                      "string"
+                    ]
+                  },
+                  "durationMs": {
+                    "type": "integer"
+                  },
+                  "statusCode": {
+                    "type": [
+                      "null",
+                      "integer"
+                    ]
+                  },
+                  "errorCode": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "persistencePending": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "id",
+                  "scope",
+                  "environmentId",
+                  "source",
+                  "state",
+                  "startedAt",
+                  "durationMs",
+                  "persistencePending"
+                ],
+                "additionalProperties": false
+              },
+              "valueAvailable": {
+                "type": "boolean"
+              },
+              "valueUnavailable": {
+                "type": "string"
+              },
+              "extractedValue": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "formattedValue": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "valueType": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "probe",
+              "valueAvailable"
+            ],
+            "additionalProperties": false
+          },
+          "artifact": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "uri": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "mimeType": {
+                "type": "string"
+              },
+              "size": {
+                "type": "integer"
+              },
+              "sha256": {
+                "type": "string"
+              },
+              "expiresAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "uri",
+              "name",
+              "mimeType",
+              "size",
+              "sha256",
+              "expiresAt"
+            ],
+            "additionalProperties": false
+          },
+          "summary": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "nextCursor": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "error": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "fieldErrors": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "requestId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "requestId"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Явно проверить сохранённую HTTP-переменную окружения/ресурса либо source draft. Укажите revisions, UUID idempotencyKey; секретные изменения временные. Возвращает probe ID без сохранения draft/прогона; для результата используйте probe_get.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "environment",
+              "resource"
+            ]
+          },
+          "environmentId": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "environmentRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "resourceId": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          },
+          "resourceRevision": {
+            "type": "integer"
+          },
+          "variableName": {
+            "type": "string"
+          },
+          "source": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "method": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "query": {
+                "type": [
+                  "null",
+                  "array"
+                ],
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "value"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "headers": {
+                "type": [
+                  "null",
+                  "array"
+                ],
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "value"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "bodyMode": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "text",
+                  "json",
+                  "form"
+                ]
+              },
+              "body": {
+                "type": "string"
+              },
+              "form": {
+                "type": [
+                  "null",
+                  "array"
+                ],
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "value"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "tls": {
+                "type": "object",
+                "properties": {
+                  "mode": {
+                    "type": "string"
+                  },
+                  "serverName": {
+                    "type": "string"
+                  },
+                  "ca": {
+                    "type": "string"
+                  },
+                  "certificate": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "additionalProperties": false
+              },
+              "privateKeySecret": {
+                "type": "string"
+              },
+              "jsonPointer": {
+                "type": "string"
+              },
+              "prefix": {
+                "type": "string"
+              },
+              "suffix": {
+                "type": "string"
+              },
+              "fetchMode": {
+                "type": "string",
+                "enum": [
+                  "per_attempt",
+                  "per_run"
+                ]
+              }
+            },
+            "required": [
+              "method",
+              "url",
+              "query",
+              "headers",
+              "bodyMode",
+              "body",
+              "tls",
+              "jsonPointer",
+              "fetchMode"
+            ],
+            "additionalProperties": false
+          },
+          "variables": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "resourceVariables": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "literal",
+                    "http"
+                  ]
+                },
+                "value": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": [
+                    "null",
+                    "object"
+                  ],
+                  "properties": {
+                    "method": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "query": {
+                      "type": [
+                        "null",
+                        "array"
+                      ],
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "value": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "value"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "headers": {
+                      "type": [
+                        "null",
+                        "array"
+                      ],
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "value": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "value"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "bodyMode": {
+                      "type": "string",
+                      "enum": [
+                        "none",
+                        "text",
+                        "json",
+                        "form"
+                      ]
+                    },
+                    "body": {
+                      "type": "string"
+                    },
+                    "form": {
+                      "type": [
+                        "null",
+                        "array"
+                      ],
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "value": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "value"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "tls": {
+                      "type": "object",
+                      "properties": {
+                        "mode": {
+                          "type": "string"
+                        },
+                        "serverName": {
+                          "type": "string"
+                        },
+                        "ca": {
+                          "type": "string"
+                        },
+                        "certificate": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "mode"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "privateKeySecret": {
+                      "type": "string"
+                    },
+                    "jsonPointer": {
+                      "type": "string"
+                    },
+                    "prefix": {
+                      "type": "string"
+                    },
+                    "suffix": {
+                      "type": "string"
+                    },
+                    "fetchMode": {
+                      "type": "string",
+                      "enum": [
+                        "per_attempt",
+                        "per_run"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "method",
+                    "url",
+                    "query",
+                    "headers",
+                    "bodyMode",
+                    "body",
+                    "tls",
+                    "jsonPointer",
+                    "fetchMode"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "mode"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "secrets": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "replace": {
+                "type": "object",
+                "patternProperties": {
+                  "^\\s*$": true
+                },
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "clear": {
+                "type": [
+                  "null",
+                  "array"
+                ],
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "timeoutSeconds": {
+            "type": "integer"
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+          }
+        },
+        "required": [
+          "scope",
+          "environmentId",
+          "environmentRevision",
+          "idempotencyKey"
+        ],
+        "additionalProperties": false
+      },
+      "name": "qag_http_variable_probe_start",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": [
+              "null",
+              "object"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "scope": {
+                "type": "string"
+              },
+              "environmentId": {
+                "type": "string"
+              },
+              "resourceId": {
+                "type": "string"
+              },
+              "variableName": {
+                "type": "string"
+              },
+              "source": {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  },
+                  "query": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "headers": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "bodyMode": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "text",
+                      "json",
+                      "form"
+                    ]
+                  },
+                  "body": {
+                    "type": "string"
+                  },
+                  "form": {
+                    "type": [
+                      "null",
+                      "array"
+                    ],
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "tls": {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "type": "string"
+                      },
+                      "serverName": {
+                        "type": "string"
+                      },
+                      "ca": {
+                        "type": "string"
+                      },
+                      "certificate": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "mode"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "privateKeySecret": {
+                    "type": "string"
+                  },
+                  "jsonPointer": {
+                    "type": "string"
+                  },
+                  "prefix": {
+                    "type": "string"
+                  },
+                  "suffix": {
+                    "type": "string"
+                  },
+                  "fetchMode": {
+                    "type": "string",
+                    "enum": [
+                      "per_attempt",
+                      "per_run"
+                    ]
+                  }
+                },
+                "required": [
+                  "method",
+                  "url",
+                  "query",
+                  "headers",
+                  "bodyMode",
+                  "body",
+                  "tls",
+                  "jsonPointer",
+                  "fetchMode"
+                ],
+                "additionalProperties": false
+              },
+              "logId": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "startedAt": {
+                "type": "string"
+              },
+              "finishedAt": {
+                "type": [
+                  "null",
+                  "string"
+                ]
+              },
+              "durationMs": {
+                "type": "integer"
+              },
+              "statusCode": {
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "errorCode": {
+                "type": "string"
+              },
+              "error": {
+                "type": "string"
+              },
+              "persistencePending": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "scope",
+              "environmentId",
+              "source",
+              "state",
+              "startedAt",
+              "durationMs",
+              "persistencePending"
             ],
             "additionalProperties": false
           },
@@ -9643,6 +11964,9 @@
                                       "items": {
                                         "type": "object",
                                         "properties": {
+                                          "logId": {
+                                            "type": "string"
+                                          },
                                           "scope": {
                                             "type": "string"
                                           },
@@ -9685,6 +12009,9 @@
                                       "items": {
                                         "type": "object",
                                         "properties": {
+                                          "logId": {
+                                            "type": "string"
+                                          },
                                           "headerId": {
                                             "type": "string"
                                           },
@@ -11070,6 +13397,9 @@
                                             "items": {
                                               "type": "object",
                                               "properties": {
+                                                "logId": {
+                                                  "type": "string"
+                                                },
                                                 "scope": {
                                                   "type": "string"
                                                 },
@@ -11112,6 +13442,9 @@
                                             "items": {
                                               "type": "object",
                                               "properties": {
+                                                "logId": {
+                                                  "type": "string"
+                                                },
                                                 "headerId": {
                                                   "type": "string"
                                                 },
@@ -15849,6 +18182,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "logId": {
+                          "type": "string"
+                        },
                         "scope": {
                           "type": "string"
                         },
@@ -15891,6 +18227,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "logId": {
+                          "type": "string"
+                        },
                         "headerId": {
                           "type": "string"
                         },
@@ -19340,6 +21679,9 @@
                           "items": {
                             "type": "object",
                             "properties": {
+                              "logId": {
+                                "type": "string"
+                              },
                               "scope": {
                                 "type": "string"
                               },
@@ -19382,6 +21724,9 @@
                           "items": {
                             "type": "object",
                             "properties": {
+                              "logId": {
+                                "type": "string"
+                              },
                               "headerId": {
                                 "type": "string"
                               },
@@ -23002,6 +25347,9 @@
                           "items": {
                             "type": "object",
                             "properties": {
+                              "logId": {
+                                "type": "string"
+                              },
                               "scope": {
                                 "type": "string"
                               },
@@ -23044,6 +25392,9 @@
                           "items": {
                             "type": "object",
                             "properties": {
+                              "logId": {
+                                "type": "string"
+                              },
                               "headerId": {
                                 "type": "string"
                               },
@@ -26531,6 +28882,9 @@
                           "items": {
                             "type": "object",
                             "properties": {
+                              "logId": {
+                                "type": "string"
+                              },
                               "scope": {
                                 "type": "string"
                               },
@@ -26573,6 +28927,9 @@
                           "items": {
                             "type": "object",
                             "properties": {
+                              "logId": {
+                                "type": "string"
+                              },
                               "headerId": {
                                 "type": "string"
                               },
@@ -30060,6 +32417,9 @@
                           "items": {
                             "type": "object",
                             "properties": {
+                              "logId": {
+                                "type": "string"
+                              },
                               "scope": {
                                 "type": "string"
                               },
@@ -30102,6 +32462,9 @@
                           "items": {
                             "type": "object",
                             "properties": {
+                              "logId": {
+                                "type": "string"
+                              },
                               "headerId": {
                                 "type": "string"
                               },
@@ -33615,6 +35978,9 @@
                           "items": {
                             "type": "object",
                             "properties": {
+                              "logId": {
+                                "type": "string"
+                              },
                               "scope": {
                                 "type": "string"
                               },
@@ -33657,6 +36023,9 @@
                           "items": {
                             "type": "object",
                             "properties": {
+                              "logId": {
+                                "type": "string"
+                              },
                               "headerId": {
                                 "type": "string"
                               },
@@ -37369,6 +39738,9 @@
                           "items": {
                             "type": "object",
                             "properties": {
+                              "logId": {
+                                "type": "string"
+                              },
                               "scope": {
                                 "type": "string"
                               },
@@ -37411,6 +39783,9 @@
                           "items": {
                             "type": "object",
                             "properties": {
+                              "logId": {
+                                "type": "string"
+                              },
                               "headerId": {
                                 "type": "string"
                               },
@@ -40921,6 +43296,9 @@
                           "items": {
                             "type": "object",
                             "properties": {
+                              "logId": {
+                                "type": "string"
+                              },
                               "scope": {
                                 "type": "string"
                               },
@@ -40963,6 +43341,9 @@
                           "items": {
                             "type": "object",
                             "properties": {
+                              "logId": {
+                                "type": "string"
+                              },
                               "headerId": {
                                 "type": "string"
                               },
@@ -44475,6 +46856,9 @@
                                 "items": {
                                   "type": "object",
                                   "properties": {
+                                    "logId": {
+                                      "type": "string"
+                                    },
                                     "scope": {
                                       "type": "string"
                                     },
@@ -44517,6 +46901,9 @@
                                 "items": {
                                   "type": "object",
                                   "properties": {
+                                    "logId": {
+                                      "type": "string"
+                                    },
                                     "headerId": {
                                       "type": "string"
                                     },
@@ -51860,6 +54247,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "logId": {
+                          "type": "string"
+                        },
                         "scope": {
                           "type": "string"
                         },
@@ -51902,6 +54292,9 @@
                     "items": {
                       "type": "object",
                       "properties": {
+                        "logId": {
+                          "type": "string"
+                        },
                         "headerId": {
                           "type": "string"
                         },

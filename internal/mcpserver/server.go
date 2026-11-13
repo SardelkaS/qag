@@ -59,7 +59,7 @@ type Envelope[T any] struct {
 
 func New(options Options) *Server {
 	server := &Server{options: options, Artifacts: NewArtifactStore(), registered: map[string]bool{}}
-	server.SDK = mcp.NewServer(&mcp.Implementation{Name: "qag", Version: "1.0.0"}, &mcp.ServerOptions{Instructions: serverInstructions, SupportedProtocolVersions: []string{"2026-07-28", "2025-11-25"}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), Capabilities: &mcp.ServerCapabilities{Tools: &mcp.ToolCapabilities{}, Resources: &mcp.ResourceCapabilities{}}, SetCacheable: func(_ context.Context, _ mcp.Request, c *mcp.Cacheable) { c.TTLMs = 0; c.CacheScope = "private" }})
+	server.SDK = mcp.NewServer(&mcp.Implementation{Name: "qag", Version: "1.0.0"}, &mcp.ServerOptions{Instructions: serverInstructions + diagnosticInstructions, SupportedProtocolVersions: []string{"2026-07-28", "2025-11-25"}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), Capabilities: &mcp.ServerCapabilities{Tools: &mcp.ToolCapabilities{}, Resources: &mcp.ResourceCapabilities{}}, SetCacheable: func(_ context.Context, _ mcp.Request, c *mcp.Cacheable) { c.TTLMs = 0; c.CacheScope = "private" }})
 	server.SDK.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 			if method == "resources/list" || method == "resources/read" {
@@ -182,12 +182,16 @@ func addTool[I, O any](s *Server, name, description string, readOnly, external, 
 				return nil, &jsonrpc.Error{Code: -32603, Message: "Не удалось подготовить ответ"}
 			}
 			if len(data) > InlineBytes {
-				artifacts, e := s.Artifacts.PutGroup([]File{{Name: name + ".json", MIMEType: "application/json", Data: data}})
-				if e != nil {
-					out.Error = &ToolError{Code: "result_too_large", Message: "Результат превышает допустимый предел артефакта", RequestID: id}
+				if name == "qag_http_variable_probe_get" {
+					out.Error = &ToolError{Code: "result_too_large", Message: "Live-результат проверки превышает предел прямого ответа; артефакт не создавался", RequestID: id}
 				} else {
-					out.Artifact = &artifacts[0]
-					out.Summary = summarize(value)
+					artifacts, e := s.Artifacts.PutGroup([]File{{Name: name + ".json", MIMEType: "application/json", Data: data}})
+					if e != nil {
+						out.Error = &ToolError{Code: "result_too_large", Message: "Результат превышает допустимый предел артефакта", RequestID: id}
+					} else {
+						out.Artifact = &artifacts[0]
+						out.Summary = summarize(value)
+					}
 				}
 			} else {
 				out.Data = &value
@@ -215,6 +219,18 @@ func addTool[I, O any](s *Server, name, description string, readOnly, external, 
 
 func configureInput(schema *jsonschema.Schema, name string) {
 	configureSourceSchemas(schema)
+	if name == "qag_call_logs_list" {
+		for key, values := range map[string][]any{"protocol": {"http", "grpc", "postgresql"}, "origin": {"editor", "run", "variant", "variable_probe"}, "stage": {"main", "header_source", "environment_variable_source", "resource_variable_source", "variable_probe"}, "state": {"queued", "running", "completed", "error", "timed_out", "cancelled", "interrupted"}} {
+			if s := schema.Properties[key]; s != nil {
+				s.Enum = values
+			}
+		}
+	}
+	if vars := schema.Properties["resourceVariables"]; vars != nil && vars.AdditionalProperties != nil {
+		if mode := vars.AdditionalProperties.Properties["mode"]; mode != nil {
+			mode.Enum = []any{"literal", "http"}
+		}
+	}
 	allowUnnamed := func(values *jsonschema.Schema) {
 		if values != nil {
 			values.PatternProperties = map[string]*jsonschema.Schema{`^\s*$`: {}}
@@ -226,6 +242,9 @@ func configureInput(schema *jsonschema.Schema, name string) {
 	}
 	if secrets := schema.Properties["secrets"]; secrets != nil {
 		allowUnnamed(secrets.Properties["replace"])
+		if name == "qag_http_variable_probe_start" {
+			secrets.Required = nil
+		}
 	}
 	if config := schema.Properties["config"]; config != nil {
 		if variables := config.Properties["variables"]; variables != nil && variables.AdditionalProperties != nil {
@@ -238,10 +257,20 @@ func configureInput(schema *jsonschema.Schema, name string) {
 	for key, value := range schema.Properties {
 		if key == "id" || strings.HasSuffix(key, "Id") || key == "idempotencyKey" {
 			value.Pattern = `^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`
+			if name == "qag_call_log_get" && key == "id" {
+				value.Pattern = `^(legacy:)?[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`
+			}
 		}
 		if key == "revision" {
 			min := 1.
 			value.Minimum = &min
+		}
+		if key == "environmentRevision" {
+			min := 1.
+			value.Minimum = &min
+		}
+		if key == "scope" && name == "qag_http_variable_probe_start" {
+			value.Enum = []any{"environment", "resource"}
 		}
 		if key == "limit" {
 			min, max := 1., 100.

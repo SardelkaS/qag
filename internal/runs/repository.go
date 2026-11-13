@@ -451,7 +451,10 @@ func (r *Repository) Recover(ctx context.Context) error {
 		}
 	}
 	_, err = r.pool.Exec(ctx, dbscope.Render(r.pool, `UPDATE qag.call_attempts SET state='interrupted',finished_at=clock_timestamp(),result=$1 WHERE run_id IS NULL AND state IN ('queued','running')`), interruptedResult("interrupted"))
-	return problem.Database(err)
+	if err != nil {
+		return problem.Database(err)
+	}
+	return r.recoverDiagnostics(ctx)
 }
 
 // RetentionReasons chooses automatic pins without changing existing history.

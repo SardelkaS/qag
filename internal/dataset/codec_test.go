@@ -58,16 +58,16 @@ func TestHTTPSourceDefaultsOnlyNormalizeDefinitionFields(t *testing.T) {
 	}
 }
 
-func TestVersionsOneAndTwoReadWithoutRewriting(t *testing.T) {
+func TestVersionsOneTwoAndThreeReadWithoutRewriting(t *testing.T) {
 	current, err := Encode(sample())
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, version := range []int{1, 2} {
-		legacy := bytes.Replace(current, []byte("version: 3"), []byte("version: "+strconv.Itoa(version)), 1)
+	for _, version := range []int{1, 2, 3} {
+		legacy := bytes.Replace(current, []byte("version: "+strconv.Itoa(Version)), []byte("version: "+strconv.Itoa(version)), 1)
 		before := append([]byte(nil), legacy...)
 		doc, err := Decode(bytes.NewReader(legacy))
-		if err != nil || doc.Version != 3 {
+		if err != nil || doc.Version != Version {
 			t.Fatal("legacy decode", err)
 		}
 		if !bytes.Equal(before, legacy) {

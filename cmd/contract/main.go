@@ -86,6 +86,7 @@ func request(name string) object {
 
 func main() {
 	for name, value := range map[string]any{
+		"CallLog": execution.CallLog{}, "LogSummary": execution.LogSummary{}, "LogRequest": execution.LogRequest{}, "CallLogPage": httpapi.CallLogPage{}, "ProbeInput": execution.ProbeInput{}, "HTTPVariableProbe": execution.HTTPVariableProbe{}, "ProbeView": execution.ProbeView{},
 		"CaseExport": reporting.CaseExport{}, "VariableDefinition": resources.VariableDefinition{}, "VariableSourceResult": execution.VariableSourceResult{}, "CallRequest": catalog.CallRequest{}, "StepRevision": runs.StepRevision{}, "StepsPassAll": httpapi.StepsPassAll{},
 		"ClipboardWrite": reporting.ClipboardWrite{}, "PNGPart": reporting.PNGPart{}, "ClipboardResult": reporting.ClipboardResult{},
 		"ReportNode": runs.ReportNode{},
@@ -105,6 +106,13 @@ func main() {
 	schemas["Health"] = object{"type": "object", "required": []string{"status"}, "properties": object{"status": object{"type": "string", "enum": []string{"ready"}}}}
 	schemas["Session"] = object{"type": "object", "required": []string{"csrfToken"}, "properties": object{"csrfToken": object{"type": "string"}}}
 	setEnum("VariableDefinition", "mode", "literal", "http")
+	setEnum("ProbeInput", "scope", "environment", "resource")
+	setEnum("HTTPVariableProbe", "scope", "environment", "resource")
+	setEnum("LogSummary", "protocol", "http", "grpc", "postgresql")
+	setEnum("LogRequest", "protocol", "http", "grpc", "postgresql")
+	for _, name := range []string{"LogSummary", "HTTPVariableProbe"} {
+		setEnum(name, "state", "queued", "running", "completed", "error", "timed_out", "cancelled", "interrupted")
+	}
 	setEnum("Run", "historyPolicy", "auto", "retain", "unretained")
 	setEnum("RunStart", "historyPolicy", "auto", "retain", "unretained")
 	setEnum("CaseExport", "format", "jira-wiki")
@@ -155,11 +163,19 @@ func main() {
 		for _, match := range regexp.MustCompile(`\{([^}]+)\}`).FindAllStringSubmatch(path, -1) {
 			parameters = append(parameters, object{"name": match[1], "in": "path", "required": true, "schema": object{"type": "string", "format": "uuid"}})
 		}
+		if id == "getCallLog" {
+			parameters = []object{{"name": "id", "in": "path", "required": true, "schema": object{"type": "string", "pattern": `^(legacy:)?[0-9a-fA-F-]{36}$`}}}
+		}
 		if strings.HasSuffix(result, "Page") {
 			parameters = append(parameters, object{"name": "limit", "in": "query", "schema": object{"type": "integer", "minimum": 1, "maximum": 100, "default": 50}}, object{"name": "cursor", "in": "query", "schema": object{"type": "string"}})
 		}
 		if id == "listFolders" {
 			parameters = append(parameters, object{"name": "archived", "in": "query", "schema": object{"type": "boolean", "default": false}})
+		}
+		if id == "listCallLogs" {
+			for _, name := range []string{"from", "to", "protocol", "origin", "stage", "state", "environmentId", "resourceId", "testCaseId", "runId", "attemptId", "probeId"} {
+				parameters = append(parameters, object{"name": name, "in": "query", "schema": object{"type": "string"}})
+			}
 		}
 		if id == "exportTestCase" {
 			parameters = append(parameters, object{"name": "revision", "in": "query", "required": true, "schema": object{"type": "integer", "minimum": 1}}, object{"name": "format", "in": "query", "schema": object{"type": "string", "enum": []string{"jira-wiki"}, "default": "jira-wiki"}}, object{"name": "includeExpected", "in": "query", "schema": object{"type": "boolean", "default": true}})
@@ -195,6 +211,11 @@ func main() {
 		paths[path].(object)[method] = operation
 	}
 	for _, route := range [][6]string{
+		{"get", "/call-logs", "listCallLogs", "Журнал всех вызовов", "", "CallLogPage"},
+		{"get", "/call-logs/{id}", "getCallLog", "Безопасные запрос и ответ", "", "CallLog"},
+		{"post", "/http-variable-probes", "startHTTPVariableProbe", "Проверить HTTP-переменную без сохранения draft", "ProbeInput", "HTTPVariableProbe"},
+		{"get", "/http-variable-probes/{id}", "getHTTPVariableProbe", "Состояние и временное значение проверки", "", "ProbeView"},
+		{"post", "/http-variable-probes/{id}/cancel", "cancelHTTPVariableProbe", "Отменить проверку переменной", "", "HTTPVariableProbe"},
 		{"get", "/demo", "getDemo", "Получить встроенный пример", "", "DemoInfo"},
 		{"get", "/session", "getSession", "Получить локальную сессию", "", "Session"},
 		{"get", "/health", "getHealth", "Проверить готовность", "", "Health"},

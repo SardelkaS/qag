@@ -7,13 +7,15 @@ const manifest = JSON.parse(await readFile('api/mcp-tools.json', 'utf8'));
 const specification = JSON.parse(await readFile('api/openapi.json', 'utf8'));
 const documentation = await readFile('docs/mcp.md', 'utf8');
 const names = manifest.tools.map(tool => tool.name);
-assert.equal(names.length, 45);
-assert.equal(new Set(names).size, 45);
+assert.equal(names.length, 50);
+assert.equal(new Set(names).size, 50);
 assert.deepEqual(names, [...names].sort());
 assert.deepEqual(manifest.protocols, ['2026-07-28', '2025-11-25']);
 const documented = [...documentation.matchAll(/^\| `(qag_[a-z_]+)` \|/gm)].map(match => match[1]).sort();
 assert.deepEqual(documented, names, 'documentation/registry drift');
 const mapping = {
+  listCallLogs: 'qag_call_logs_list', getCallLog: 'qag_call_log_get',
+  startHTTPVariableProbe: 'qag_http_variable_probe_start', getHTTPVariableProbe: 'qag_http_variable_probe_get', cancelHTTPVariableProbe: 'qag_http_variable_probe_cancel',
   exportTestCase: 'qag_test_case_export', getHealth: 'qag_status', getDemo: 'qag_demo_get',
   listFolders: 'qag_folders_list', createFolder: 'qag_folder_create', updateFolder: 'qag_folder_update',
   listTestCases: 'qag_test_cases_list', createTestCase: 'qag_test_case_create', getTestCase: 'qag_test_case_get', saveTestCase: 'qag_test_case_save', archiveTestCase: 'qag_test_case_update',

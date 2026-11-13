@@ -128,6 +128,8 @@ type Snapshot struct {
 	Resources            []Resource        `json:"resources"`
 }
 type Resolved struct {
+	EnvironmentName          string
+	EnvironmentRevision      int64
 	EnvironmentID            string
 	EnvironmentVersionID     string
 	EnvironmentHTTPVariables map[string]catalog.HTTPHeaderSource

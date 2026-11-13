@@ -196,8 +196,8 @@ func headers(values map[string][]string) []catalog.KeyValue {
 	return result
 }
 
-func (r *Runner) http(ctx context.Context, b catalog.Block, res resources.Resolved) (Result, error) {
-	result := Result{Protocol: "http"}
+func (r *Runner) http(ctx context.Context, b catalog.Block, res resources.Resolved) (result Result, err error) {
+	result = Result{Protocol: "http"}
 	if err := checkRequestGate(ctx); err != nil {
 		return result, err
 	}
@@ -241,6 +241,23 @@ func (r *Runner) http(ctx context.Context, b catalog.Block, res resources.Resolv
 	transport := &http.Transport{TLSClientConfig: tlsConfig, DisableKeepAlives: true, MaxResponseHeaderBytes: 64 << 10}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	requestBody := ""
+	if b.HTTP.BodyMode != "none" {
+		requestBody = b.HTTP.Body
+	}
+	sent, finish, err := beginExchange(ctx, LogRequest{Protocol: "http", Method: request.Method, URL: request.URL.String(), Headers: headers(request.Header), Body: requestBody}, res.Secrets)
+	if err != nil {
+		return result, err
+	}
+	defer func() {
+		if e := finish(result, err); e != nil {
+			err = e
+		}
+	}()
+	if err = checkRequestGate(ctx); err != nil {
+		return result, err
+	}
+	sent()
 	response, err := client.Do(request)
 	if err != nil {
 		return result, err

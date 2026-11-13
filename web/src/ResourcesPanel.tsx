@@ -1,17 +1,18 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type {
   Environment,
   Resource,
   ResourceConfig,
   SecretChanges,
 } from './api'
-import { fieldErrors, message, protocolLabel, request } from './api'
+import { all, fieldErrors, message, protocolLabel, request } from './api'
 import { Field, Modal, Notice } from './ui'
 import { HeaderEditor, TLSFields } from './HeaderEditor'
 import { PemUpload } from './PemUpload'
 import { ResourceVariables, environmentVariableWrite, variableMap, type VariableRow } from './ResourceVariables'
 import { FileReadContext, useFileRead, useFileReadScope } from './FileReads'
 import { ReadOnlyNotice } from './ReadOnlyNotice'
+import { FormErrorBanner, FormFeedbackContext } from './FormFeedback'
 
 type SecretRow = {
   name: string
@@ -65,7 +66,7 @@ function Secrets({
   const update = (i: number, patch: Partial<SecretRow>) =>
     change(rows.map((r, n) => (n === i ? { ...r, ...patch } : r)))
   return (
-    <fieldset className="secret-editor">
+    <fieldset className="secret-editor" data-error-section="secrets">
       <legend>Секреты</legend>
       <p className="muted small">
         Сохранённые значения не показываются. Для заголовков и метаданных
@@ -304,6 +305,7 @@ export default function ResourcesPanel({
                   }
                   initial={editing === 'new' ? undefined : editing}
                   environmentId={environmentId}
+                  environment={environment}
                   environmentsSecretNames={environment.secretNames}
                   saved={async (r) => {
                     setEditing(r)
@@ -424,6 +426,7 @@ export function VariablesForm({
   close: () => void
   saved: (env: Environment) => Promise<void>
 }) {
+  const form = useRef<HTMLFormElement>(null)
   const [variables, setVariables] = useState<VariableRow[]>([
     ...Object.entries(initial?.variables ?? {}).map(([name, value]) => ({
       id: crypto.randomUUID(),
@@ -466,44 +469,56 @@ export function VariablesForm({
     }
   }
   return (
+    <FormFeedbackContext.Provider value={setError}>
     <FileReadContext.Provider value={files.begin}>
-    <Modal title="Переменные окружения" onClose={close}>
-      <form onSubmit={(e) => void submit(e)}>
+    <Modal title="Переменные окружения" onClose={close} className="form-modal">
+      <FormErrorBanner error={error} fields={fields} form={form} close={() => setError('')} />
+      <form ref={form} onSubmit={(e) => void submit(e)}>
+        <div className="modal-form-scroll">
         <fieldset disabled={busy} className="plain-fieldset">
-          {error && <Notice>{error}</Notice>}
-          <ResourceVariables scope="environment" rows={variables} change={setVariables} secrets={secrets.map(row => row.name).filter(Boolean)} />
+          <ResourceVariables scope="environment" rows={variables} change={setVariables} secrets={secrets.map(row => row.name).filter(Boolean)} probe={{
+            disabled: busy || files.pending > 0 || !!initial?.readOnly,
+            version: JSON.stringify({ variables, secrets, revision: initial?.revision }),
+            failed: text => { setError(text); setFields({ source: text }) },
+            build: async () => ({ scope: 'environment', environmentId: initial!.id, environmentRevision: initial!.revision, variables: environmentVariableWrite(variables).variables, secrets: secretChanges(secrets) }),
+          }} />
           {fields.variables && (
             <p className="field-error">{fields.variables}</p>
           )}
           <Secrets rows={secrets} change={setSecrets} />
+        </fieldset>
+        </div>
           <div className="modal-actions">
-            <button type="button" className="button secondary" onClick={close}>
+            <button type="button" className="button secondary" disabled={busy} onClick={close}>
               Отмена
             </button>
-            <button className="button" type="submit" disabled={files.pending > 0}>
+            <button className="button" type="submit" disabled={busy || files.pending > 0}>
               {busy ? 'Сохранение…' : 'Сохранить переменные'}
             </button>
           </div>
-        </fieldset>
       </form>
     </Modal>
     </FileReadContext.Provider>
+    </FormFeedbackContext.Provider>
   )
 }
 
 export function ResourceForm({
   initial,
   environmentId,
+  environment,
   environmentsSecretNames,
   saved,
   cancel,
 }: {
   initial?: Resource
   environmentId: string
+  environment?: Environment
   environmentsSecretNames?: string[]
   saved: (r: Resource) => Promise<void>
   cancel: () => void
 }) {
+  const form = useRef<HTMLFormElement>(null)
   const [name, setName] = useState(initial?.name ?? ''),
     [kind, setKind] = useState<Resource['kind']>(initial?.kind ?? 'http')
   const [config, setConfig] = useState<ResourceConfig>(
@@ -599,8 +614,10 @@ export function ResourceForm({
     })
   }
   return (
+    <FormFeedbackContext.Provider value={setError}>
     <FileReadContext.Provider value={files.begin}>
-    <form className="resource-form" onSubmit={(e) => void submit(e)}>
+    <form ref={form} className="resource-form" onSubmit={(e) => void submit(e)}>
+      <FormErrorBanner error={error} fields={fields} form={form} close={() => setError('')} />
       {initial?.config.unavailableReason === 'demo_sql_unavailable' && (
         <Notice>
           В YAML-режиме демонстрационная PostgreSQL не настроена. SQL-шаг
@@ -615,7 +632,6 @@ export function ResourceForm({
             Закрыть
           </button>
         </div>
-        {error && <Notice>{error}</Notice>}
         <div className="form-grid">
           <Field
             label="Имя ресурса"
@@ -700,6 +716,7 @@ export function ResourceForm({
         )}
         {kind !== 'postgresql' && <p className="muted small">Общие заголовки или метаданные добавляются ко всем запросам этого ресурса. Значение в отдельном вызове перекрывает общее имя без учёта регистра.</p>}
         {kind !== 'postgresql' && (
+          <div data-error-section="headers">
           <HeaderEditor
             secrets={[
               ...(environmentsSecretNames ?? []),
@@ -709,12 +726,22 @@ export function ResourceForm({
             value={config.headers}
             onChange={(v) => change({ headers: v })}
           />
+          </div>
         )}
-        <ResourceVariables rows={resourceVariables} change={setResourceVariables} secrets={[...(environmentsSecretNames ?? []), ...secrets.map(s => s.name).filter(Boolean)]} />
-        <TLSFields config={config.tls} change={tls} />
+        <ResourceVariables rows={resourceVariables} change={setResourceVariables} secrets={[...(environmentsSecretNames ?? []), ...secrets.map(s => s.name).filter(Boolean)]} probe={{
+          disabled: busy || files.pending > 0 || !!initial?.readOnly,
+          version: JSON.stringify({ resourceVariables, secrets, config, revision: initial?.revision, environmentRevision: environment?.revision }),
+          failed: text => { setError(text); setFields({ source: text }) },
+          build: async () => {
+            const env = environment ?? (await all<Environment>('/environments')).find(value => value.id === environmentId)
+            if (!env) throw new Error('Выберите окружение для проверки')
+            return { scope: 'resource', environmentId, environmentRevision: env.revision, resourceId: initial?.id, resourceRevision: initial?.revision, resourceVariables: variableMap(resourceVariables), secrets: secretChanges(secrets) }
+          },
+        }} />
+        <div data-error-section="tls"><TLSFields config={config.tls} change={tls} /></div>
         <Secrets rows={secrets} change={setSecrets} presets={presets} />
         {kind === 'grpc' && (
-          <fieldset className="proto-files">
+          <fieldset className="proto-files" data-error-section="proto">
             <legend>Описание gRPC</legend>
             <p className="muted small">
               Без файлов используется server reflection. Если его нет, загрузите
@@ -778,5 +805,6 @@ export function ResourceForm({
       </fieldset>
     </form>
     </FileReadContext.Provider>
+    </FormFeedbackContext.Provider>
   )
 }

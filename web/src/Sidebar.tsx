@@ -3,7 +3,7 @@ import type { Folder, TestCase } from './api'
 type Props = {
   demoCaseId?: string
   view: string
-  navigate: (view: 'cases' | 'resources') => void
+  navigate: (view: 'cases' | 'resources' | 'logs') => void
   archive: boolean
   setArchive: (v: boolean) => void
   folders: Folder[]
@@ -47,6 +47,7 @@ export default function Sidebar(p: Props) {
       >
         <span>◇</span> Окружения и ресурсы
       </button>
+      <button className={`nav-item ${p.view === 'logs' ? 'active' : ''}`} onClick={() => p.navigate('logs')}><span>≡</span> Журнал вызовов</button>
       <div className="catalog-heading">
         <span className="section-label">КАТАЛОГ</span>
         <button

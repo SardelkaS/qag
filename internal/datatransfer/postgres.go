@@ -22,7 +22,7 @@ type PostgreSQL struct {
 	Vault *resources.Vault
 }
 
-var tables = []string{"qag.folders", "qag.test_cases", "qag.environments", "qag.environment_versions", "qag.resources", "qag.resource_versions", "qag.runs", "qag.run_resource_versions", "qag.run_steps", "qag.call_attempts", "qag.expected_images", "qag.run_call_variants", "qag.run_call_variant_versions", "qag.run_batches", "qag.run_batch_items", "qag.builtin_demo", "qag_demo.items"}
+var tables = []string{"qag.folders", "qag.test_cases", "qag.environments", "qag.environment_versions", "qag.resources", "qag.resource_versions", "qag.runs", "qag.run_resource_versions", "qag.run_steps", "qag.call_attempts", "qag.expected_images", "qag.run_call_variants", "qag.run_call_variant_versions", "qag.run_batches", "qag.run_batch_items", "qag.builtin_demo", "qag_demo.items", "qag.http_variable_probes", "qag.call_logs"}
 var boundary1 = regexp.MustCompile(`([A-Z]+)([A-Z][a-z])`)
 var boundary2 = regexp.MustCompile(`([a-z0-9])([A-Z])`)
 
@@ -30,7 +30,7 @@ func column(name string) string {
 	return strings.ToLower(boundary2.ReplaceAllString(boundary1.ReplaceAllString(name, `${1}_${2}`), `${1}_${2}`))
 }
 func nullable(name, table string) bool {
-	return name == "RunID" && table == "qag.call_attempts" || name == "VariantID" || name == "VariantVersionID" || name == "BatchID" && table == "qag.call_attempts" || name == "AttemptID" || name == "StepID" && table == "qag.run_batches"
+	return name == "RunID" && (table == "qag.call_attempts" || table == "qag.call_logs") || name == "VariantID" || name == "VariantVersionID" || name == "BatchID" && table == "qag.call_attempts" || name == "AttemptID" || name == "ProbeID" && table == "qag.call_logs" || name == "TestCaseID" && table == "qag.call_logs" || name == "ResourceID" && (table == "qag.call_logs" || table == "qag.http_variable_probes") || name == "StepID" && table == "qag.run_batches"
 }
 
 func (p *PostgreSQL) Snapshot(ctx context.Context) (dataset.Document, error) {
@@ -181,7 +181,7 @@ func (p *PostgreSQL) Import(ctx context.Context, input dataset.Document, dry boo
 		}
 	}
 	before, after := reflect.ValueOf(current.Data), reflect.ValueOf(merged.Data)
-	for _, i := range []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 9, 15, 16} {
+	for _, i := range []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 9, 15, 16, 17, 18} {
 		table := tables[i]
 		src, old := after.Field(i), before.Field(i)
 		existing := map[string]bool{}

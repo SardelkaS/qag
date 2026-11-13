@@ -19,6 +19,7 @@ import (
 	"github.com/SardelkaS/qag/internal/dataset"
 	"github.com/SardelkaS/qag/internal/datatransfer"
 	"github.com/SardelkaS/qag/internal/demo"
+	"github.com/SardelkaS/qag/internal/execution"
 	"github.com/SardelkaS/qag/internal/filestore"
 	"github.com/SardelkaS/qag/internal/resources"
 	"github.com/SardelkaS/qag/internal/runs"
@@ -149,6 +150,28 @@ func TestFullGraphCrossKeyRoundTrip(t *testing.T) {
 	if err != nil || run.Status != "passed" {
 		t.Fatal("source finish", err)
 	}
+	probeTarget := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"value":"portable-live-only-sentinel"}`))
+	}))
+	defer probeTarget.Close()
+	probeSource := catalog.HTTPHeaderSource{Method: "GET", URL: probeTarget.URL, BodyMode: "none", JSONPointer: "/value", FetchMode: "per_run", TLS: catalog.TLSConfig{Mode: "plaintext"}}
+	probe, err := engine.StartProbe(ctx, execution.ProbeInput{Scope: "environment", EnvironmentID: env.ID, EnvironmentRevision: env.Revision, Source: &probeSource, IdempotencyKey: catalog.NewID()})
+	if err != nil {
+		t.Fatal("probe source", err)
+	}
+	for n := 0; n < 100; n++ {
+		view, e := engine.GetProbe(ctx, probe.ID)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if !execution.ActiveState(view.Probe.State) {
+			if !view.ValueAvailable {
+				t.Fatal("probe value unavailable")
+			}
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	engine.Close()
 	resource.Config.Headers = []catalog.RequestHeader{}
 	if _, err = res.SaveResource(ctx, resource.ID, env.ID, resource.Name, resource.Kind, resource.Revision, resource.Config, resources.SecretChanges{}); err != nil {
@@ -195,6 +218,8 @@ func TestFullGraphCrossKeyRoundTrip(t *testing.T) {
 			// Reconstruct a real v1 document, including history, then exercise the
 			// supported v1 reader before importing it into a third PostgreSQL key.
 			doc.Version = 1
+			doc.Data.CallLogs = nil
+			doc.Data.HTTPVariableProbes = nil
 			for j := range doc.Data.EnvironmentVersions {
 				doc.Data.EnvironmentVersions[j].HTTPVariables = nil
 			}
@@ -247,6 +272,26 @@ func TestFullGraphCrossKeyRoundTrip(t *testing.T) {
 		snapshot, err := pg.Snapshot(ctx)
 		if err != nil {
 			t.Fatal("snapshot", err)
+		}
+		if i != 2 && (len(snapshot.Data.CallLogs) == 0 || len(snapshot.Data.HTTPVariableProbes) != 1) {
+			t.Fatal("diagnostics omitted by transfer")
+		}
+		portable, _ := dataset.Encode(snapshot)
+		if bytes.Contains(portable, []byte("portable-live-only-sentinel")) {
+			t.Fatal("live probe value transferred")
+		}
+		if len(snapshot.Data.CallLogs) > 0 {
+			conflict, _ := dataset.Clone(snapshot)
+			row := &conflict.Data.CallLogs[0]
+			l, e := dataset.Value[execution.CallLog](row.Payload)
+			if e != nil {
+				t.Fatal(e)
+			}
+			l.Request.Body += " changed"
+			row.Payload = dataset.Raw(l)
+			if _, e = pg.Import(ctx, conflict, false); e == nil {
+				t.Fatal("log conflict accepted")
+			}
 		}
 		if _, counts, err := dataset.Merge(snapshot, doc); err != nil {
 			t.Fatal("round trip equality", counts, err)

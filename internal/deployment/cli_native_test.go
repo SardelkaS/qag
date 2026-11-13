@@ -179,7 +179,7 @@ func TestInstalledCLIFullYAMLLifecycle(t *testing.T) {
 	}
 	defer session.Close()
 	tools, e := session.ListTools(ctx, nil)
-	if e != nil || len(tools.Tools) != 45 {
+	if e != nil || len(tools.Tools) != 50 {
 		t.Fatal("MCP discovery", e)
 	}
 	if !strings.Contains(session.InitializeResult().Instructions, mcpserver.GuideURI) {

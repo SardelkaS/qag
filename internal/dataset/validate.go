@@ -14,7 +14,7 @@ import (
 )
 
 func Validate(doc Document) error {
-	if doc.Format != "qag" || doc.Version != Version && doc.Version != 2 && doc.Version != 1 {
+	if doc.Format != "qag" || doc.Version < 1 || doc.Version > Version {
 		return invalid("формат", "", "неподдерживаемая версия")
 	}
 	d := doc.Data
@@ -38,7 +38,7 @@ func Validate(doc Document) error {
 				name := r.Type().Field(f).Name
 				if strings.HasSuffix(name, "ID") && field.Kind() == reflect.String {
 					id := field.String()
-					optional := name == "RunID" && group == "callAttempts" || name == "VariantID" || name == "VariantVersionID" || name == "BatchID" && group == "callAttempts" || name == "AttemptID" || name == "StepID" && group == "runBatches"
+					optional := name == "RunID" && (group == "callAttempts" || group == "callLogs") || name == "VariantID" || name == "VariantVersionID" || name == "BatchID" && group == "callAttempts" || name == "AttemptID" || name == "ProbeID" && group == "callLogs" || name == "TestCaseID" && group == "callLogs" || name == "ResourceID" && (group == "callLogs" || group == "httpVariableProbes") || name == "StepID" && group == "runBatches"
 					if id == "" && optional {
 						continue
 					}
@@ -527,7 +527,7 @@ func Validate(doc Document) error {
 			return invalid("demoItems", "", "сумма")
 		}
 	}
-	return nil
+	return validateDiagnostics(doc)
 }
 
 func sameNames(names []string, values map[string]string) bool {

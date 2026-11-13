@@ -1,5 +1,6 @@
 import type { Environment, ResourceConfig, VariableDefinition } from './api'
 import { HTTPSourceFields, newHTTPSource } from './HeaderEditor'
+import VariableProbe, { type ProbeContext } from './VariableProbe'
 
 export type VariableRow = VariableDefinition & { id: string; name: string }
 export function variableMap(rows: VariableRow[], scope = 'ресурса'): NonNullable<ResourceConfig['variables']> {
@@ -18,15 +19,16 @@ export function environmentVariableWrite(rows: VariableRow[]) {
   }
 }
 
-export function ResourceVariables({ rows, change, secrets, scope = 'resource' }: {
+export function ResourceVariables({ rows, change, secrets, scope = 'resource', probe }: {
   rows: VariableRow[]
   change: (rows: VariableRow[]) => void
   secrets: string[]
   scope?: 'resource' | 'environment'
+  probe?: ProbeContext
 }) {
   const owner = scope === 'resource' ? 'ресурса' : 'окружения'
   const update = (id: string, patch: Partial<VariableRow>) => change(rows.map(row => row.id === id ? { ...row, ...patch } : row))
-  return <fieldset className="pair-editor">
+  return <fieldset className="pair-editor" data-error-section="variables">
     <legend>Переменные {owner}</legend>
     <p className="muted small">Используйте {'${NAME}'} в HTTP, gRPC и SQL-параметрах {scope === 'resource' ? 'этого ресурса' : 'любого ресурса окружения'}. Пустые имена пропускаются. HTTP-источники используют только статические переменные и секреты {scope === 'resource' ? 'окружения и ресурса' : 'своего окружения'}.</p>
     {rows.map((row, i) => <article className="header-row" key={row.id}>
@@ -39,7 +41,7 @@ export function ResourceVariables({ rows, change, secrets, scope = 'resource' }:
         <button type="button" className="icon-button" aria-label={`Удалить переменную ${owner} ${i + 1}`} onClick={() => change(rows.filter(r => r.id !== row.id))}>×</button>
       </div>
       {row.mode === 'literal' ? <input aria-label={`Переменная ${owner}: значение ${i + 1}`} value={row.value ?? ''} onChange={e => update(row.id, { value: e.target.value })} />
-        : <HTTPSourceFields value={row.source!} change={patch => update(row.id, { source: { ...row.source!, ...patch } })} secrets={secrets} />}
+        : <><HTTPSourceFields value={row.source!} change={patch => update(row.id, { source: { ...row.source!, ...patch } })} secrets={secrets} />{probe && <VariableProbe name={row.name} source={row.source!} context={probe} />}</>}
     </article>)}
     <button type="button" className="text-button" onClick={() => change([...rows, { id: crypto.randomUUID(), name: '', mode: 'literal', value: '' }])}>+ Переменная {owner}</button>
   </fieldset>

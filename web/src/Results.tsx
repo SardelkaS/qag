@@ -2,6 +2,7 @@ import type { Attempt, CallRequest, Column, Expectation, TypedValue } from './ap
 import { protocolLabel, statusLabel } from './api'
 import { Code, Notice } from './ui'
 import { ImageGallery } from './ImageGallery'
+import { useCallLogs } from './CallLogContext'
 
 export function SQLTable({
   columns,
@@ -107,6 +108,7 @@ export function Results({
   attempt?: Attempt
   cancel?: () => void
 }) {
+  const openLogs = useCallLogs()
   if (!attempt) return null
   const original = attempt.request ?? block,
     result = attempt.result,
@@ -118,6 +120,7 @@ export function Results({
   return (
     <section className="results" aria-label="Результат вызова">
       <RequestSummary block={original} />
+      {openLogs && <button type="button" className="text-button" onClick={() => openLogs({ attemptId: attempt.id })}>Журнал запросов и ответов</button>}
       <div className="row-heading">
         <div className="inline">
           <strong>

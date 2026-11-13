@@ -12,7 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const Version = 3
+const Version = 4
 const MaxBytes = 256 << 20
 const MaxRecords = 100000
 const MaxDepth = 64
@@ -66,6 +66,37 @@ type Data struct {
 	BatchItems          []BatchItem          `yaml:"batchItems"`
 	BuiltinDemo         []Builtin            `yaml:"builtinDemo"`
 	DemoItems           []DemoItem           `yaml:"demoItems"`
+	HTTPVariableProbes  []HTTPVariableProbe  `yaml:"httpVariableProbes"`
+	CallLogs            []CallLog            `yaml:"callLogs"`
+}
+
+type HTTPVariableProbe struct {
+	ID             string     `yaml:"id"`
+	EnvironmentID  string     `yaml:"environmentId"`
+	ResourceID     string     `yaml:"resourceId"`
+	IdempotencyKey string     `yaml:"idempotencyKey"`
+	RequestHash    string     `yaml:"requestHash"`
+	State          string     `yaml:"state"`
+	StartedAt      time.Time  `yaml:"startedAt"`
+	FinishedAt     *time.Time `yaml:"finishedAt"`
+	Payload        JSON       `yaml:"payload"`
+}
+
+type CallLog struct {
+	ID            string    `yaml:"id"`
+	AttemptID     string    `yaml:"attemptId"`
+	ProbeID       string    `yaml:"probeId"`
+	RunID         string    `yaml:"runId"`
+	TestCaseID    string    `yaml:"testCaseId"`
+	EnvironmentID string    `yaml:"environmentId"`
+	ResourceID    string    `yaml:"resourceId"`
+	Protocol      string    `yaml:"protocol"`
+	Origin        string    `yaml:"origin"`
+	Stage         string    `yaml:"stage"`
+	State         string    `yaml:"state"`
+	StartedAt     time.Time `yaml:"startedAt"`
+	Summary       JSON      `yaml:"summary"`
+	Payload       JSON      `yaml:"payload"`
 }
 
 func Empty() Document { return Document{Format: "qag", Version: Version} }

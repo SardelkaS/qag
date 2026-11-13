@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useFileRead } from './FileReads'
+import { useFormFeedback } from './FormFeedback'
 
 // Check DER framing before replacing a draft. Certificate/key semantics and
 // matching the pair are validated by the server when saving the resource.
@@ -57,7 +58,8 @@ export function PemUpload({ label, kind, change }: {
   change: (value: string) => void
 }) {
   const [error, setError] = useState('')
-  const read = useFileRead<string>(change, setError)
+  const report = useFormFeedback()
+  const read = useFileRead<string>(change, text => { setError(text); report?.(text) })
   return <div className="pem-upload">
     <label className="file-button">{label}
       <input type="file" accept=".pem,.crt,.cer,.key" aria-label={label} onChange={async (event) => {

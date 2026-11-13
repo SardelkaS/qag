@@ -38,9 +38,25 @@ func NewRunner() *Runner {
 	return &Runner{cache: map[string]*protoregistry.Files{}, headers: map[string]*headerScope{}}
 }
 
-func (r *Runner) grpc(ctx context.Context, scope string, b catalog.Block, res resources.Resolved) (Result, error) {
-	result := Result{Protocol: "grpc"}
+func (r *Runner) grpc(ctx context.Context, scope string, b catalog.Block, res resources.Resolved) (result Result, err error) {
+	result = Result{Protocol: "grpc"}
 	if err := checkRequestGate(ctx); err != nil {
+		return result, err
+	}
+	requestHeaders := []catalog.KeyValue{}
+	for _, h := range mergedHeaders(res.Resource.Config.Headers, b.GRPC.Metadata) {
+		requestHeaders = append(requestHeaders, catalog.KeyValue{Name: strings.ToLower(h.Name), Value: h.Value})
+	}
+	sent, finish, err := beginExchange(ctx, LogRequest{Protocol: "grpc", Address: res.Resource.Config.Address, Method: "/" + b.GRPC.Service + "/" + b.GRPC.Method, Headers: requestHeaders, Body: b.GRPC.Body}, res.Secrets)
+	if err != nil {
+		return result, err
+	}
+	defer func() {
+		if e := finish(result, err); e != nil {
+			err = e
+		}
+	}()
+	if err = checkRequestGate(ctx); err != nil {
 		return result, err
 	}
 	tlsConfig, err := resources.TLS(res.Resource.Config, res.Secrets)
@@ -108,6 +124,10 @@ func (r *Runner) grpc(ctx context.Context, scope string, b catalog.Block, res re
 	}
 	callCtx := ctx
 	var initial, trailers metadata.MD
+	if err = checkRequestGate(ctx); err != nil {
+		return result, err
+	}
+	sent()
 	err = conn.Invoke(callCtx, "/"+b.GRPC.Service+"/"+b.GRPC.Method, request, response, grpc.Header(&initial), grpc.Trailer(&trailers))
 	result.Headers = headers(initial)
 	result.Trailers = headers(trailers)

@@ -31,10 +31,10 @@ func TestMigrateFreshDatabaseAndRepeat(t *testing.T) {
 		t.Fatalf("repeat migration: %v", err)
 	}
 	var count int
-	if err = store.Pool.QueryRow(ctx, dbscope.Render(store.Pool, "SELECT count(*) FROM qag.schema_migrations")).Scan(&count); err != nil || count != 10 {
+	if err = store.Pool.QueryRow(ctx, dbscope.Render(store.Pool, "SELECT count(*) FROM qag.schema_migrations")).Scan(&count); err != nil || count != 11 {
 		t.Fatalf("migration count %d: %v", count, err)
 	}
-	for _, name := range []string{"expected_images", "folders", "test_cases", "environments", "environment_versions", "resources", "resource_versions", "runs", "run_resource_versions", "run_steps", "call_attempts"} {
+	for _, name := range []string{"expected_images", "folders", "test_cases", "environments", "environment_versions", "resources", "resource_versions", "runs", "run_resource_versions", "run_steps", "call_attempts", "call_logs", "http_variable_probes"} {
 		var exists bool
 		if err = store.Pool.QueryRow(ctx, dbscope.Render(store.Pool, "SELECT to_regclass($1) IS NOT NULL"), store.Namespace.App+"."+name).Scan(&exists); err != nil || !exists {
 			t.Fatalf("missing table %s: %v", name, err)
