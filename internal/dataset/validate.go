@@ -14,7 +14,7 @@ import (
 )
 
 func Validate(doc Document) error {
-	if doc.Format != "qag" || doc.Version != Version && doc.Version != 1 {
+	if doc.Format != "qag" || doc.Version != Version && doc.Version != 2 && doc.Version != 1 {
 		return invalid("формат", "", "неподдерживаемая версия")
 	}
 	d := doc.Data
@@ -133,7 +133,7 @@ func Validate(doc Document) error {
 		if _, ok := envs[e.EnvironmentID]; !ok {
 			return invalid("environmentVersions", e.ID, "окружение")
 		}
-		if err := resources.ValidateVariables(e.Variables, e.Secrets); err != nil {
+		if err := resources.EnvironmentVariableContext(e.Variables, e.HTTPVariables, e.Secrets); err != nil {
 			return invalid("environmentVersions", e.ID, "переменные")
 		}
 		if !sameNames(e.SecretNames, e.Secrets) {

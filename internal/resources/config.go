@@ -128,15 +128,20 @@ type Snapshot struct {
 	Resources            []Resource        `json:"resources"`
 }
 type Resolved struct {
-	Prepared       bool
-	Deferred       bool
-	DynamicValues  map[string]string
-	planning       bool
-	forbidDynamic  bool
-	variablesReady bool
-	Resource       Resource
-	Variables      map[string]string
-	Secrets        map[string]string
+	EnvironmentID            string
+	EnvironmentVersionID     string
+	EnvironmentHTTPVariables map[string]catalog.HTTPHeaderSource
+	EnvironmentVariables     map[string]string
+	EnvironmentSecrets       map[string]string
+	Prepared                 bool
+	Deferred                 bool
+	DynamicValues            map[string]string
+	planning                 bool
+	forbidDynamic            bool
+	variablesReady           bool
+	Resource                 Resource
+	Variables                map[string]string
+	Secrets                  map[string]string
 }
 
 func ValidateVariables(values map[string]string, secrets map[string]string) error {

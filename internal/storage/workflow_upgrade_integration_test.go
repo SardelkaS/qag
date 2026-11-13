@@ -25,6 +25,9 @@ func TestUpgradePopulatedSixMigrationNamespace(t *testing.T) { testUpgradePopula
 func TestUpgradePopulatedEightMigrationNamespace(t *testing.T) {
 	testUpgradePopulatedNamespace(t, "009")
 }
+func TestUpgradePopulatedNineMigrationNamespace(t *testing.T) {
+	testUpgradePopulatedNamespace(t, "010")
+}
 func testUpgradePopulatedNamespace(t *testing.T, cutoff string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -58,6 +61,11 @@ func testUpgradePopulatedNamespace(t *testing.T, cutoff string) {
 		if _, err = store.Pool.Exec(ctx, dbscope.Render(store.Pool, `INSERT INTO qag.schema_migrations(name,checksum) VALUES($1,$2)`), "migrations/"+file.Name(), hex.EncodeToString(sum[:])); err != nil {
 			t.Fatal(err)
 		}
+	}
+	// The current repository requires the additive column while seeding. Drop
+	// it before the upgrade to reconstruct the exact previous schema and rows.
+	if _, err = store.Pool.Exec(ctx, dbscope.Render(store.Pool, `ALTER TABLE qag.environment_versions ADD COLUMN http_variables jsonb NOT NULL DEFAULT '{}'::jsonb`)); err != nil {
+		t.Fatal(err)
 	}
 	c := catalog.NewRepository(store.Pool)
 	vault, _ := resources.NewVault(bytes.Repeat([]byte{5}, 32))
@@ -95,9 +103,12 @@ func testUpgradePopulatedNamespace(t *testing.T, cutoff string) {
 			t.Fatal(err)
 		}
 	}
+	if _, err = store.Pool.Exec(ctx, dbscope.Render(store.Pool, `ALTER TABLE qag.environment_versions DROP COLUMN http_variables`)); err != nil {
+		t.Fatal(err)
+	}
 	fingerprint := func() string {
 		var value string
-		if err := store.Pool.QueryRow(ctx, dbscope.Render(store.Pool, `SELECT md5(jsonb_build_object('cases',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM qag.test_cases t),'env',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM qag.environment_versions t),'secrets',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM qag.resource_versions t),'runs',(SELECT jsonb_agg(to_jsonb(t)-'history_policy' ORDER BY id) FROM qag.runs t),'steps',(SELECT jsonb_agg(to_jsonb(t) ORDER BY step_id) FROM qag.run_steps t),'migrations',(SELECT jsonb_agg(to_jsonb(t) ORDER BY name) FROM qag.schema_migrations t WHERE name<'migrations/`+cutoff+`'))::text)`)).Scan(&value); err != nil {
+		if err := store.Pool.QueryRow(ctx, dbscope.Render(store.Pool, `SELECT md5(jsonb_build_object('cases',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM qag.test_cases t),'env',(SELECT jsonb_agg(to_jsonb(t)-'http_variables' ORDER BY id) FROM qag.environment_versions t),'secrets',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM qag.resource_versions t),'runs',(SELECT jsonb_agg(to_jsonb(t)-'history_policy' ORDER BY id) FROM qag.runs t),'steps',(SELECT jsonb_agg(to_jsonb(t) ORDER BY step_id) FROM qag.run_steps t),'migrations',(SELECT jsonb_agg(to_jsonb(t) ORDER BY name) FROM qag.schema_migrations t WHERE name<'migrations/`+cutoff+`'))::text)`)).Scan(&value); err != nil {
 			t.Fatal(err)
 		}
 		return value
@@ -110,6 +121,10 @@ func testUpgradePopulatedNamespace(t *testing.T, cutoff string) {
 	}
 	if fingerprint() != before {
 		t.Fatal("upgrade rewrote snapshots, secrets, IDs, statuses or migration checksums")
+	}
+	var defaults bool
+	if err = store.Pool.QueryRow(ctx, dbscope.Render(store.Pool, `SELECT bool_and(http_variables='{}'::jsonb) FROM qag.environment_versions`)).Scan(&defaults); err != nil || !defaults {
+		t.Fatal("HTTP defaults changed old definitions", err)
 	}
 	run, err := runs.NewRepository(store.Pool).Get(ctx, id)
 	if err != nil {

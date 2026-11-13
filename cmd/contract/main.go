@@ -118,7 +118,7 @@ func main() {
 	setEnum("Expectation", "bodyMode", "none", "text", "json", "rows", "exec")
 	setEnum("TLSConfig", "mode", "tls", "mtls", "plaintext")
 	setEnum("HTTPHeaderSource", "fetchMode", "per_attempt", "per_run")
-	setEnum("HTTPHeaderSource", "bodyMode", "none", "text", "json")
+	setEnum("HTTPHeaderSource", "bodyMode", "none", "text", "json", "form")
 	setEnum("Run", "status", "running", "passed", "failed", "blocked", "cancelled", "interrupted")
 	setEnum("StepState", "status", "not_run", "passed", "failed")
 	setEnum("StepState", "legacyStatus", "blocked", "skipped")
@@ -143,7 +143,7 @@ func main() {
 	for _, name := range []string{"ResourceWrite", "VariablesWrite"} {
 		schemas[name].(object)["properties"].(object)["secrets"] = ref("SecretChangesWrite")
 	}
-	for _, field := range [][2]string{{"ResourceConfigWrite", "variables"}, {"VariablesWrite", "variables"}, {"SecretChangesWrite", "replace"}} {
+	for _, field := range [][2]string{{"ResourceConfigWrite", "variables"}, {"VariablesWrite", "variables"}, {"VariablesWrite", "httpVariables"}, {"SecretChangesWrite", "replace"}} {
 		properties := schemas[field[0]].(object)["properties"].(object)
 		properties[field[1]].(object)["patternProperties"] = object{`^\s*$`: object{}}
 	}

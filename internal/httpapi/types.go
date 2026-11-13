@@ -27,9 +27,10 @@ type EnvironmentWrite struct {
 	Revision    int64  `json:"revision"`
 }
 type VariablesWrite struct {
-	Revision  int64                   `json:"revision"`
-	Variables map[string]string       `json:"variables"`
-	Secrets   resources.SecretChanges `json:"secrets"`
+	HTTPVariables resources.HTTPVariables `json:"httpVariables,omitempty"`
+	Revision      int64                   `json:"revision"`
+	Variables     map[string]string       `json:"variables"`
+	Secrets       resources.SecretChanges `json:"secrets"`
 }
 type ResourceWrite struct {
 	Name     string                  `json:"name"`

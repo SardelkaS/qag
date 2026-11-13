@@ -67,7 +67,7 @@ test('header source form chooses per-header mode and keeps its stable ID', () =>
   fireEvent.change(screen.getByLabelText('Источник: поле JSON'), {
     target: { value: '/data/access_token' },
   })
-  fireEvent.change(screen.getByLabelText('Источник: префикс'), {
+  fireEvent.change(screen.getByLabelText('Источник: текст перед значением'), {
     target: { value: 'Bearer ' },
   })
   const header = JSON.parse(screen.getByTestId('header').textContent!)[0]

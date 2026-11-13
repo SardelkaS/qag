@@ -21,10 +21,10 @@ type ValidationIssue struct {
 	Message string `json:"message"`
 }
 type TLSConfig struct {
-	Mode        string `json:"mode"`
-	ServerName  string `json:"serverName,omitempty"`
-	CA          string `json:"ca,omitempty"`
-	Certificate string `json:"certificate,omitempty"`
+	Mode        string `json:"mode" yaml:"mode"`
+	ServerName  string `json:"serverName,omitempty" yaml:"serverName,omitempty"`
+	CA          string `json:"ca,omitempty" yaml:"ca,omitempty"`
+	Certificate string `json:"certificate,omitempty" yaml:"certificate,omitempty"`
 }
 type RequestHeader struct {
 	ID     string            `json:"id,omitempty"`
@@ -33,17 +33,19 @@ type RequestHeader struct {
 	Source *HTTPHeaderSource `json:"source,omitempty"`
 }
 type HTTPHeaderSource struct {
-	Method           string     `json:"method"`
-	URL              string     `json:"url"`
-	Query            []KeyValue `json:"query"`
-	Headers          []KeyValue `json:"headers"`
-	BodyMode         string     `json:"bodyMode"`
-	Body             string     `json:"body"`
-	TLS              TLSConfig  `json:"tls"`
-	PrivateKeySecret string     `json:"privateKeySecret,omitempty"`
-	JSONPointer      string     `json:"jsonPointer"`
-	Prefix           string     `json:"prefix,omitempty"`
-	FetchMode        string     `json:"fetchMode"`
+	Method           string     `json:"method" yaml:"method"`
+	URL              string     `json:"url" yaml:"url"`
+	Query            []KeyValue `json:"query" yaml:"query"`
+	Headers          []KeyValue `json:"headers" yaml:"headers"`
+	BodyMode         string     `json:"bodyMode" yaml:"bodyMode"`
+	Body             string     `json:"body" yaml:"body"`
+	Form             []KeyValue `json:"form,omitempty" yaml:"form,omitempty"`
+	TLS              TLSConfig  `json:"tls" yaml:"tls"`
+	PrivateKeySecret string     `json:"privateKeySecret,omitempty" yaml:"privateKeySecret,omitempty"`
+	JSONPointer      string     `json:"jsonPointer" yaml:"jsonPointer"`
+	Prefix           string     `json:"prefix,omitempty" yaml:"prefix,omitempty"`
+	Suffix           string     `json:"suffix,omitempty" yaml:"suffix,omitempty"`
+	FetchMode        string     `json:"fetchMode" yaml:"fetchMode"`
 }
 
 // Draft validation enforces document integrity, never completeness of user fields.

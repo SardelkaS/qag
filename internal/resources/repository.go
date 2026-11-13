@@ -28,11 +28,11 @@ type queryer interface {
 }
 type scanner interface{ Scan(...any) error }
 
-const environmentSelect = `SELECT e.id::text,e.name,e.revision,v.variables,v.secret_names,EXISTS(SELECT 1 FROM qag.builtin_demo WHERE environment_id=e.id),e.description FROM qag.environments e JOIN qag.environment_versions v ON v.id=e.current_version_id`
+const environmentSelect = `SELECT e.id::text,e.name,e.revision,v.variables,v.secret_names,EXISTS(SELECT 1 FROM qag.builtin_demo WHERE environment_id=e.id),e.description,v.http_variables FROM qag.environments e JOIN qag.environment_versions v ON v.id=e.current_version_id`
 
 func scanEnvironment(row scanner) (Environment, error) {
 	var e Environment
-	err := row.Scan(&e.ID, &e.Name, &e.Revision, &e.Variables, &e.SecretNames, &e.ReadOnly, &e.Description)
+	err := row.Scan(&e.ID, &e.Name, &e.Revision, &e.Variables, &e.SecretNames, &e.ReadOnly, &e.Description, &e.HTTPVariables)
 	if e.Variables == nil {
 		e.Variables = map[string]string{}
 	}
@@ -74,14 +74,14 @@ func (r *Repository) SaveEnvironment(ctx context.Context, id, value string, revi
 func (r *Repository) SaveEnvironmentMetadata(ctx context.Context, id, name, description string, revision int64) (Environment, error) {
 	return r.saveEnvironment(ctx, id, name, revision, nil, SecretChanges{}, &description)
 }
-func (r *Repository) SaveVariables(ctx context.Context, id string, revision int64, variables map[string]string, changes SecretChanges) (Environment, error) {
+func (r *Repository) SaveVariables(ctx context.Context, id string, revision int64, variables map[string]string, changes SecretChanges, sources ...map[string]catalog.HTTPHeaderSource) (Environment, error) {
 	e, err := r.GetEnvironment(ctx, id)
 	if err != nil {
 		return e, err
 	}
-	return r.SaveEnvironment(ctx, id, e.Name, revision, variables, changes)
+	return r.saveEnvironment(ctx, id, e.Name, revision, variables, changes, nil, sources...)
 }
-func (r *Repository) saveEnvironment(ctx context.Context, id, value string, revision int64, variables map[string]string, changes SecretChanges, description *string) (Environment, error) {
+func (r *Repository) saveEnvironment(ctx context.Context, id, value string, revision int64, variables map[string]string, changes SecretChanges, description *string, sources ...map[string]catalog.HTTPHeaderSource) (Environment, error) {
 	variables = NormalizeNewVariables(variables)
 	name, normalized, err := catalog.Name(value)
 	if err != nil {
@@ -98,6 +98,7 @@ func (r *Repository) saveEnvironment(ctx context.Context, id, value string, revi
 	}
 	var result Environment
 	err = r.transaction(ctx, func(tx pgx.Tx) error {
+		httpVariables := map[string]catalog.HTTPHeaderSource{}
 		if !create {
 			if err := builtin.Protect(ctx, tx, id); err != nil {
 				return err
@@ -108,18 +109,15 @@ func (r *Repository) saveEnvironment(ctx context.Context, id, value string, revi
 		if !create {
 			var version string
 			var sealed []byte
-			if err := tx.QueryRow(ctx, dbscope.Render(tx, `SELECT e.revision,v.id::text,v.encrypted_secrets FROM qag.environments e JOIN qag.environment_versions v ON v.id=e.current_version_id WHERE e.id=$1 FOR UPDATE OF e`), id).Scan(&currentRevision, &version, &sealed); err != nil {
+			var oldVariables map[string]string
+			if err := tx.QueryRow(ctx, dbscope.Render(tx, `SELECT e.revision,v.id::text,v.encrypted_secrets,v.http_variables,v.variables FROM qag.environments e JOIN qag.environment_versions v ON v.id=e.current_version_id WHERE e.id=$1 FOR UPDATE OF e`), id).Scan(&currentRevision, &version, &sealed, &httpVariables, &oldVariables); err != nil {
 				return problem.Database(err)
 			}
 			if currentRevision != revision {
 				return problem.Conflict("Окружение изменилось; обновите форму")
 			}
 			if description != nil {
-				if _, err := tx.Exec(ctx, dbscope.Render(tx, `UPDATE qag.environments SET name=$2,normalized_name=$3,description=$4,revision=revision+1,updated_at=now() WHERE id=$1`), id, name, normalized, *description); err != nil {
-					return problem.Database(err)
-				}
-				result, err = scanEnvironment(tx.QueryRow(ctx, dbscope.Render(tx, environmentSelect+` WHERE e.id=$1`), id))
-				return err
+				variables = oldVariables
 			}
 			var err error
 			oldSecrets, err = r.vault.Open(id+":"+version, sealed)
@@ -139,8 +137,32 @@ func (r *Repository) saveEnvironment(ctx context.Context, id, value string, revi
 		if err != nil {
 			return err
 		}
-		if err = ValidateVariables(variables, values); err != nil {
+		if len(sources) > 0 && sources[0] != nil {
+			httpVariables = NormalizeHTTPVariables(sources[0])
+		}
+		if err = EnvironmentVariableContext(variables, httpVariables, values); err != nil {
 			return err
+		}
+		rows, err := tx.Query(ctx, dbscope.Render(tx, `SELECT v.config,v.secret_names FROM qag.resources r JOIN qag.resource_versions v ON v.id=r.current_version_id WHERE r.environment_id=$1`), id)
+		if err != nil {
+			return problem.Database(err)
+		}
+		for rows.Next() {
+			var config Config
+			var names []string
+			if err = rows.Scan(&config, &names); err != nil {
+				rows.Close()
+				return problem.Database(err)
+			}
+			if err = CheckEnvironmentNames(config, names, variables, httpVariables, values); err != nil {
+				rows.Close()
+				return err
+			}
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return problem.Database(err)
 		}
 		version := catalog.NewID()
 		sealed, err := r.vault.Seal(id+":"+version, values)
@@ -148,10 +170,10 @@ func (r *Repository) saveEnvironment(ctx context.Context, id, value string, revi
 			return problem.Conflict("Не удалось зашифровать секреты")
 		}
 		next := currentRevision + 1
-		if _, err = tx.Exec(ctx, dbscope.Render(tx, `INSERT INTO qag.environment_versions(id,environment_id,revision,variables,encrypted_secrets,secret_names) VALUES($1,$2,$3,$4,$5,$6)`), version, id, next, variables, sealed, secretNames(values)); err != nil {
+		if _, err = tx.Exec(ctx, dbscope.Render(tx, `INSERT INTO qag.environment_versions(id,environment_id,revision,variables,encrypted_secrets,secret_names,http_variables) VALUES($1,$2,$3,$4,$5,$6,$7)`), version, id, next, variables, sealed, secretNames(values), httpVariables); err != nil {
 			return problem.Database(err)
 		}
-		if _, err = tx.Exec(ctx, dbscope.Render(tx, `UPDATE qag.environments SET name=$2,normalized_name=$3,revision=$4,current_version_id=$5,updated_at=now() WHERE id=$1`), id, name, normalized, next, version); err != nil {
+		if _, err = tx.Exec(ctx, dbscope.Render(tx, `UPDATE qag.environments SET name=$2,normalized_name=$3,revision=$4,current_version_id=$5,description=COALESCE($6::text,description),updated_at=now() WHERE id=$1`), id, name, normalized, next, version, description); err != nil {
 			return problem.Database(err)
 		}
 		result, err = scanEnvironment(tx.QueryRow(ctx, dbscope.Render(tx, environmentSelect+` WHERE e.id=$1`), id))
@@ -276,7 +298,8 @@ func (r *Repository) SaveResource(ctx context.Context, id, environmentID, name, 
 		var envVersion string
 		var envSealed []byte
 		var envVariables map[string]string
-		if err := tx.QueryRow(ctx, dbscope.Render(tx, `SELECT v.id::text,v.encrypted_secrets,v.variables FROM qag.environments e JOIN qag.environment_versions v ON v.id=e.current_version_id WHERE e.id=$1`), environmentID).Scan(&envVersion, &envSealed, &envVariables); err != nil {
+		var envHTTP map[string]catalog.HTTPHeaderSource
+		if err := tx.QueryRow(ctx, dbscope.Render(tx, `SELECT v.id::text,v.encrypted_secrets,v.variables,v.http_variables FROM qag.environments e JOIN qag.environment_versions v ON v.id=e.current_version_id WHERE e.id=$1 FOR SHARE OF e`), environmentID).Scan(&envVersion, &envSealed, &envVariables, &envHTTP); err != nil {
 			return problem.Database(err)
 		}
 		envValues, err := r.vault.Open(environmentID+":"+envVersion, envSealed)
@@ -289,7 +312,7 @@ func (r *Repository) SaveResource(ctx context.Context, id, environmentID, name, 
 		for k, v := range values {
 			sourceValues[k] = v
 		}
-		if err := VariableContext(config, envVariables, sourceValues); err != nil {
+		if err := VariableContext(config, envVariables, sourceValues, envHTTP); err != nil {
 			return err
 		}
 		if err = ValidateConfig(kind, config, values, sourceValues); err != nil {
@@ -385,8 +408,9 @@ func (r *Repository) Resolve(ctx context.Context, snapshot Snapshot, name string
 		return Resolved{}, err
 	}
 	var variables map[string]string
+	var httpVariables map[string]catalog.HTTPHeaderSource
 	var envEncrypted []byte
-	if err = r.pool.QueryRow(ctx, dbscope.Render(r.pool, `SELECT variables,encrypted_secrets FROM qag.environment_versions WHERE id=$1 AND environment_id=$2`), snapshot.EnvironmentVersionID, snapshot.EnvironmentID).Scan(&variables, &envEncrypted); err != nil {
+	if err = r.pool.QueryRow(ctx, dbscope.Render(r.pool, `SELECT variables,encrypted_secrets,http_variables FROM qag.environment_versions WHERE id=$1 AND environment_id=$2`), snapshot.EnvironmentVersionID, snapshot.EnvironmentID).Scan(&variables, &envEncrypted, &httpVariables); err != nil {
 		return Resolved{}, problem.Database(err)
 	}
 	envSecrets, err := r.vault.Open(snapshot.EnvironmentID+":"+snapshot.EnvironmentVersionID, envEncrypted)
@@ -405,7 +429,7 @@ func (r *Repository) Resolve(ctx context.Context, snapshot Snapshot, name string
 		}
 	}
 	resource.Config = config
-	return Resolved{Resource: resource, Variables: variables, Secrets: secrets}, nil
+	return Resolved{Resource: resource, Variables: variables, Secrets: secrets, EnvironmentID: snapshot.EnvironmentID, EnvironmentVersionID: snapshot.EnvironmentVersionID, EnvironmentHTTPVariables: httpVariables, EnvironmentVariables: variables, EnvironmentSecrets: envSecrets}, nil
 }
 
 func (r *Repository) transaction(ctx context.Context, apply func(pgx.Tx) error) error {

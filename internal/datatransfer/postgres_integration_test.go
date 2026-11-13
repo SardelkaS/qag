@@ -68,6 +68,15 @@ func TestFullGraphCrossKeyRoundTrip(t *testing.T) {
 		w.Write([]byte(`{"n":9007199254740993123.125,"token":"new-private-sentinel"}`))
 	}))
 	defer target.Close()
+	env, err = res.GetEnvironment(ctx, env.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	envSource := catalog.HTTPHeaderSource{Method: "POST", URL: target.URL, TLS: catalog.TLSConfig{Mode: "plaintext"}, BodyMode: "form", Form: []catalog.KeyValue{{Name: "secret", Value: "${TOKEN}"}, {Name: "scope", Value: "one"}, {Name: "scope", Value: "two"}}, JSONPointer: "/token", Suffix: "]", FetchMode: "per_run"}
+	env, err = res.SaveVariables(ctx, env.ID, env.Revision, env.Variables, resources.SecretChanges{}, map[string]catalog.HTTPHeaderSource{"ENV_HTTP": envSource})
+	if err != nil {
+		t.Fatal(err)
+	}
 	resource, err := res.SaveResource(ctx, "", env.ID, "TARGET", "http", 0, resources.Config{BaseURL: target.URL, Variables: map[string]resources.VariableDefinition{"LOCAL": {Mode: "literal", Value: "${N}"}, "FROM_HTTP": {Mode: "http", Source: &catalog.HTTPHeaderSource{Method: "GET", URL: target.URL, BodyMode: "none", TLS: catalog.TLSConfig{Mode: "plaintext"}, JSONPointer: "/token", FetchMode: "per_run"}}}, Headers: []catalog.RequestHeader{{Name: "Authorization", Value: "${TOKEN}"}}, TLS: resources.TLSConfig{Mode: "plaintext"}}, resources.SecretChanges{})
 	if err != nil {
 		t.Fatal(err)
@@ -186,6 +195,9 @@ func TestFullGraphCrossKeyRoundTrip(t *testing.T) {
 			// Reconstruct a real v1 document, including history, then exercise the
 			// supported v1 reader before importing it into a third PostgreSQL key.
 			doc.Version = 1
+			for j := range doc.Data.EnvironmentVersions {
+				doc.Data.EnvironmentVersions[j].HTTPVariables = nil
+			}
 			for j := range doc.Data.Runs {
 				doc.Data.Runs[j].HistoryPolicy = ""
 				context, _ := dataset.Value[resources.Snapshot](doc.Data.Runs[j].Context)
@@ -207,7 +219,7 @@ func TestFullGraphCrossKeyRoundTrip(t *testing.T) {
 				t.Fatal(err)
 			}
 			doc, err = dataset.Decode(bytes.NewReader(legacy))
-			if err != nil || doc.Version != 2 {
+			if err != nil || doc.Version != dataset.Version {
 				t.Fatal("v1-to-v2", err)
 			}
 		}
@@ -238,6 +250,20 @@ func TestFullGraphCrossKeyRoundTrip(t *testing.T) {
 		}
 		if _, counts, err := dataset.Merge(snapshot, doc); err != nil {
 			t.Fatal("round trip equality", counts, err)
+		}
+		if i != 2 {
+			found := false
+			for _, version := range snapshot.Data.EnvironmentVersions {
+				if source, ok := version.HTTPVariables["ENV_HTTP"]; ok {
+					found = true
+					if source.Suffix != "]" || source.BodyMode != "form" || len(source.Form) != 3 {
+						t.Fatal("HTTP environment transfer lost fields")
+					}
+				}
+			}
+			if !found {
+				t.Fatal("HTTP environment transfer lost definition")
+			}
 		}
 		if !bytes.Equal(snapshot.Data.ExpectedImages[0].Data, picture.Bytes()) || len(snapshot.Data.CallAttempts) != 3 || len(snapshot.Data.VariantVersions) != 2 {
 			t.Fatal("full graph was truncated")
@@ -274,7 +300,7 @@ func TestFullGraphCrossKeyRoundTrip(t *testing.T) {
 		if _, err = pg.Import(ctx, doc, false); err != nil {
 			t.Fatal("repeat import", err)
 		}
-		for _, changed := range []string{"policy", "step"} {
+		for _, changed := range []string{"policy", "step", "environment-source"} {
 			if i == 2 {
 				continue
 			}
@@ -285,10 +311,17 @@ func TestFullGraphCrossKeyRoundTrip(t *testing.T) {
 						conflict.Data.Runs[j].HistoryPolicy = "auto"
 					}
 				}
-			} else {
+			} else if changed == "step" {
 				for j := range conflict.Data.Batches {
 					if conflict.Data.Batches[j].RunID == run.ID {
 						conflict.Data.Batches[j].StepID = ""
+					}
+				}
+			} else {
+				for j := range conflict.Data.EnvironmentVersions {
+					if source, ok := conflict.Data.EnvironmentVersions[j].HTTPVariables["ENV_HTTP"]; ok {
+						source.Suffix = "different"
+						conflict.Data.EnvironmentVersions[j].HTTPVariables["ENV_HTTP"] = source
 					}
 				}
 			}

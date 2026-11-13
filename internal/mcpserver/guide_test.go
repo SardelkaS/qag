@@ -2,13 +2,46 @@ package mcpserver
 
 import (
 	"context"
+	"encoding/json"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/SardelkaS/qag/internal/resources"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+func TestGuideEnvironmentFormExampleMatchesCurrentContract(t *testing.T) {
+	schema := schemaFor[VariablesSet]()
+	configureInput(schema, "qag_variables_set")
+	resolved, err := schema.Resolve(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, match := range regexp.MustCompile("(?s)```json\\s*(.*?)```").FindAllStringSubmatch(agentGuide, -1) {
+		var value map[string]any
+		if json.Unmarshal([]byte(match[1]), &value) != nil || value["httpVariables"] == nil {
+			continue
+		}
+		found = true
+		if err := resolved.Validate(value); err != nil {
+			t.Fatal("guide/schema drift", err)
+		}
+		var input VariablesSet
+		if err := json.Unmarshal([]byte(match[1]), &input); err != nil {
+			t.Fatal(err)
+		}
+		if err := resources.EnvironmentVariableContext(input.Variables, input.HTTPVariables, map[string]string{"CLIENT_SECRET": "a+b&c= d%"}); err != nil {
+			t.Fatal("guide/domain drift", err)
+		}
+	}
+	if !found {
+		t.Fatal("missing form authorization example")
+	}
+}
 
 func TestPermanentGuideSurvivesArtifactExpiry(t *testing.T) {
 	s := New(Options{})

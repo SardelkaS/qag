@@ -30,6 +30,9 @@ func NormalizeVariableWriteJSON(raw []byte) []byte {
 		return changed
 	}
 	changed := cleanMap(root, "variables")
+	if cleanMap(root, "httpVariables") {
+		changed = true
+	}
 	var config map[string]json.RawMessage
 	if json.Unmarshal(root["config"], &config) == nil && cleanMap(config, "variables") {
 		root["config"], _ = json.Marshal(config)

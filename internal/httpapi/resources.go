@@ -33,7 +33,7 @@ func (s *Server) RegisterResources(repo ports.Resources) {
 		if err := readJSON(r, &body); err != nil {
 			return nil, err
 		}
-		return repo.SaveVariables(r.Context(), r.PathValue("id"), body.Revision, body.Variables, body.Secrets)
+		return repo.SaveVariables(r.Context(), r.PathValue("id"), body.Revision, body.Variables, body.Secrets, body.HTTPVariables)
 	})
 	s.register("GET /api/v1/environments/{id}/resources", func(r *http.Request) (any, error) {
 		limit, cursor, err := pageOptions(r)

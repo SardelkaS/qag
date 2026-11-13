@@ -1,16 +1,16 @@
 import { useState } from 'react'
 import type {
   Environment,
-  KeyValue,
   Resource,
   ResourceConfig,
   SecretChanges,
 } from './api'
 import { fieldErrors, message, protocolLabel, request } from './api'
-import { Field, Modal, Notice, Pairs } from './ui'
+import { Field, Modal, Notice } from './ui'
 import { HeaderEditor, TLSFields } from './HeaderEditor'
 import { PemUpload } from './PemUpload'
-import { ResourceVariables, variableMap, type VariableRow } from './ResourceVariables'
+import { ResourceVariables, environmentVariableWrite, variableMap, type VariableRow } from './ResourceVariables'
+import { FileReadContext, useFileRead, useFileReadScope } from './FileReads'
 import { ReadOnlyNotice } from './ReadOnlyNotice'
 
 type SecretRow = {
@@ -202,6 +202,7 @@ export default function ResourcesPanel({
               <p className="muted">{environment.description}</p>
               <span className="muted small">
                 {Object.keys(environment.variables).length} открытых переменных
+                · {Object.keys(environment.httpVariables ?? {}).length} HTTP-источников
                 · {environment.secretNames.length} секретных
               </span>
             </div>
@@ -225,6 +226,7 @@ export default function ResourcesPanel({
               </button>
             </div>
             {!Object.keys(environment.variables).length &&
+              !Object.keys(environment.httpVariables ?? {}).length &&
               !environment.secretNames.length && (
                 <p className="muted small">Переменных пока нет.</p>
               )}
@@ -238,6 +240,12 @@ export default function ResourcesPanel({
                     <span>{value || 'Пустая строка'}</span>
                   </div>
                 ))}
+              {Object.entries(environment.httpVariables ?? {}).sort(([a], [b]) => a.localeCompare(b)).map(([name, source]) => (
+                <div key={name}>
+                  <code>{name}</code><span className="badge">Из HTTP-запроса</span>
+                  <span className="muted">{source.method} {source.url} · {source.fetchMode === 'per_run' ? 'Один раз на прогон' : 'Перед каждым вызовом'}</span>
+                </div>
+              ))}
               {environment.secretNames.map((name) => (
                 <div key={name}>
                   <code>{name}</code>
@@ -407,7 +415,7 @@ function EnvironmentForm({
   )
 }
 
-function VariablesForm({
+export function VariablesForm({
   initial,
   close,
   saved,
@@ -416,12 +424,16 @@ function VariablesForm({
   close: () => void
   saved: (env: Environment) => Promise<void>
 }) {
-  const [variables, setVariables] = useState<KeyValue[]>(
-    Object.entries(initial?.variables ?? {}).map(([name, value]) => ({
+  const [variables, setVariables] = useState<VariableRow[]>([
+    ...Object.entries(initial?.variables ?? {}).map(([name, value]) => ({
+      id: crypto.randomUUID(),
+      mode: 'literal' as const,
       name,
       value,
     })),
-  )
+    ...Object.entries(initial?.httpVariables ?? {}).map(([name, source]) => ({ id: crypto.randomUUID(), mode: 'http' as const, name, source })),
+  ])
+  const files = useFileReadScope()
   const [secrets, setSecrets] = useState(
       initialSecrets(initial?.secretNames ?? []),
     ),
@@ -430,21 +442,18 @@ function VariablesForm({
     [busy, setBusy] = useState(false)
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
+    if (files.pending || busy) return
     setBusy(true)
     setError('')
     setFields({})
     try {
-      const named = variables.filter((v) => v.name.trim())
-      if (new Set(named.map((v) => v.name)).size !== named.length)
-        throw new Error('Имена переменных должны быть уникальными')
+      const definitions = environmentVariableWrite(variables)
       const env = await request<Environment>(
         `/environments/${initial!.id}/variables`,
         'PUT',
         {
           revision: initial?.revision ?? 0,
-          variables: Object.fromEntries(
-            named.map((v) => [v.name, v.value]),
-          ),
+          ...definitions,
           secrets: secretChanges(secrets),
         },
       )
@@ -457,15 +466,12 @@ function VariablesForm({
     }
   }
   return (
+    <FileReadContext.Provider value={files.begin}>
     <Modal title="Переменные окружения" onClose={close}>
       <form onSubmit={(e) => void submit(e)}>
         <fieldset disabled={busy} className="plain-fieldset">
           {error && <Notice>{error}</Notice>}
-          <Pairs
-            label="Открытые переменные"
-            value={variables}
-            onChange={setVariables}
-          />
+          <ResourceVariables scope="environment" rows={variables} change={setVariables} secrets={secrets.map(row => row.name).filter(Boolean)} />
           {fields.variables && (
             <p className="field-error">{fields.variables}</p>
           )}
@@ -474,17 +480,18 @@ function VariablesForm({
             <button type="button" className="button secondary" onClick={close}>
               Отмена
             </button>
-            <button className="button" type="submit">
+            <button className="button" type="submit" disabled={files.pending > 0}>
               {busy ? 'Сохранение…' : 'Сохранить переменные'}
             </button>
           </div>
         </fieldset>
       </form>
     </Modal>
+    </FileReadContext.Provider>
   )
 }
 
-function ResourceForm({
+export function ResourceForm({
   initial,
   environmentId,
   environmentsSecretNames,
@@ -523,6 +530,7 @@ function ResourceForm({
         },
   )
   const [resourceVariables, setResourceVariables] = useState<VariableRow[]>(Object.entries(initial?.config.variables ?? {}).map(([name, definition]) => ({ ...definition, name, id: crypto.randomUUID() })))
+  const files = useFileReadScope()
   const presets =
     kind === 'postgresql'
       ? ['PASSWORD', 'PRIVATE_KEY']
@@ -539,6 +547,7 @@ function ResourceForm({
     change({ tls: { ...config.tls, ...patch } })
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
+    if (files.pending || busy || initial?.readOnly) return
     setBusy(true)
     setError('')
     setFields({})
@@ -564,10 +573,12 @@ function ResourceForm({
       setBusy(false)
     }
   }
+  const readProto = useFileRead<Record<string, string>>(values => setConfig(old => ({ ...old, protoFiles: { ...old.protoFiles, ...values } })), setError, files.begin)
   const upload = async (list: FileList | null) => {
     if (!list) return
-    try {
-      const files = Array.from(list)
+    const selected = Array.from(list)
+    await readProto(async () => {
+      const files = selected
       if (
         files.reduce((n, f) => n + f.size, 0) > 5 * 1024 * 1024 ||
         files.length > 100
@@ -584,14 +595,11 @@ function ResourceForm({
             ] as const,
         ),
       )
-      change({
-        protoFiles: { ...config.protoFiles, ...Object.fromEntries(values) },
-      })
-    } catch (e) {
-      setError(message(e))
-    }
+      return Object.fromEntries(values)
+    })
   }
   return (
+    <FileReadContext.Provider value={files.begin}>
     <form className="resource-form" onSubmit={(e) => void submit(e)}>
       {initial?.config.unavailableReason === 'demo_sql_unavailable' && (
         <Notice>
@@ -625,7 +633,7 @@ function ResourceForm({
           <Field label="Тип ресурса" error={fields.kind}>
             <select
               value={kind}
-              disabled={!!initial}
+              disabled={!!initial || files.pending > 0}
               onChange={(e) => {
                 const next = e.target.value as Resource['kind']
                 setKind(next)
@@ -759,15 +767,16 @@ function ResourceForm({
           <span className="muted small">
             Изменения применятся к новым прогонам.
           </span>
-          <button className="button" type="submit">
+          <button className="button" type="submit" disabled={files.pending > 0}>
             {initial?.readOnly
               ? 'Системное подключение · только просмотр'
               : busy
                 ? 'Сохранение…'
-                : 'Сохранить ресурс'}
+                : files.pending > 0 ? 'Чтение файлов…' : 'Сохранить ресурс'}
           </button>
         </div>
       </fieldset>
     </form>
+    </FileReadContext.Provider>
   )
 }

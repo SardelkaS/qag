@@ -114,6 +114,7 @@ export const newHTTPSource = (): HTTPHeaderSource => ({
   tls: { mode: 'tls' },
   jsonPointer: '',
   prefix: '',
+  suffix: '',
   fetchMode: 'per_attempt',
 })
 export function HeaderEditor({
@@ -248,15 +249,22 @@ export function HTTPSourceFields({ value, change, secrets = [] }: { value: HTTPH
                   onChange={(e) =>
                     change({
                       bodyMode: e.target.value as HTTPHeaderSource['bodyMode'],
+                      body: ['none', 'form'].includes(e.target.value) ? '' : value.body,
+                      form: e.target.value === 'form' ? value.form ?? [] : undefined,
                     })
                   }
                 >
                   <option value="none">Без тела</option>
                   <option value="json">JSON</option>
                   <option value="text">Текст</option>
+                  <option value="form">Форма · application/x-www-form-urlencoded</option>
                 </select>
               </Field>
-              {value.bodyMode !== 'none' && (
+              {value.bodyMode === 'form' && <>
+                <p className="muted small">Введите исходные значения, как в curl --data-urlencode. Подстановки и секреты кодируются автоматически; повторные имена и пустые значения сохраняются.</p>
+                <Pairs label="Источник: поля формы" value={value.form ?? []} onChange={form => change({ form })} />
+              </>}
+              {value.bodyMode !== 'none' && value.bodyMode !== 'form' && (
                 <Field
                   label="Источник: тело запроса"
                   hint="Секреты указываются ссылками, например ${CLIENT_SECRET}"
@@ -296,7 +304,7 @@ export function HTTPSourceFields({ value, change, secrets = [] }: { value: HTTPH
                   />
                 </Field>
                 <Field
-                  label="Источник: префикс"
+                  label="Источник: текст перед значением"
                   hint="Например Bearer с пробелом в конце"
                 >
                   <input
@@ -305,6 +313,9 @@ export function HTTPSourceFields({ value, change, secrets = [] }: { value: HTTPH
                       change({ prefix: e.target.value })
                     }
                   />
+                </Field>
+                <Field label="Источник: текст после значения" hint="Необязательно. Пробелы сохраняются без изменений.">
+                  <input value={value.suffix ?? ''} onChange={e => change({ suffix: e.target.value })} />
                 </Field>
               </div>
               <Field

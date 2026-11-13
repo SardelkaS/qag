@@ -6,12 +6,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"github.com/SardelkaS/qag/internal/catalog"
 	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
-const Version = 2
+const Version = 3
 const MaxBytes = 256 << 20
 const MaxRecords = 100000
 const MaxDepth = 64
@@ -99,13 +100,14 @@ type Environment struct {
 	UpdatedAt        time.Time `yaml:"updatedAt"`
 }
 type EnvironmentVersion struct {
-	ID            string            `yaml:"id"`
-	EnvironmentID string            `yaml:"environmentId"`
-	Revision      int64             `yaml:"revision"`
-	Variables     map[string]string `yaml:"variables"`
-	Secrets       map[string]string `yaml:"secrets"`
-	SecretNames   []string          `yaml:"secretNames"`
-	CreatedAt     time.Time         `yaml:"createdAt"`
+	HTTPVariables map[string]catalog.HTTPHeaderSource `yaml:"httpVariables,omitempty"`
+	ID            string                              `yaml:"id"`
+	EnvironmentID string                              `yaml:"environmentId"`
+	Revision      int64                               `yaml:"revision"`
+	Variables     map[string]string                   `yaml:"variables"`
+	Secrets       map[string]string                   `yaml:"secrets"`
+	SecretNames   []string                            `yaml:"secretNames"`
+	CreatedAt     time.Time                           `yaml:"createdAt"`
 }
 type Resource struct {
 	ID               string    `yaml:"id"`

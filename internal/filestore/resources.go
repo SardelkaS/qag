@@ -33,7 +33,7 @@ func environment(d *dataset.Data, id string) (resources.Environment, error) {
 	if vars == nil {
 		vars = map[string]string{}
 	}
-	return resources.Environment{ID: id, Name: v.Name, Description: v.Description, Revision: v.Revision, Variables: vars, SecretNames: resources.SecretNames(ver.Secrets), ReadOnly: protected(d, id)}, nil
+	return resources.Environment{ID: id, Name: v.Name, Description: v.Description, Revision: v.Revision, Variables: vars, HTTPVariables: ver.HTTPVariables, SecretNames: resources.SecretNames(ver.Secrets), ReadOnly: protected(d, id)}, nil
 }
 func resource(d *dataset.Data, id, version string) (resources.Resource, error) {
 	if e := valid(id); e != nil {
@@ -122,14 +122,14 @@ func (r *Resources) SaveEnvironment(ctx context.Context, id, value string, revis
 func (r *Resources) SaveEnvironmentMetadata(ctx context.Context, id, name, description string, revision int64) (resources.Environment, error) {
 	return r.saveEnvironment(ctx, id, name, revision, nil, resources.SecretChanges{}, &description)
 }
-func (r *Resources) SaveVariables(ctx context.Context, id string, revision int64, variables map[string]string, changes resources.SecretChanges) (resources.Environment, error) {
+func (r *Resources) SaveVariables(ctx context.Context, id string, revision int64, variables map[string]string, changes resources.SecretChanges, sources ...map[string]catalog.HTTPHeaderSource) (resources.Environment, error) {
 	old, e := r.GetEnvironment(ctx, id)
 	if e != nil {
 		return old, e
 	}
-	return r.SaveEnvironment(ctx, id, old.Name, revision, variables, changes)
+	return r.saveEnvironment(ctx, id, old.Name, revision, variables, changes, nil, sources...)
 }
-func (r *Resources) saveEnvironment(ctx context.Context, id, value string, revision int64, variables map[string]string, changes resources.SecretChanges, description *string) (resources.Environment, error) {
+func (r *Resources) saveEnvironment(ctx context.Context, id, value string, revision int64, variables map[string]string, changes resources.SecretChanges, description *string, sources ...map[string]catalog.HTTPHeaderSource) (resources.Environment, error) {
 	variables = resources.NormalizeNewVariables(variables)
 	name, norm, e := catalog.Name(value)
 	if e != nil {
@@ -143,6 +143,7 @@ func (r *Resources) saveEnvironment(ctx context.Context, id, value string, revis
 		variables = map[string]string{}
 	}
 	e = r.Store.Update(ctx, func(d *dataset.Data) error {
+		httpVariables := map[string]catalog.HTTPHeaderSource{}
 		if !create && protected(d, id) {
 			return readOnly()
 		}
@@ -161,16 +162,12 @@ func (r *Resources) saveEnvironment(ctx context.Context, id, value string, revis
 			if v.Revision != revision {
 				return problem.Conflict("Окружение изменилось; обновите форму")
 			}
-			if description != nil {
-				v.Name = name
-				v.NormalizedName = norm
-				v.Description = *description
-				v.Revision++
-				v.UpdatedAt = now()
-				return nil
-			}
 			j := index(d.EnvironmentVersions, func(x dataset.EnvironmentVersion) bool { return x.ID == v.CurrentVersionID })
 			oldSecrets = d.EnvironmentVersions[j].Secrets
+			httpVariables = d.EnvironmentVersions[j].HTTPVariables
+			if description != nil {
+				variables = d.EnvironmentVersions[j].Variables
+			}
 		} else {
 			t := now()
 			desc := ""
@@ -184,16 +181,39 @@ func (r *Resources) saveEnvironment(ctx context.Context, id, value string, revis
 		if e != nil {
 			return e
 		}
-		if e = resources.ValidateVariables(variables, values); e != nil {
+		if len(sources) > 0 && sources[0] != nil {
+			httpVariables = resources.NormalizeHTTPVariables(sources[0])
+		}
+		if e = resources.EnvironmentVariableContext(variables, httpVariables, values); e != nil {
 			return e
+		}
+		for _, resource := range d.Resources {
+			if resource.EnvironmentID != id {
+				continue
+			}
+			for _, version := range d.ResourceVersions {
+				if version.ID != resource.CurrentVersionID {
+					continue
+				}
+				config, err := dataset.Value[resources.Config](version.Config)
+				if err != nil {
+					return storageError()
+				}
+				if err := resources.CheckEnvironmentNames(config, version.SecretNames, variables, httpVariables, values); err != nil {
+					return err
+				}
+			}
 		}
 		v := &d.Environments[i]
 		v.Revision++
 		v.Name = name
 		v.NormalizedName = norm
+		if description != nil {
+			v.Description = *description
+		}
 		v.UpdatedAt = now()
 		v.CurrentVersionID = catalog.NewID()
-		d.EnvironmentVersions = append(d.EnvironmentVersions, dataset.EnvironmentVersion{ID: v.CurrentVersionID, EnvironmentID: id, Revision: v.Revision, Variables: variables, Secrets: values, SecretNames: resources.SecretNames(values), CreatedAt: now()})
+		d.EnvironmentVersions = append(d.EnvironmentVersions, dataset.EnvironmentVersion{ID: v.CurrentVersionID, EnvironmentID: id, Revision: v.Revision, Variables: variables, HTTPVariables: httpVariables, Secrets: values, SecretNames: resources.SecretNames(values), CreatedAt: now()})
 		return nil
 	})
 	if e != nil {
@@ -278,7 +298,7 @@ func (r *Resources) SaveResource(ctx context.Context, id, env, name, kind string
 		if e != nil {
 			return e
 		}
-		if e = resources.VariableContext(config, envValue.Variables, sourceSecrets); e != nil {
+		if e = resources.VariableContext(config, envValue.Variables, sourceSecrets, envValue.HTTPVariables); e != nil {
 			return e
 		}
 		if e = resources.ValidateConfig(kind, config, secrets, sourceSecrets); e != nil {
@@ -378,9 +398,9 @@ func (r *Resources) Resolve(ctx context.Context, snapshot resources.Snapshot, na
 		return resources.Resolved{}, storageError()
 	}
 	rv.Config = config
-	secrets := v.Secrets
-	if secrets == nil {
-		secrets = map[string]string{}
+	secrets := map[string]string{}
+	for k, value := range v.Secrets {
+		secrets[k] = value
 	}
 	for k, val := range ev.Secrets {
 		if _, ok := secrets[k]; ok {
@@ -393,5 +413,5 @@ func (r *Resources) Resolve(ctx context.Context, snapshot resources.Snapshot, na
 			return resources.Resolved{}, problem.Invalid("variables", "Имя "+k+" одновременно открытое и секретное")
 		}
 	}
-	return resources.Resolved{Resource: rv, Variables: ev.Variables, Secrets: secrets}, nil
+	return resources.Resolved{Resource: rv, Variables: ev.Variables, Secrets: secrets, EnvironmentID: snapshot.EnvironmentID, EnvironmentVersionID: snapshot.EnvironmentVersionID, EnvironmentHTTPVariables: ev.HTTPVariables, EnvironmentVariables: ev.Variables, EnvironmentSecrets: ev.Secrets}, nil
 }

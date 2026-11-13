@@ -561,6 +561,12 @@
           "description": {
             "type": "string"
           },
+          "httpVariables": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/HTTPHeaderSource"
+            },
+            "type": "object"
+          },
           "id": {
             "type": "string"
           },
@@ -910,7 +916,8 @@
             "enum": [
               "none",
               "text",
-              "json"
+              "json",
+              "form"
             ],
             "type": "string"
           },
@@ -920,6 +927,12 @@
               "per_run"
             ],
             "type": "string"
+          },
+          "form": {
+            "items": {
+              "$ref": "#/components/schemas/KeyValue"
+            },
+            "type": "array"
           },
           "headers": {
             "items": {
@@ -944,6 +957,9 @@
               "$ref": "#/components/schemas/KeyValue"
             },
             "type": "array"
+          },
+          "suffix": {
+            "type": "string"
           },
           "tls": {
             "$ref": "#/components/schemas/TLSConfig"
@@ -2369,6 +2385,9 @@
           "name": {
             "type": "string"
           },
+          "scope": {
+            "type": "string"
+          },
           "state": {
             "type": "string"
           },
@@ -2388,6 +2407,15 @@
       "VariablesWrite": {
         "additionalProperties": false,
         "properties": {
+          "httpVariables": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/HTTPHeaderSource"
+            },
+            "patternProperties": {
+              "^\\s*$": {}
+            },
+            "type": "object"
+          },
           "revision": {
             "format": "int64",
             "type": "integer"

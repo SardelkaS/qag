@@ -123,6 +123,7 @@ func addTool[I, O any](s *Server, name, description string, readOnly, external, 
 	input := schemaFor[I]()
 	configureInput(input, name)
 	output := schemaFor[Envelope[O]]()
+	configureSourceSchemas(output)
 	if _, err := output.Resolve(nil); err != nil {
 		panic(err)
 	}
@@ -213,6 +214,7 @@ func addTool[I, O any](s *Server, name, description string, readOnly, external, 
 }
 
 func configureInput(schema *jsonschema.Schema, name string) {
+	configureSourceSchemas(schema)
 	allowUnnamed := func(values *jsonschema.Schema) {
 		if values != nil {
 			values.PatternProperties = map[string]*jsonschema.Schema{`^\s*$`: {}}
@@ -220,6 +222,7 @@ func configureInput(schema *jsonschema.Schema, name string) {
 	}
 	if name == "qag_variables_set" {
 		allowUnnamed(schema.Properties["variables"])
+		allowUnnamed(schema.Properties["httpVariables"])
 	}
 	if secrets := schema.Properties["secrets"]; secrets != nil {
 		allowUnnamed(secrets.Properties["replace"])
@@ -261,6 +264,30 @@ func configureInput(schema *jsonschema.Schema, name string) {
 			}
 		}
 	}
+}
+
+func configureSourceSchemas(root *jsonschema.Schema) {
+	seen := map[*jsonschema.Schema]bool{}
+	var visit func(*jsonschema.Schema)
+	visit = func(schema *jsonschema.Schema) {
+		if schema == nil || seen[schema] {
+			return
+		}
+		seen[schema] = true
+		if schema.Properties["jsonPointer"] != nil && schema.Properties["fetchMode"] != nil && schema.Properties["url"] != nil {
+			schema.Properties["bodyMode"].Enum = []any{"none", "text", "json", "form"}
+			schema.Properties["fetchMode"].Enum = []any{"per_attempt", "per_run"}
+		}
+		for _, child := range schema.Properties {
+			visit(child)
+		}
+		for _, child := range schema.Defs {
+			visit(child)
+		}
+		visit(schema.AdditionalProperties)
+		visit(schema.Items)
+	}
+	visit(root)
 }
 func summarize(value any) *Summary {
 	v := reflect.ValueOf(value)

@@ -107,8 +107,8 @@ func (s *Server) registerTools() {
 	addTool(s, "qag_environment_update", "Изменить имя/описание окружения по revision, сохранив переменные и секреты.", false, false, false, func(ctx context.Context, in EnvironmentUpdate) (resources.Environment, error) {
 		return e.Resources.SaveEnvironmentMetadata(ctx, in.ID, in.Name, in.Description, in.Revision)
 	})
-	addTool(s, "qag_variables_set", "Заменить полный набор открытых переменных; secrets.replace/clear изменяют секреты, пропущенные секреты сохраняются.", false, false, false, func(ctx context.Context, in VariablesSet) (resources.Environment, error) {
-		return e.Resources.SaveVariables(ctx, in.ID, in.Revision, in.Variables, in.Secrets.domain())
+	addTool(s, "qag_variables_set", "Атомарно сохранить строковые переменные, HTTP-источники окружения и изменения секретов. Пропущенное httpVariables сохраняет источники, {} очищает. Источники при сохранении не выполняются; secrets.replace/clear изменяют секреты без обратной выдачи.", false, false, false, func(ctx context.Context, in VariablesSet) (resources.Environment, error) {
+		return e.Resources.SaveVariables(ctx, in.ID, in.Revision, in.Variables, in.Secrets.domain(), in.HTTPVariables)
 	})
 	addTool(s, "qag_resources_list", "Ресурсы выбранного окружения без приватных значений.", true, false, false, func(ctx context.Context, in ResourceList) (catalog.Page[resources.Resource], error) {
 		limit, err := page(in.Page)

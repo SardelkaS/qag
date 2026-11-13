@@ -5,6 +5,7 @@ import { createWriteStream } from 'node:fs'
 import { resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { createServer } from 'node:net'
+import { verifyHTTPSourceWorkflow } from './http-source-workflow'
 
 const root = resolve(import.meta.dirname, '../..'),
   base = 'http://127.0.0.1:18080'
@@ -14,6 +15,10 @@ let fixture: ChildProcess,
   csrf = '',
   logs = ''
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+test('HTTP-источники окружения, полное сохранение и перезапуск PostgreSQL', async ({ page }) => {
+  await verifyHTTPSourceWorkflow(page, base, async () => { await stopApp(); await startApp() })
+})
 async function eventually(action: () => Promise<boolean>) {
   for (let n = 0; n < 100; n++) {
     if (await action().catch(() => false)) return
@@ -391,7 +396,7 @@ test('каталог → три протокола → история → арх
     .getByRole('button', { name: 'Окружения и ресурсы', exact: false })
     .click()
   await page
-    .getByRole('button', { name: 'Создать окружение', exact: true })
+    .getByRole('button', { name: '+ Окружение', exact: true })
     .click()
   await page.getByLabel('Имя окружения', { exact: true }).fill('dev')
   await page
@@ -1038,19 +1043,19 @@ test('новые формы: черновики, изображения, пер�
     .click()
   const vars = page.getByRole('dialog', { name: 'Переменные окружения' })
   const pairs = vars.getByRole('group', {
-    name: 'Открытые переменные',
+    name: 'Переменные окружения',
     exact: true,
   })
   for (const [i, name, value] of [
     [1, 'API_HOST', config.http],
     [2, 'AUTH_HOST', config.http],
   ] as const) {
-    await pairs.getByRole('button', { name: '+ Добавить', exact: true }).click()
+    await pairs.getByRole('button', { name: '+ Переменная окружения', exact: true }).click()
     await pairs
-      .getByLabel(`Открытые переменные: имя ${i}`, { exact: true })
+      .getByLabel(`Переменная окружения: имя ${i}`, { exact: true })
       .fill(name)
     await pairs
-      .getByLabel(`Открытые переменные: значение ${i}`, { exact: true })
+      .getByLabel(`Переменная окружения: значение ${i}`, { exact: true })
       .fill(value)
   }
   await vars
@@ -1119,7 +1124,7 @@ test('новые формы: черновики, изображения, пер�
     await row
       .getByLabel('Источник: поле JSON', { exact: false })
       .fill('/tokens/0/value')
-    await row.getByLabel('Источник: префикс', { exact: false }).fill('Bearer ')
+    await row.getByLabel('Источник: текст перед значением', { exact: false }).fill('Bearer ')
     await row
       .getByLabel('Источник: когда получать', { exact: false })
       .selectOption(mode)
@@ -1377,13 +1382,13 @@ test('PEM-файлы, переменные ресурса, MCP-шаг и Jira-с
   await page.getByLabel('Текущее окружение', { exact: true }).selectOption(env.id)
   await page.getByRole('button', { name:'Настроить переменные', exact:true }).click()
   const dialog = page.getByRole('dialog', { name:'Переменные окружения', exact:true })
-  const openVars = dialog.getByRole('group', { name:'Открытые переменные', exact:true })
-  for (let i=0;i<4;i++) await openVars.getByRole('button', { name:'+ Добавить', exact:true }).click()
-  await openVars.getByLabel('Открытые переменные: имя 1', { exact:true }).fill('STATIC_VALUE')
-  await openVars.getByLabel('Открытые переменные: имя 2', { exact:true }).fill('STATIC_VALUE')
+  const openVars = dialog.getByRole('group', { name:'Переменные окружения', exact:true })
+  for (let i=0;i<4;i++) await openVars.getByRole('button', { name:'+ Переменная окружения', exact:true }).click()
+  await openVars.getByLabel('Переменная окружения: имя 1', { exact:true }).fill('STATIC_VALUE')
+  await openVars.getByLabel('Переменная окружения: имя 2', { exact:true }).fill('STATIC_VALUE')
   await dialog.getByRole('button', { name:'Сохранить переменные', exact:true }).click()
   await expect(dialog.getByRole('alert')).toContainText('уникальными')
-  await openVars.getByLabel('Открытые переменные: имя 2', { exact:true }).fill('  ')
+  await openVars.getByLabel('Переменная окружения: имя 2', { exact:true }).fill('  ')
   await dialog.getByLabel('Действие: KEEP_SECRET', { exact:true }).selectOption('clear')
   await dialog.getByLabel('Имя секрета', { exact:true }).fill(' ')
   await dialog.getByRole('button', { name:'+ Секретная переменная', exact:true }).click()

@@ -4,6 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { resolve, join, sep } from 'node:path'
 import { createServer } from 'node:net'
+import { verifyHTTPSourceWorkflow } from './http-source-workflow'
 
 let app: ChildProcess, directory = '', base = ''
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -15,8 +16,12 @@ test.beforeAll(async () => {
   const port = address.port
   await new Promise<void>((r) => listener.close(() => r()))
   base = `http://127.0.0.1:${port}`
+  await startYAMLApp()
+})
+
+async function startYAMLApp() {
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('QAG_')))
-  app = spawn(process.env.QAG_E2E_BINARY || resolve(import.meta.dirname, '../../.local/verify/qag-yaml.exe'), ['serve', '--data-file', join(directory, 'workspace.yaml'), '--address', `127.0.0.1:${port}`], {
+  app = spawn(process.env.QAG_E2E_BINARY || resolve(import.meta.dirname, '../../.local/verify/qag-yaml.exe'), ['serve', '--data-file', join(directory, 'workspace.yaml'), '--address', new URL(base).host], {
     cwd: directory, windowsHide: true, env: { ...env, QAG_DEMO_GRPC_ADDRESS: '127.0.0.1:0' },
     stdio: 'ignore',
   })
@@ -25,6 +30,13 @@ test.beforeAll(async () => {
     await pause(100)
   }
   throw new Error('YAML server did not become ready')
+}
+
+test('HTTP-источники окружения, полное сохранение и перезапуск YAML', async ({ page }) => {
+  await verifyHTTPSourceWorkflow(page, base, async () => {
+    if (app?.exitCode === null) { const closed = new Promise(resolve => app.once('close', resolve)); app.kill(); await closed }
+    await startYAMLApp()
+  })
 })
 test.afterAll(async () => {
   if (app?.exitCode === null) {

@@ -2,9 +2,9 @@ package resources
 
 import (
 	"crypto/tls"
-	"net/url"
 	"github.com/SardelkaS/qag/internal/catalog"
 	"github.com/SardelkaS/qag/internal/problem"
+	"net/url"
 )
 
 func HeaderTLS(source catalog.HTTPHeaderSource, secrets map[string]string) (*tls.Config, error) {
@@ -72,6 +72,29 @@ func (res Resolved) prepareRequestHeaders(headers []catalog.RequestHeader) ([]ca
 		}
 		if s.BodyMode == "json" {
 			s.Body, err = res.expandJSONAllowed(s.Body, true)
+		} else if s.BodyMode == "form" {
+			form := make([]catalog.KeyValue, 0, len(s.Form))
+			for _, pair := range s.Form {
+				if pair.Name == "" && pair.Value == "" {
+					continue
+				}
+				pair.Name, err = res.Expand(pair.Name, false, nil)
+				if err != nil {
+					return nil, err
+				}
+				pair.Value, err = res.Expand(pair.Value, true, nil)
+				if err != nil {
+					return nil, err
+				}
+				if len(pair.Name) == 0 {
+					return nil, problem.Invalid("source.form", "Источник: имя поля формы не должно быть пустым")
+				}
+				form = append(form, pair)
+			}
+			s.Form = form
+			if err = catalog.ValidateFormHeaders(s.Headers, false); err != nil {
+				return nil, problem.Invalid("source.headers", err.Error())
+			}
 		} else {
 			s.Body, err = res.Expand(s.Body, true, nil)
 		}
@@ -79,6 +102,10 @@ func (res Resolved) prepareRequestHeaders(headers []catalog.RequestHeader) ([]ca
 			return nil, err
 		}
 		s.Prefix, err = res.Expand(s.Prefix, false, nil)
+		if err != nil {
+			return nil, err
+		}
+		s.Suffix, err = res.Expand(s.Suffix, false, nil)
 		if err != nil {
 			return nil, err
 		}

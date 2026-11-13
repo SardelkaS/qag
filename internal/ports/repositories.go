@@ -34,7 +34,7 @@ type Resources interface {
 	ListEnvironments(ctx context.Context, limit int, cursor string) (catalog.Page[resources.Environment], error)
 	SaveEnvironment(ctx context.Context, id, value string, revision int64, variables map[string]string, changes resources.SecretChanges) (resources.Environment, error)
 	SaveEnvironmentMetadata(ctx context.Context, id, name, description string, revision int64) (resources.Environment, error)
-	SaveVariables(ctx context.Context, id string, revision int64, variables map[string]string, changes resources.SecretChanges) (resources.Environment, error)
+	SaveVariables(ctx context.Context, id string, revision int64, variables map[string]string, changes resources.SecretChanges, sources ...map[string]catalog.HTTPHeaderSource) (resources.Environment, error)
 	GetResource(ctx context.Context, id string) (resources.Resource, error)
 	ListResources(ctx context.Context, environmentID string, limit int, cursor string) (catalog.Page[resources.Resource], error)
 	SaveResource(ctx context.Context, id, environmentID, name, kind string, revision int64, config resources.Config, changes resources.SecretChanges) (resources.Resource, error)

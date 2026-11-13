@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/SardelkaS/qag/internal/catalog"
 	"io"
 	"reflect"
 	"sort"
@@ -153,6 +154,9 @@ func Canonicalize(doc *Document) {
 	}
 	for i := range doc.Data.EnvironmentVersions {
 		v := &doc.Data.EnvironmentVersions[i]
+		if v.HTTPVariables == nil {
+			v.HTTPVariables = map[string]catalog.HTTPHeaderSource{}
+		}
 		if v.Variables == nil {
 			v.Variables = map[string]string{}
 		}

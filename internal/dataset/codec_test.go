@@ -37,6 +37,48 @@ func TestLegacyResourceVariableDefaultsCompareWithoutRewriting(t *testing.T) {
 	}
 }
 
+func TestHTTPSourceDefaultsOnlyNormalizeDefinitionFields(t *testing.T) {
+	old := ResourceVersion{Config: JSON(`{"headers":[{"source":{"bodyMode":"text","body":"{\"suffix\":\"\"}"}}],"variables":{"AUTH":{"mode":"http","source":{"bodyMode":"none"}}}}`)}
+	current := ResourceVersion{Config: JSON(`{"headers":[{"source":{"bodyMode":"text","body":"{\"suffix\":\"\"}","suffix":"","form":[]}}],"variables":{"AUTH":{"mode":"http","source":{"bodyMode":"none","suffix":"","form":null}}}}`)}
+	if !equivalent(reflect.ValueOf(old), reflect.ValueOf(current)) {
+		t.Fatal("empty source defaults conflict")
+	}
+	changed := current
+	changed.Config = JSON(strings.Replace(string(current.Config), `"suffix":""`, `"suffix":"]"`, 1))
+	if equivalent(reflect.ValueOf(old), reflect.ValueOf(changed)) {
+		t.Fatal("real suffix ignored")
+	}
+	changed = current
+	changed.Config = JSON(strings.Replace(string(current.Config), `{\"suffix\":\"\"}`, `{}`, 1))
+	if equivalent(reflect.ValueOf(old), reflect.ValueOf(changed)) {
+		t.Fatal("user JSON body normalized")
+	}
+	if strings.Contains(string(old.Config), `"form"`) {
+		t.Fatal("original JSON changed")
+	}
+}
+
+func TestVersionsOneAndTwoReadWithoutRewriting(t *testing.T) {
+	current, err := Encode(sample())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, version := range []int{1, 2} {
+		legacy := bytes.Replace(current, []byte("version: 3"), []byte("version: "+strconv.Itoa(version)), 1)
+		before := append([]byte(nil), legacy...)
+		doc, err := Decode(bytes.NewReader(legacy))
+		if err != nil || doc.Version != 3 {
+			t.Fatal("legacy decode", err)
+		}
+		if !bytes.Equal(before, legacy) {
+			t.Fatal("source bytes changed")
+		}
+		if _, err = Encode(doc); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func TestPortableRoundTripAndStrictInput(t *testing.T) {
 	d := sample()
 	b, err := Encode(d)

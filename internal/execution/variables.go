@@ -15,6 +15,7 @@ import (
 )
 
 type VariableSourceResult struct {
+	Scope      string `json:"scope,omitempty"`
 	Name       string `json:"name"`
 	FetchMode  string `json:"fetchMode"`
 	State      string `json:"state"`
@@ -28,7 +29,8 @@ func (r *Runner) invalidateVariableCache(scope string, res resources.Resolved, t
 	state.mu.Lock()
 	defer state.mu.Unlock()
 	for _, trace := range traces {
-		prefix := "variable:" + res.Resource.VersionID + ":" + trace.Name + ":"
+		owner, version := res.VariableOwner(trace.Name)
+		prefix := "variable:" + owner + ":" + version + ":" + trace.Name + ":"
 		for key := range state.cache {
 			if strings.HasPrefix(key, prefix) {
 				delete(state.cache, key)
@@ -55,21 +57,23 @@ func (r *Runner) resolveVariables(ctx context.Context, scope string, block catal
 	values := map[string]string{}
 	var failure error
 	for _, name := range names {
-		def, _ := res.DynamicVariable(name)
-		source, err := res.PrepareVariableSource(*def.Source)
-		trace := VariableSourceResult{Name: name, FetchMode: def.Source.FetchMode, State: "fetched"}
+		source, sourceContext, err := res.PrepareNamedVariableSource(name)
+		owner, version := res.VariableOwner(name)
+		trace := VariableSourceResult{Name: name, Scope: owner, FetchMode: source.FetchMode, State: "fetched"}
 		raw, _ := json.Marshal(source)
 		digest := sha256.Sum256(raw)
-		key := "variable:" + res.Resource.VersionID + ":" + name + ":" + hex.EncodeToString(digest[:])
+		key := "variable:" + owner + ":" + version + ":" + name + ":" + hex.EncodeToString(digest[:])
 		value, found := state.cache[key]
 		if err == nil && source.FetchMode == "per_run" && found {
 			trace.State = "reused"
 		} else if err == nil {
 			started := time.Now()
-			value, trace.StatusCode, err = r.fetchHeader(ctx, source, res)
+			value, trace.StatusCode, err = r.fetchHeader(ctx, source, sourceContext)
 			trace.DurationMS = time.Since(started).Milliseconds()
 			if err == nil {
-				value = source.Prefix + value
+				state.values[value] = true
+				value = source.Prefix + value + source.Suffix
+				state.values[value] = true
 			}
 		}
 		if err != nil || len(value) > 64<<10 || !utf8.ValidString(value) {

@@ -1,6 +1,7 @@
 package resources
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -27,6 +28,73 @@ func NormalizeResourceVariables(values map[string]VariableDefinition) map[string
 		}
 	}
 	return out
+}
+
+// HTTPVariables distinguishes an omitted update (nil) from an explicit empty
+// set. A null update is never an implicit delete.
+type HTTPVariables map[string]catalog.HTTPHeaderSource
+
+func (v *HTTPVariables) UnmarshalJSON(raw []byte) error {
+	if strings.TrimSpace(string(raw)) == "null" {
+		return fmt.Errorf("httpVariables: нужен объект, не null")
+	}
+	type plain HTTPVariables
+	var value plain
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&value); err != nil {
+		return err
+	}
+	*v = HTTPVariables(value)
+	return nil
+}
+
+func NormalizeHTTPVariables(values map[string]catalog.HTTPHeaderSource) map[string]catalog.HTTPHeaderSource {
+	out := map[string]catalog.HTTPHeaderSource{}
+	for name, source := range values {
+		if strings.TrimSpace(name) != "" {
+			out[name] = source
+		}
+	}
+	return out
+}
+
+func EnvironmentVariableContext(variables map[string]string, sources map[string]catalog.HTTPHeaderSource, secrets map[string]string) error {
+	if err := ValidateVariables(variables, secrets); err != nil {
+		return err
+	}
+	res, err := (Resolved{Variables: variables, Secrets: secrets, EnvironmentVariables: variables, EnvironmentSecrets: secrets, EnvironmentHTTPVariables: sources}).withVariables()
+	if err != nil {
+		return err
+	}
+	for _, source := range sources {
+		if _, err := res.EnvironmentSourceContext().PrepareVariableSource(source); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func CheckEnvironmentNames(config Config, secretNames []string, variables map[string]string, sources map[string]catalog.HTTPHeaderSource, secrets map[string]string) error {
+	for name := range config.Variables {
+		_, literal := variables[name]
+		_, dynamic := sources[name]
+		_, secret := secrets[name]
+		if literal || dynamic || secret {
+			return problem.Invalid("variables", "Имя "+name+" повторяется в окружении и ресурсе")
+		}
+	}
+	for _, name := range secretNames {
+		if _, exists := sources[name]; exists {
+			return problem.Invalid("httpVariables", "Имя "+name+" одновременно HTTP-переменная и секрет ресурса")
+		}
+	}
+	return nil
+}
+
+// Environment sources never inherit a target resource's credentials or locals.
+func (res Resolved) EnvironmentSourceContext() Resolved {
+	return Resolved{Variables: res.EnvironmentVariables, Secrets: res.EnvironmentSecrets, EnvironmentHTTPVariables: res.EnvironmentHTTPVariables, EnvironmentVariables: res.EnvironmentVariables, EnvironmentSecrets: res.EnvironmentSecrets}
 }
 
 func ValidateVariableDefinitions(config Config, secrets map[string]string, checkTLS bool) error {
@@ -62,11 +130,15 @@ func ValidateVariableDefinitions(config Config, secrets map[string]string, check
 }
 
 // VariableContext checks only configuration. It never fetches an HTTP value.
-func VariableContext(config Config, variables, secrets map[string]string) error {
+func VariableContext(config Config, variables, secrets map[string]string, sources ...map[string]catalog.HTTPHeaderSource) error {
 	if err := ValidateVariableDefinitions(config, secrets, true); err != nil {
 		return err
 	}
-	res, err := (Resolved{Resource: Resource{Config: config}, Variables: variables, Secrets: secrets}).withVariables()
+	res := Resolved{Resource: Resource{Config: config}, Variables: variables, Secrets: secrets}
+	if len(sources) > 0 {
+		res.EnvironmentHTTPVariables = sources[0]
+	}
+	res, err := res.withVariables()
 	if err != nil {
 		return err
 	}
@@ -84,6 +156,13 @@ func VariableContext(config Config, variables, secrets map[string]string) error 
 			}
 		}
 	}
+	for _, header := range config.Headers {
+		if header.Source != nil {
+			if _, err := res.PrepareVariableSource(*header.Source); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 
@@ -95,10 +174,30 @@ func (res Resolved) withVariables() (Resolved, error) {
 		return res, err
 	}
 	values := map[string]string{}
+	if res.EnvironmentVariables == nil {
+		res.EnvironmentVariables = res.Variables
+	}
 	for k, v := range res.Variables {
 		values[k] = v
 	}
+	for name, source := range res.EnvironmentHTTPVariables {
+		if !variableName.MatchString(name) {
+			return res, problem.Invalid("httpVariables", "Имена переменных должны быть в формате TASK_ID")
+		}
+		if _, exists := values[name]; exists {
+			return res, problem.Invalid("httpVariables", "Имя "+name+" повторяется в строковых и HTTP-переменных")
+		}
+		if _, exists := res.Secrets[name]; exists {
+			return res, problem.Invalid("httpVariables", "Имя "+name+" одновременно переменная и секрет")
+		}
+		if err := catalog.ValidateHeaderSource(source); err != nil {
+			return res, problem.Invalid("httpVariables", err.Error())
+		}
+	}
 	for name, def := range res.Resource.Config.Variables {
+		if _, exists := res.EnvironmentHTTPVariables[name]; exists {
+			return res, problem.Invalid("config.variables", "Имя "+name+" повторяется в окружении и ресурсе")
+		}
 		if _, ok := values[name]; ok {
 			return res, problem.Invalid("config.variables", "Имя "+name+" повторяется в окружении и ресурсе")
 		}
@@ -199,7 +298,7 @@ func (res Resolved) RequiredVariables(block catalog.Block) ([]string, error) {
 		}
 		for _, token := range substitution.FindAllStringSubmatch(text, -1) {
 			name := token[1]
-			if def, ok := res.Resource.Config.Variables[name]; ok && def.Mode == "http" {
+			if _, ok := res.DynamicVariable(name); ok {
 				required[name] = true
 				continue
 			}
@@ -297,6 +396,11 @@ func (res Resolved) plan(block catalog.Block, research bool) (catalog.Block, Res
 			}
 		}
 	}
+	for _, source := range res.EnvironmentHTTPVariables {
+		if _, err = res.EnvironmentSourceContext().PrepareVariableSource(source); err != nil {
+			return block, res, err
+		}
+	}
 	needed, err := res.RequiredVariables(block)
 	if err != nil {
 		return block, res, err
@@ -316,8 +420,31 @@ func (res Resolved) plan(block catalog.Block, research bool) (catalog.Block, Res
 }
 
 func (res Resolved) DynamicVariable(name string) (VariableDefinition, bool) {
+	if source, ok := res.EnvironmentHTTPVariables[name]; ok {
+		return VariableDefinition{Mode: "http", Source: &source}, true
+	}
 	d, ok := res.Resource.Config.Variables[name]
 	return d, ok && d.Mode == "http"
+}
+
+func (res Resolved) VariableOwner(name string) (scope, version string) {
+	if _, ok := res.EnvironmentHTTPVariables[name]; ok {
+		return "environment", res.EnvironmentVersionID
+	}
+	return "resource", res.Resource.VersionID
+}
+
+func (res Resolved) PrepareNamedVariableSource(name string) (catalog.HTTPHeaderSource, Resolved, error) {
+	def, ok := res.DynamicVariable(name)
+	if !ok || def.Source == nil {
+		return catalog.HTTPHeaderSource{}, res, VariableError(name)
+	}
+	context := res
+	if scope, _ := res.VariableOwner(name); scope == "environment" {
+		context = res.EnvironmentSourceContext()
+	}
+	source, err := context.PrepareVariableSource(*def.Source)
+	return source, context, err
 }
 func (res Resolved) WithDynamicValues(values map[string]string) Resolved {
 	res.DynamicValues = values

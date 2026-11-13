@@ -49,7 +49,7 @@ func (r *Runner) execute(ctx context.Context, scope string, block catalog.Block,
 	var result Result
 	var err error
 	var variables []VariableSourceResult
-	if len(res.Resource.Config.Variables) > 0 && !res.Prepared {
+	if (len(res.Resource.Config.Variables) > 0 || len(res.EnvironmentHTTPVariables) > 0) && !res.Prepared {
 		if !res.Deferred {
 			if research {
 				block, res, err = res.PlanRequest(block)

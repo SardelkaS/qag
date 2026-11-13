@@ -6,13 +6,14 @@ import (
 )
 
 type Environment struct {
-	Description string            `json:"description"`
-	ReadOnly    bool              `json:"readOnly"`
-	ID          string            `json:"id"`
-	Name        string            `json:"name"`
-	Revision    int64             `json:"revision"`
-	Variables   map[string]string `json:"variables"`
-	SecretNames []string          `json:"secretNames"`
+	Description   string                              `json:"description"`
+	ReadOnly      bool                                `json:"readOnly"`
+	ID            string                              `json:"id"`
+	Name          string                              `json:"name"`
+	Revision      int64                               `json:"revision"`
+	Variables     map[string]string                   `json:"variables"`
+	HTTPVariables map[string]catalog.HTTPHeaderSource `json:"httpVariables,omitempty"`
+	SecretNames   []string                            `json:"secretNames"`
 }
 
 type TLSConfig = catalog.TLSConfig

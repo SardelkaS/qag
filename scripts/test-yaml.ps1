@@ -13,7 +13,7 @@ try {
     $env:QAG_TEST_BACKEND = 'yaml'
     # The application uses YAML. PostgreSQL is only an isolated external SQL
     # target, as in the existing HTTP/gRPC/TLS integration fixtures.
-    & go test -p=1 -tags=integration -count=1 -run 'Test(MCP(NetworkResourcesProtoAndSQL|UIParityAndLifecycle|JobOwnershipCancellationAndStorageFailure|ResourceVariablesStepAndJira)|HistoryPoliciesAndSelectedStep|HistoryPolicyTerminalOutcomes|ResourceVariableDurabilityCancelAndRecovery)$' -v ./internal/service
+    & go test -p=1 -tags=integration -count=1 -run 'Test(MCP(NetworkResourcesProtoAndSQL|UIParityAndLifecycle|JobOwnershipCancellationAndStorageFailure|ResourceVariablesStepAndJira|EnvironmentHTTPFormAcrossProtocols)|HistoryPoliciesAndSelectedStep|HistoryPolicyTerminalOutcomes|ResourceVariableDurabilityCancelAndRecovery|EnvironmentVariableDurabilityCancelAndRecovery)$' -v ./internal/service
     if ($LASTEXITCODE -ne 0) { throw 'YAML UI/MCP repository integration failed' }
 } finally {
     foreach ($qagName in $qagNames) { [Environment]::SetEnvironmentVariable($qagName, $qagPrevious[$qagName], 'Process') }

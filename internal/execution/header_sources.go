@@ -112,7 +112,7 @@ func (r *Runner) resolveHeaders(ctx context.Context, scope string, block catalog
 			traces = append(traces, trace)
 			break
 		}
-		full := s.Prefix + value
+		full := s.Prefix + value + s.Suffix
 		state.values[value] = true
 		state.values[full] = true
 		invalid := false
@@ -161,7 +161,26 @@ func (r *Runner) fetchHeader(ctx context.Context, s catalog.HTTPHeaderSource, re
 	for _, h := range s.Headers {
 		hs = append(hs, catalog.RequestHeader{Name: h.Name, Value: h.Value})
 	}
-	b := catalog.Block{Kind: "http", HTTP: &catalog.HTTPRequest{Method: s.Method, Path: u.RequestURI(), Query: s.Query, Headers: hs, BodyMode: s.BodyMode, Body: s.Body}}
+	bodyMode, body := s.BodyMode, s.Body
+	if s.BodyMode == "form" {
+		if err := catalog.ValidateFormHeaders(s.Headers, false); err != nil {
+			return "", nil, err
+		}
+		var err error
+		body, err = catalog.EncodeSourceForm(s.Form)
+		if err != nil {
+			return "", nil, err
+		}
+		bodyMode = "text"
+		found := false
+		for _, h := range hs {
+			found = found || strings.EqualFold(h.Name, "Content-Type")
+		}
+		if !found {
+			hs = append(hs, catalog.RequestHeader{Name: "Content-Type", Value: "application/x-www-form-urlencoded"})
+		}
+	}
+	b := catalog.Block{Kind: "http", HTTP: &catalog.HTTPRequest{Method: s.Method, Path: u.RequestURI(), Query: s.Query, Headers: hs, BodyMode: bodyMode, Body: body}}
 	actual, err := r.http(ctx, b, resources.Resolved{Resource: resources.Resource{Config: cfg}, Secrets: keys})
 	if err != nil {
 		return "", actual.StatusCode, fmt.Errorf("Не удалось выполнить запрос источника заголовка")

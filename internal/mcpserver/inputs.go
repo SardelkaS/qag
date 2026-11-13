@@ -64,9 +64,10 @@ type EnvironmentUpdate struct {
 }
 type VariablesSet struct {
 	IDInput
-	Revision  int64             `json:"revision"`
-	Variables map[string]string `json:"variables"`
-	Secrets   SecretChanges     `json:"secrets,omitempty"`
+	HTTPVariables resources.HTTPVariables `json:"httpVariables,omitempty"`
+	Revision      int64                   `json:"revision"`
+	Variables     map[string]string       `json:"variables"`
+	Secrets       SecretChanges           `json:"secrets,omitempty"`
 }
 type SecretChanges struct {
 	Replace map[string]string `json:"replace,omitempty"`

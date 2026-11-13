@@ -122,6 +122,14 @@ func TestHistoryPoliciesAndSelectedStep(t *testing.T) {
 }
 
 func TestResourceVariableDurabilityCancelAndRecovery(t *testing.T) {
+	testHTTPVariableDurabilityCancelAndRecovery(t, false)
+}
+
+func TestEnvironmentVariableDurabilityCancelAndRecovery(t *testing.T) {
+	testHTTPVariableDurabilityCancelAndRecovery(t, true)
+}
+
+func testHTTPVariableDurabilityCancelAndRecovery(t *testing.T, environment bool) {
 	f := authoringApp(t)
 	var sources, mains atomic.Int32
 	var reject atomic.Bool
@@ -139,7 +147,16 @@ func TestResourceVariableDurabilityCancelAndRecovery(t *testing.T) {
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { mains.Add(1); reject.Store(true); w.WriteHeader(204) }))
 	defer target.Close()
 	src := &catalog.HTTPHeaderSource{Method: "GET", URL: source.URL, TLS: catalog.TLSConfig{Mode: "plaintext"}, BodyMode: "none", JSONPointer: "/token", FetchMode: "per_run"}
-	r, err := f.res.SaveResource(f.ctx, "", f.env.ID, "DURABLE", "http", 0, resources.Config{BaseURL: target.URL, TLS: catalog.TLSConfig{Mode: "plaintext"}, Variables: map[string]resources.VariableDefinition{"HTTP_VALUE": {Mode: "http", Source: src}}}, resources.SecretChanges{})
+	variables := map[string]resources.VariableDefinition{"HTTP_VALUE": {Mode: "http", Source: src}}
+	if environment {
+		var err error
+		f.env, err = f.res.SaveVariables(f.ctx, f.env.ID, f.env.Revision, f.env.Variables, resources.SecretChanges{}, map[string]catalog.HTTPHeaderSource{"HTTP_VALUE": *src})
+		if err != nil {
+			t.Fatal(err)
+		}
+		variables = nil
+	}
+	r, err := f.res.SaveResource(f.ctx, "", f.env.ID, "DURABLE", "http", 0, resources.Config{BaseURL: target.URL, TLS: catalog.TLSConfig{Mode: "plaintext"}, Variables: variables}, resources.SecretChanges{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,8 +230,15 @@ func TestResourceVariableDurabilityCancelAndRecovery(t *testing.T) {
 	} else {
 		reject.Store(false)
 	}
-	r.Config.Variables["HTTP_VALUE"].Source.URL = source.URL + "/slow"
-	if _, err = f.res.SaveResource(f.ctx, r.ID, f.env.ID, r.Name, r.Kind, r.Revision, r.Config, resources.SecretChanges{}); err != nil {
+	if environment {
+		def := f.env.HTTPVariables["HTTP_VALUE"]
+		def.URL = source.URL + "/slow"
+		f.env, err = f.res.SaveVariables(f.ctx, f.env.ID, f.env.Revision, f.env.Variables, resources.SecretChanges{}, map[string]catalog.HTTPHeaderSource{"HTTP_VALUE": def})
+	} else {
+		r.Config.Variables["HTTP_VALUE"].Source.URL = source.URL + "/slow"
+		_, err = f.res.SaveResource(f.ctx, r.ID, f.env.ID, r.Name, r.Kind, r.Revision, r.Config, resources.SecretChanges{})
+	}
+	if err != nil {
 		t.Fatal(err)
 	}
 	run, err := f.engine.StartRunWithPolicy(f.ctx, c.ID, f.env.ID, c.Revision, catalog.NewID(), "unretained", false)

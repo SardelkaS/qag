@@ -37,7 +37,17 @@ func equivalent(a, b reflect.Value) bool {
 				d.UseNumber()
 				var data any
 				if d.Decode(&data) == nil {
+					fieldName := copy.Type().Field(i).Name
+					if copy.Type() == reflect.TypeFor[TestCase]() && fieldName == "Steps" {
+						compareStepsDefaults(data)
+					}
 					if root, ok := data.(map[string]any); ok {
+						if copy.Type() == reflect.TypeFor[Run]() && fieldName == "Snapshot" {
+							compareStepsDefaults(root["steps"])
+						}
+						if copy.Type() == reflect.TypeFor[CallAttempt]() && fieldName == "SafeRequest" || copy.Type() == reflect.TypeFor[VariantVersion]() && fieldName == "Request" {
+							compareRequestDefaults(root)
+						}
 						// Defaults are compared without rewriting any stored JSON.
 						if copy.Type() == reflect.TypeFor[ResourceVersion]() && copy.Type().Field(i).Name == "Config" {
 							compareResourceDefaults(root)
@@ -66,9 +76,64 @@ func equivalent(a, b reflect.Value) bool {
 }
 
 func compareResourceDefaults(config map[string]any) {
+	compareHeaderDefaults(config["headers"])
 	value, exists := config["variables"]
+	if variables, ok := value.(map[string]any); ok {
+		for _, definition := range variables {
+			if def, ok := definition.(map[string]any); ok {
+				compareSourceDefaults(def["source"])
+			}
+		}
+	}
 	if variables, ok := value.(map[string]any); exists && (value == nil || ok && len(variables) == 0) {
 		delete(config, "variables")
+	}
+}
+
+func compareSourceDefaults(value any) {
+	if source, ok := value.(map[string]any); ok {
+		if suffix, exists := source["suffix"]; exists && suffix == "" {
+			delete(source, "suffix")
+		}
+		if source["bodyMode"] != "form" {
+			if form, exists := source["form"]; exists {
+				if list, ok := form.([]any); form == nil || ok && len(list) == 0 {
+					delete(source, "form")
+				}
+			}
+		}
+	}
+}
+func compareHeaderDefaults(value any) {
+	if headers, ok := value.([]any); ok {
+		for _, item := range headers {
+			if header, ok := item.(map[string]any); ok {
+				compareSourceDefaults(header["source"])
+			}
+		}
+	}
+}
+func compareRequestDefaults(request map[string]any) {
+	if http, ok := request["http"].(map[string]any); ok {
+		compareHeaderDefaults(http["headers"])
+	}
+	if grpc, ok := request["grpc"].(map[string]any); ok {
+		compareHeaderDefaults(grpc["metadata"])
+	}
+}
+func compareStepsDefaults(value any) {
+	if steps, ok := value.([]any); ok {
+		for _, item := range steps {
+			if step, ok := item.(map[string]any); ok {
+				if blocks, ok := step["blocks"].([]any); ok {
+					for _, item := range blocks {
+						if block, ok := item.(map[string]any); ok {
+							compareRequestDefaults(block)
+						}
+					}
+				}
+			}
+		}
 	}
 }
 

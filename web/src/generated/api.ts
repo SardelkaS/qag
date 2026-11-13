@@ -718,6 +718,9 @@ export interface components {
         };
         Environment: {
             description: string;
+            httpVariables?: {
+                [key: string]: components["schemas"]["HTTPHeaderSource"];
+            };
             id: string;
             name: string;
             readOnly: boolean;
@@ -806,15 +809,17 @@ export interface components {
         HTTPHeaderSource: {
             body: string;
             /** @enum {string} */
-            bodyMode: "none" | "text" | "json";
+            bodyMode: "none" | "text" | "json" | "form";
             /** @enum {string} */
             fetchMode: "per_attempt" | "per_run";
+            form?: components["schemas"]["KeyValue"][];
             headers: components["schemas"]["KeyValue"][];
             jsonPointer: string;
             method: string;
             prefix?: string;
             privateKeySecret?: string;
             query: components["schemas"]["KeyValue"][];
+            suffix?: string;
             tls: components["schemas"]["TLSConfig"];
             url: string;
         };
@@ -1185,11 +1190,15 @@ export interface components {
             errorCode?: string;
             fetchMode: string;
             name: string;
+            scope?: string;
             state: string;
             /** Format: int64 */
             statusCode?: number;
         };
         VariablesWrite: {
+            httpVariables?: {
+                [key: string]: components["schemas"]["HTTPHeaderSource"] | unknown;
+            };
             /** Format: int64 */
             revision: number;
             secrets: components["schemas"]["SecretChangesWrite"];
